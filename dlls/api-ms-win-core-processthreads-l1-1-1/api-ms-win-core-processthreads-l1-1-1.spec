@@ -43,7 +43,7 @@
 @ stdcall QueueUserAPC(ptr long long) kernel32.QueueUserAPC
 @ stdcall ResumeThread(long) kernel32.ResumeThread
 @ stdcall SetPriorityClass(long long) kernel32.SetPriorityClass
-@ stdcall SetProcessAffinityUpdateMode(long long) kernel32.SetProcessAffinityUpdateMode
+@ stub SetProcessAffinityUpdateMode
 @ stub SetProcessMitigationPolicy
 @ stdcall SetProcessShutdownParameters(long long) kernel32.SetProcessShutdownParameters
 @ stdcall SetThreadContext(long ptr) kernel32.SetThreadContext
