@@ -44,8 +44,6 @@
 DEFINE_GUID(IID_IParentAndItem, 0xB3A4B685, 0xB685, 0x4805, 0x99,0xD9, 0x5D,0xEA,0xD2,0x87,0x32,0x36);
 DEFINE_GUID(CLSID_ShellDocObjView, 0xe7e4bc40, 0xe76a, 0x11ce, 0xa9,0xbb, 0x00,0xaa,0x00,0x4a,0xe8,0x37);
 
-#define ARRAY_SIZE(x) ( sizeof(x) / sizeof((x)[0]) )
-
 static IMalloc *ppM;
 
 static HRESULT (WINAPI *pSHCreateItemFromIDList)(PCIDLIST_ABSOLUTE pidl, REFIID riid, void **ppv);
@@ -65,6 +63,7 @@ static HRESULT (WINAPI *pSHGetItemFromObject)(IUnknown*,REFIID,void**);
 static BOOL (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
 static HRESULT (WINAPI *pSHCreateDefaultContextMenu)(const DEFCONTEXTMENU*,REFIID,void**);
 static BOOL (WINAPI *pSHGetPathFromIDListEx)(PCIDLIST_ABSOLUTE,WCHAR*,DWORD,GPFIDL_FLAGS);
+static HRESULT (WINAPI *pSHGetSetFolderCustomSettings)(LPSHFOLDERCUSTOMSETTINGS,PCWSTR,DWORD);
 
 static WCHAR *make_wstr(const char *str)
 {
@@ -118,6 +117,7 @@ static void init_function_pointers(void)
     MAKEFUNC(SHGetItemFromObject);
     MAKEFUNC(SHCreateDefaultContextMenu);
     MAKEFUNC(SHGetPathFromIDListEx);
+    MAKEFUNC(SHGetSetFolderCustomSettings);
 #undef MAKEFUNC
 
     /* test named exports */
@@ -5246,6 +5246,58 @@ todo_wine
     IShellFolder_Release(desktop);
 }
 
+static void test_SHGetSetFolderCustomSettings(void)
+{
+    HRESULT hr;
+    SHFOLDERCUSTOMSETTINGS fcs;
+    WCHAR pathW[MAX_PATH];
+    WCHAR bufferW[MAX_PATH];
+    WCHAR iconpathW[MAX_PATH];
+    static const WCHAR somedirW[] = {'s','o','m','e','_','d','i','r',0};
+    static const WCHAR iconW[] = {'\\','s','o','m','e','_','i','c','o','n','.','i','c','o',0};
+    static const WCHAR desktop_iniW[] = {'\\','D','e','s','k','t','o','p','.','i','n','i',0};
+
+    if (!pSHGetSetFolderCustomSettings)
+    {
+        win_skip("SHGetSetFolderCustomSetting not exported by name (only by ordinal) for version XP/win2003\n");
+        return;
+    }
+
+    GetTempPathW(MAX_PATH, pathW);
+    lstrcatW(pathW, somedirW);
+    CreateDirectoryW(pathW, NULL);
+
+    lstrcpyW(iconpathW, pathW);
+    lstrcatW(iconpathW, iconW);
+
+    memset(&fcs, 0, sizeof(fcs));
+    fcs.dwSize = sizeof(fcs);
+    fcs.dwMask = FCSM_ICONFILE;
+    fcs.pszIconFile = iconpathW;
+
+    hr = pSHGetSetFolderCustomSettings(&fcs, pathW, FCS_FORCEWRITE); /*creates and writes to a Desktop.ini*/
+    ok(hr == S_OK, "Expected S_OK, got %#x\n", hr);
+
+    memset(&fcs, 0, sizeof(fcs));
+    fcs.dwSize = sizeof(fcs);
+    fcs.dwMask = FCSM_ICONFILE;
+    fcs.cchIconFile = MAX_PATH;
+    fcs.pszIconFile = bufferW;
+    bufferW[0] = 0;
+
+    hr = pSHGetSetFolderCustomSettings(&fcs, pathW, FCS_READ);
+    todo_wine ok(hr == S_OK, "Expected S_OK, got %#x\n", hr);
+    todo_wine ok(!lstrcmpiW(iconpathW, fcs.pszIconFile), "Expected %s, got %s\n", wine_dbgstr_w(iconpathW), wine_dbgstr_w(fcs.pszIconFile));
+
+    hr = pSHGetSetFolderCustomSettings(&fcs, NULL, FCS_READ);
+    ok(hr == E_FAIL, "Expected E_FAIL, got %#x\n", hr);
+
+    lstrcpyW(bufferW, pathW);
+    lstrcatW(bufferW, desktop_iniW);
+    DeleteFileW(bufferW);
+    RemoveDirectoryW(pathW);
+}
+
 START_TEST(shlfolder)
 {
     init_function_pointers();
@@ -5288,6 +5340,7 @@ START_TEST(shlfolder)
     test_GetDefaultColumn();
     test_GetDefaultSearchGUID();
     test_SHLimitInputEdit();
+    test_SHGetSetFolderCustomSettings();
 
     OleUninitialize();
 }

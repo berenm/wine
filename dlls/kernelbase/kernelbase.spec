@@ -448,7 +448,7 @@
 @ stdcall GetConsoleScreenBufferInfo(long ptr) kernel32.GetConsoleScreenBufferInfo
 @ stdcall GetConsoleScreenBufferInfoEx(long ptr) kernel32.GetConsoleScreenBufferInfoEx
 @ stdcall GetConsoleTitleW(ptr long) kernel32.GetConsoleTitleW
-@ stub GetCurrencyFormatEx
+@ stdcall GetCurrencyFormatEx(wstr long wstr ptr ptr long) kernel32.GetCurrencyFormatEx
 @ stdcall GetCurrencyFormatW(long long str ptr str long) kernel32.GetCurrencyFormatW
 @ stdcall GetCurrentActCtx(ptr) kernel32.GetCurrentActCtx
 # @ stub GetCurrentApplicationUserModelId
@@ -1452,7 +1452,7 @@
 @ stdcall SetPriorityClass(long long) kernel32.SetPriorityClass
 @ stdcall SetPrivateObjectSecurity(long ptr ptr ptr long) advapi32.SetPrivateObjectSecurity
 @ stub SetPrivateObjectSecurityEx
-@ stub SetProcessAffinityUpdateMode
+@ stdcall SetProcessAffinityUpdateMode(long long) kernel32.SetProcessAffinityUpdateMode
 # @ stub SetProcessDefaultCpuSets
 # @ stub SetProcessGroupAffinity
 # @ stub SetProcessInformation

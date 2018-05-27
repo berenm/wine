@@ -36,7 +36,7 @@
 # @ stub DbgUiDebugActiveProcess
 # @ stub DbgUiGetThreadDebugObject
 # @ stub DbgUiIssueRemoteBreakin
-# @ stub DbgUiRemoteBreakin
+@ stdcall DbgUiRemoteBreakin(ptr)
 # @ stub DbgUiSetThreadDebugObject
 # @ stub DbgUiStopDebugging
 @ stub DbgUiWaitStateChange
@@ -83,6 +83,7 @@
 @ stdcall LdrProcessRelocationBlock(ptr long ptr long)
 @ stdcall LdrQueryImageFileExecutionOptions(ptr wstr long ptr long ptr)
 @ stdcall LdrQueryProcessModuleInformation(ptr long ptr)
+@ stdcall LdrRegisterDllNotification(long ptr ptr ptr)
 @ stdcall LdrResolveDelayLoadedAPI(ptr ptr ptr ptr ptr long)
 @ stub LdrSetAppCompatDllRedirectionCallback
 @ stub LdrSetDllManifestProber
@@ -91,6 +92,7 @@
 @ stub LdrUnloadAlternateResourceModule
 @ stdcall LdrUnloadDll(ptr)
 @ stdcall LdrUnlockLoaderLock(long long)
+@ stdcall LdrUnregisterDllNotification(ptr)
 @ stub LdrVerifyImageMatchesChecksum
 @ extern NlsAnsiCodePage
 @ extern NlsMbCodePageTag
@@ -735,7 +737,7 @@
 # @ stub RtlIpv6AddressToStringW
 # @ stub RtlIpv6StringToAddressA
 # @ stub RtlIpv6StringToAddressExA
-# @ stub RtlIpv6StringToAddressExW
+@ stdcall RtlIpv6StringToAddressExW(wstr ptr ptr ptr)
 # @ stub RtlIpv6StringToAddressW
 @ stdcall RtlIsActivationContextActive(ptr)
 @ stdcall RtlIsCriticalSectionLocked(ptr)
@@ -813,6 +815,7 @@
 @ stdcall RtlQueryInformationActivationContext(long long ptr long ptr long ptr)
 @ stub RtlQueryInformationActiveActivationContext
 @ stub RtlQueryInterfaceMemoryStream
+@ stdcall RtlQueryPackageIdentity(long ptr ptr ptr ptr ptr)
 @ stub RtlQueryProcessBackTraceInformation
 @ stdcall RtlQueryProcessDebugInformation(long long ptr)
 @ stub RtlQueryProcessHeapInformation

@@ -20,7 +20,7 @@
 @ cdecl _CreateFrameInfo(ptr ptr)
 @ stdcall _CxxThrowException(ptr ptr)
 @ cdecl -arch=i386 -norelay _EH_prolog()
-@ stub _Exit
+@ cdecl _Exit(long) MSVCRT__exit
 @ stub _FCbuild
 @ stub _FCmulcc
 @ stub _FCmulcr
@@ -1972,8 +1972,8 @@
 @ cdecl _tempnam(str str) MSVCRT__tempnam
 @ cdecl _time32(ptr) MSVCRT__time32
 @ cdecl _time64(ptr) MSVCRT__time64
-@ stub _timespec32_get
-@ stub _timespec64_get
+@ cdecl _timespec32_get(ptr long)
+@ cdecl _timespec64_get(ptr long)
 @ cdecl _tolower(long) MSVCRT__tolower
 @ cdecl _tolower_l(long ptr) MSVCRT__tolower_l
 @ cdecl _toupper(long) MSVCRT__toupper

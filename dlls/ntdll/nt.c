@@ -624,6 +624,24 @@ NTSTATUS WINAPI NtSetInformationToken(
         }
         SERVER_END_REQ;
         break;
+    case TokenSessionId:
+        if (TokenInformationLength < sizeof(DWORD))
+        {
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+            break;
+        }
+        if (!TokenInformation)
+        {
+            ret = STATUS_ACCESS_VIOLATION;
+            break;
+        }
+        FIXME("TokenSessionId stub!\n");
+        ret = STATUS_SUCCESS;
+        break;
+    case TokenIntegrityLevel:
+        FIXME("TokenIntegrityLevel stub!\n");
+        ret = STATUS_SUCCESS;
+        break;
     default:
         FIXME("unimplemented class %u\n", TokenInformationClass);
         break;
@@ -1497,7 +1515,7 @@ static inline BOOL logical_proc_info_add_group(SYSTEM_LOGICAL_PROCESSOR_INFORMAT
 static NTSTATUS create_logical_proc_info(SYSTEM_LOGICAL_PROCESSOR_INFORMATION **data,
         SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX **dataex, DWORD *max_len)
 {
-    static const char core_info[] = "/sys/devices/system/cpu/cpu%u/%s";
+    static const char core_info[] = "/sys/devices/system/cpu/cpu%u/topology/%s";
     static const char cache_info[] = "/sys/devices/system/cpu/cpu%u/cache/index%u/%s";
     static const char numa_info[] = "/sys/devices/system/node/node%u/cpumap";
 

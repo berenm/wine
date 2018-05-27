@@ -99,7 +99,7 @@ GLenum gl_primitive_type_from_d3d(enum wined3d_primitive_type primitive_type)
     }
 }
 
-static enum wined3d_primitive_type d3d_primitive_type_from_gl(GLenum primitive_type)
+enum wined3d_primitive_type d3d_primitive_type_from_gl(GLenum primitive_type)
 {
     switch (primitive_type)
     {
@@ -413,9 +413,7 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
             gl_info->gl_ops.gl.p_glScissor(draw_rect->left, drawable_height - draw_rect->bottom,
                         draw_rect->right - draw_rect->left, draw_rect->bottom - draw_rect->top);
         }
-        checkGLcall("glScissor");
         gl_info->gl_ops.gl.p_glClear(clear_mask);
-        checkGLcall("glClear");
     }
     else
     {
@@ -450,12 +448,11 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
                 gl_info->gl_ops.gl.p_glScissor(current_rect.left, drawable_height - current_rect.bottom,
                           current_rect.right - current_rect.left, current_rect.bottom - current_rect.top);
             }
-            checkGLcall("glScissor");
-
             gl_info->gl_ops.gl.p_glClear(clear_mask);
-            checkGLcall("glClear");
         }
     }
+    context->scissor_rect_count = WINED3D_MAX_VIEWPORTS;
+    checkGLcall("clear");
 
     if (flags & WINED3DCLEAR_TARGET && target->swapchain && target->swapchain->front_buffer == target)
         gl_info->gl_ops.gl.p_glFlush();
@@ -1045,8 +1042,8 @@ static void wined3d_device_create_primary_opengl_context_cs(void *object)
         return;
     }
     wined3d_ffp_blitter_create(&device->blitter, &device->adapter->gl_info);
-    wined3d_arbfp_blitter_create(&device->blitter, device);
-    wined3d_glsl_blitter_create(&device->blitter, device);
+    if (!wined3d_glsl_blitter_create(&device->blitter, device))
+        wined3d_arbfp_blitter_create(&device->blitter, device);
     wined3d_fbo_blitter_create(&device->blitter, &device->adapter->gl_info);
     wined3d_raw_blitter_create(&device->blitter, &device->adapter->gl_info);
 
@@ -1910,13 +1907,24 @@ INT CDECL wined3d_device_get_base_vertex_index(const struct wined3d_device *devi
     return device->state.base_vertex_index;
 }
 
-void CDECL wined3d_device_set_viewport(struct wined3d_device *device, const struct wined3d_viewport *viewport)
+void CDECL wined3d_device_set_viewports(struct wined3d_device *device, unsigned int viewport_count,
+        const struct wined3d_viewport *viewports)
 {
-    TRACE("device %p, viewport %p.\n", device, viewport);
-    TRACE("x %.8e, y %.8e, w %.8e, h %.8e, min_z %.8e, max_z %.8e.\n",
-          viewport->x, viewport->y, viewport->width, viewport->height, viewport->min_z, viewport->max_z);
+    unsigned int i;
 
-    device->update_state->viewport = *viewport;
+    TRACE("device %p, viewport_count %u, viewports %p.\n", device, viewport_count, viewports);
+
+    for (i = 0; i < viewport_count; ++i)
+    {
+        TRACE("%u: x %.8e, y %.8e, w %.8e, h %.8e, min_z %.8e, max_z %.8e.\n",  i, viewports[i].x, viewports[i].y,
+                viewports[i].width, viewports[i].height, viewports[i].min_z, viewports[i].max_z);
+    }
+
+    if (viewport_count)
+        memcpy(device->update_state->viewports, viewports, viewport_count * sizeof(*viewports));
+    else
+        memset(device->update_state->viewports, 0, sizeof(device->update_state->viewports));
+    device->update_state->viewport_count = viewport_count;
 
     /* Handle recording of state blocks */
     if (device->recording)
@@ -1926,14 +1934,21 @@ void CDECL wined3d_device_set_viewport(struct wined3d_device *device, const stru
         return;
     }
 
-    wined3d_cs_emit_set_viewport(device->cs, viewport);
+    wined3d_cs_emit_set_viewports(device->cs, viewport_count, viewports);
 }
 
-void CDECL wined3d_device_get_viewport(const struct wined3d_device *device, struct wined3d_viewport *viewport)
+void CDECL wined3d_device_get_viewports(const struct wined3d_device *device, unsigned int *viewport_count,
+        struct wined3d_viewport *viewports)
 {
-    TRACE("device %p, viewport %p.\n", device, viewport);
+    unsigned int count;
 
-    *viewport = device->state.viewport;
+    TRACE("device %p, viewport_count %p, viewports %p.\n", device, viewport_count, viewports);
+
+    count = viewport_count ? min(*viewport_count, device->state.viewport_count) : 1;
+    if (count && viewports)
+        memcpy(viewports, device->state.viewports, count * sizeof(*viewports));
+    if (viewport_count)
+        *viewport_count = device->state.viewport_count;
 }
 
 static void resolve_depth_buffer(struct wined3d_device *device)
@@ -2105,19 +2120,33 @@ DWORD CDECL wined3d_device_get_sampler_state(const struct wined3d_device *device
     return device->state.sampler_states[sampler_idx][state];
 }
 
-void CDECL wined3d_device_set_scissor_rect(struct wined3d_device *device, const RECT *rect)
+void CDECL wined3d_device_set_scissor_rects(struct wined3d_device *device, unsigned int rect_count,
+        const RECT *rects)
 {
-    TRACE("device %p, rect %s.\n", device, wine_dbgstr_rect(rect));
+    unsigned int i;
+
+    TRACE("device %p, rect_count %u, rects %p.\n", device, rect_count, rects);
+
+    for (i = 0; i < rect_count; ++i)
+    {
+        TRACE("%u: %s\n", i, wine_dbgstr_rect(&rects[i]));
+    }
 
     if (device->recording)
         device->recording->changed.scissorRect = TRUE;
 
-    if (EqualRect(&device->update_state->scissor_rect, rect))
+    if (device->update_state->scissor_rect_count == rect_count
+            && !memcmp(device->update_state->scissor_rects, rects, rect_count * sizeof(*rects)))
     {
-        TRACE("App is setting the old scissor rectangle over, nothing to do.\n");
+        TRACE("App is setting the old scissor rectangles over, nothing to do.\n");
         return;
     }
-    CopyRect(&device->update_state->scissor_rect, rect);
+
+    if (rect_count)
+        memcpy(device->update_state->scissor_rects, rects, rect_count * sizeof(*rects));
+    else
+        memset(device->update_state->scissor_rects, 0, sizeof(device->update_state->scissor_rects));
+    device->update_state->scissor_rect_count = rect_count;
 
     if (device->recording)
     {
@@ -2125,15 +2154,20 @@ void CDECL wined3d_device_set_scissor_rect(struct wined3d_device *device, const 
         return;
     }
 
-    wined3d_cs_emit_set_scissor_rect(device->cs, rect);
+    wined3d_cs_emit_set_scissor_rects(device->cs, rect_count, rects);
 }
 
-void CDECL wined3d_device_get_scissor_rect(const struct wined3d_device *device, RECT *rect)
+void CDECL wined3d_device_get_scissor_rects(const struct wined3d_device *device, unsigned int *rect_count, RECT *rects)
 {
-    TRACE("device %p, rect %p.\n", device, rect);
+    unsigned int count;
 
-    *rect = device->state.scissor_rect;
-    TRACE("Returning rect %s.\n", wine_dbgstr_rect(rect));
+    TRACE("device %p, rect_count %p, rects %p.\n", device, rect_count, rects);
+
+    count = rect_count ? min(*rect_count, device->state.scissor_rect_count) : 1;
+    if (count && rects)
+        memcpy(rects, device->state.scissor_rects, count * sizeof(*rects));
+    if (rect_count)
+        *rect_count = device->state.scissor_rect_count;
 }
 
 void CDECL wined3d_device_set_vertex_declaration(struct wined3d_device *device,
@@ -3047,6 +3081,23 @@ struct wined3d_unordered_access_view * CDECL wined3d_device_get_unordered_access
     return wined3d_device_get_pipeline_unordered_access_view(device, WINED3D_PIPELINE_GRAPHICS, idx);
 }
 
+void CDECL wined3d_device_set_max_frame_latency(struct wined3d_device *device, unsigned int latency)
+{
+    unsigned int i;
+
+    if (!latency)
+        latency = 3;
+
+    device->max_frame_latency = latency;
+    for (i = 0; i < device->swapchain_count; ++i)
+        swapchain_set_max_frame_latency(device->swapchains[i], device);
+}
+
+unsigned int CDECL wined3d_device_get_max_frame_latency(const struct wined3d_device *device)
+{
+    return device->max_frame_latency;
+}
+
 /* Context activation is done by the caller. */
 #define copy_and_next(dest, src, size) memcpy(dest, src, size); dest += (size)
 static HRESULT process_vertices_strided(const struct wined3d_device *device, DWORD dwDestIndex, DWORD dwCount,
@@ -3128,8 +3179,8 @@ static HRESULT process_vertices_strided(const struct wined3d_device *device, DWO
     TRACE("%.8e %.8e %.8e %.8e\n", world_mat._41, world_mat._42, world_mat._43, world_mat._44);
 
     /* Get the viewport */
-    wined3d_device_get_viewport(device, &vp);
-    TRACE("viewport  x %.8e, y %.8e, width %.8e, height %.8e, min_z %.8e, max_z %.8e.\n",
+    wined3d_device_get_viewports(device, NULL, &vp);
+    TRACE("viewport x %.8e, y %.8e, width %.8e, height %.8e, min_z %.8e, max_z %.8e.\n",
           vp.x, vp.y, vp.width, vp.height, vp.min_z, vp.max_z);
 
     multiply_matrix(&mat,&view_mat,&world_mat);
@@ -4103,14 +4154,17 @@ void CDECL wined3d_device_copy_resource(struct wined3d_device *device,
 HRESULT CDECL wined3d_device_copy_sub_resource_region(struct wined3d_device *device,
         struct wined3d_resource *dst_resource, unsigned int dst_sub_resource_idx, unsigned int dst_x,
         unsigned int dst_y, unsigned int dst_z, struct wined3d_resource *src_resource,
-        unsigned int src_sub_resource_idx, const struct wined3d_box *src_box)
+        unsigned int src_sub_resource_idx, const struct wined3d_box *src_box, unsigned int flags)
 {
     struct wined3d_box dst_box, b;
 
     TRACE("device %p, dst_resource %p, dst_sub_resource_idx %u, dst_x %u, dst_y %u, dst_z %u, "
-            "src_resource %p, src_sub_resource_idx %u, src_box %s.\n",
+            "src_resource %p, src_sub_resource_idx %u, src_box %s, flags %#x.\n",
             device, dst_resource, dst_sub_resource_idx, dst_x, dst_y, dst_z,
-            src_resource, src_sub_resource_idx, debug_box(src_box));
+            src_resource, src_sub_resource_idx, debug_box(src_box), flags);
+
+    if (flags)
+        FIXME("Ignoring flags %#x.\n", flags);
 
     if (src_resource == dst_resource && src_sub_resource_idx == dst_sub_resource_idx)
     {
@@ -4245,13 +4299,17 @@ HRESULT CDECL wined3d_device_copy_sub_resource_region(struct wined3d_device *dev
 
 void CDECL wined3d_device_update_sub_resource(struct wined3d_device *device, struct wined3d_resource *resource,
         unsigned int sub_resource_idx, const struct wined3d_box *box, const void *data, unsigned int row_pitch,
-        unsigned int depth_pitch)
+        unsigned int depth_pitch, unsigned int flags)
 {
     unsigned int width, height, depth;
     struct wined3d_box b;
 
-    TRACE("device %p, resource %p, sub_resource_idx %u, box %s, data %p, row_pitch %u, depth_pitch %u.\n",
-            device, resource, sub_resource_idx, debug_box(box), data, row_pitch, depth_pitch);
+    TRACE("device %p, resource %p, sub_resource_idx %u, box %s, data %p, row_pitch %u, depth_pitch %u, "
+            "flags %#x.\n",
+            device, resource, sub_resource_idx, debug_box(box), data, row_pitch, depth_pitch, flags);
+
+    if (flags)
+        FIXME("Ignoring flags %#x.\n", flags);
 
     if (resource->type == WINED3D_RTYPE_BUFFER)
     {
@@ -4360,7 +4418,7 @@ HRESULT CDECL wined3d_device_clear_rendertarget_view(struct wined3d_device *devi
         return WINED3D_OK;
 
     resource = view->resource;
-    if (resource->type != WINED3D_RTYPE_TEXTURE_2D)
+    if (resource->type != WINED3D_RTYPE_TEXTURE_1D && resource->type != WINED3D_RTYPE_TEXTURE_2D)
     {
         FIXME("Not implemented for %s resources.\n", debug_d3dresourcetype(resource->type));
         return WINED3DERR_INVALIDCALL;
@@ -4449,18 +4507,19 @@ HRESULT CDECL wined3d_device_set_rendertarget_view(struct wined3d_device *device
     {
         struct wined3d_state *state = &device->state;
 
-        state->viewport.x = 0;
-        state->viewport.y = 0;
-        state->viewport.width = view->width;
-        state->viewport.height = view->height;
-        state->viewport.min_z = 0.0f;
-        state->viewport.max_z = 1.0f;
-        wined3d_cs_emit_set_viewport(device->cs, &state->viewport);
+        state->viewports[0].x = 0;
+        state->viewports[0].y = 0;
+        state->viewports[0].width = view->width;
+        state->viewports[0].height = view->height;
+        state->viewports[0].min_z = 0.0f;
+        state->viewports[0].max_z = 1.0f;
+        state->viewport_count = 1;
+        wined3d_cs_emit_set_viewports(device->cs, 1, state->viewports);
 
-        SetRect(&state->scissor_rect, 0, 0, view->width, view->height);
-        wined3d_cs_emit_set_scissor_rect(device->cs, &state->scissor_rect);
+        SetRect(&state->scissor_rects[0], 0, 0, view->width, view->height);
+        state->scissor_rect_count = 1;
+        wined3d_cs_emit_set_scissor_rects(device->cs, 1, state->scissor_rects);
     }
-
 
     prev = device->fb.render_targets[view_idx];
     if (view == prev)
@@ -4961,14 +5020,16 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         wined3d_device_set_rendertarget_view(device, 0, view, FALSE);
 
         /* Note the min_z / max_z is not reset. */
-        state->viewport.x = 0;
-        state->viewport.y = 0;
-        state->viewport.width = view->width;
-        state->viewport.height = view->height;
-        wined3d_cs_emit_set_viewport(device->cs, &state->viewport);
+        state->viewports[0].x = 0;
+        state->viewports[0].y = 0;
+        state->viewports[0].width = view->width;
+        state->viewports[0].height = view->height;
+        state->viewport_count = 1;
+        wined3d_cs_emit_set_viewports(device->cs, 1, state->viewports);
 
-        SetRect(&state->scissor_rect, 0, 0, view->width, view->height);
-        wined3d_cs_emit_set_scissor_rect(device->cs, &state->scissor_rect);
+        SetRect(&state->scissor_rects[0], 0, 0, view->width, view->height);
+        state->scissor_rect_count = 1;
+        wined3d_cs_emit_set_scissor_rects(device->cs, 1, state->scissor_rects);
     }
 
     if (device->d3d_initialized)
@@ -5187,6 +5248,8 @@ HRESULT device_init(struct wined3d_device *device, struct wined3d *wined3d,
     state_init(&device->state, &device->fb, &adapter->gl_info,
             &adapter->d3d_info, WINED3D_STATE_INIT_DEFAULT);
     device->update_state = &device->state;
+
+    device->max_frame_latency = 3;
 
     if (!(device->cs = wined3d_cs_create(device)))
     {

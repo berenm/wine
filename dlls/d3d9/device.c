@@ -1536,7 +1536,7 @@ static HRESULT WINAPI d3d9_device_UpdateSurface(IDirect3DDevice9Ex *iface,
     hr = wined3d_device_copy_sub_resource_region(device->wined3d_device,
             wined3d_texture_get_resource(dst->wined3d_texture), dst->sub_resource_idx, dst_point ? dst_point->x : 0,
             dst_point ? dst_point->y : 0, 0, wined3d_texture_get_resource(src->wined3d_texture),
-            src->sub_resource_idx, &src_box);
+            src->sub_resource_idx, &src_box, 0);
     if (SUCCEEDED(hr) && dst->texture)
         d3d9_texture_flag_auto_gen_mipmap(dst->texture);
 
@@ -2068,7 +2068,7 @@ static HRESULT WINAPI d3d9_device_SetViewport(IDirect3DDevice9Ex *iface, const D
     vp.max_z = viewport->MaxZ;
 
     wined3d_mutex_lock();
-    wined3d_device_set_viewport(device->wined3d_device, &vp);
+    wined3d_device_set_viewports(device->wined3d_device, 1, &vp);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2082,7 +2082,7 @@ static HRESULT WINAPI d3d9_device_GetViewport(IDirect3DDevice9Ex *iface, D3DVIEW
     TRACE("iface %p, viewport %p.\n", iface, viewport);
 
     wined3d_mutex_lock();
-    wined3d_device_get_viewport(device->wined3d_device, &wined3d_viewport);
+    wined3d_device_get_viewports(device->wined3d_device, NULL, &wined3d_viewport);
     wined3d_mutex_unlock();
 
     viewport->X = wined3d_viewport.x;
@@ -2564,7 +2564,7 @@ static HRESULT WINAPI d3d9_device_SetScissorRect(IDirect3DDevice9Ex *iface, cons
     TRACE("iface %p, rect %p.\n", iface, rect);
 
     wined3d_mutex_lock();
-    wined3d_device_set_scissor_rect(device->wined3d_device, rect);
+    wined3d_device_set_scissor_rects(device->wined3d_device, 1, rect);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2577,7 +2577,7 @@ static HRESULT WINAPI d3d9_device_GetScissorRect(IDirect3DDevice9Ex *iface, RECT
     TRACE("iface %p, rect %p.\n", iface, rect);
 
     wined3d_mutex_lock();
-    wined3d_device_get_scissor_rect(device->wined3d_device, rect);
+    wined3d_device_get_scissor_rects(device->wined3d_device, NULL, rect);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -3762,21 +3762,31 @@ static HRESULT WINAPI d3d9_device_CheckResourceResidency(IDirect3DDevice9Ex *ifa
 
 static HRESULT WINAPI d3d9_device_SetMaximumFrameLatency(IDirect3DDevice9Ex *iface, UINT max_latency)
 {
+    struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
+
     TRACE("iface %p, max_latency %u.\n", iface, max_latency);
 
-    if (max_latency)
-        FIXME("Ignoring max_latency %u.\n", max_latency);
+    if (max_latency > 30)
+        return D3DERR_INVALIDCALL;
+
+    wined3d_mutex_lock();
+    wined3d_device_set_max_frame_latency(device->wined3d_device, max_latency);
+    wined3d_mutex_unlock();
 
     return S_OK;
 }
 
 static HRESULT WINAPI d3d9_device_GetMaximumFrameLatency(IDirect3DDevice9Ex *iface, UINT *max_latency)
 {
-    FIXME("iface %p, max_latency %p stub!\n", iface, max_latency);
+    struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
 
-    *max_latency = 2;
+    TRACE("iface %p, max_latency %p.\n", iface, max_latency);
 
-    return E_NOTIMPL;
+    wined3d_mutex_lock();
+    *max_latency = wined3d_device_get_max_frame_latency(device->wined3d_device);
+    wined3d_mutex_unlock();
+
+    return S_OK;
 }
 
 static HRESULT WINAPI d3d9_device_CheckDeviceState(IDirect3DDevice9Ex *iface, HWND dst_window)

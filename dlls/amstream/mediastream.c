@@ -19,7 +19,6 @@
  */
 
 #define NONAMELESSUNION
-#define NONAMELESSSTRUCT
 #define COBJMACROS
 
 #include <stdarg.h>
@@ -500,7 +499,7 @@ static const IPinVtbl DirectDrawMediaStreamInputPin_IPin_Vtbl =
     BasePinImpl_QueryPinInfo,
     BasePinImpl_QueryDirection,
     BasePinImpl_QueryId,
-    BaseInputPinImpl_QueryAccept,
+    BasePinImpl_QueryAccept,
     BasePinImpl_EnumMediaTypes,
     BasePinImpl_QueryInternalConnections,
     BaseInputPinImpl_EndOfStream,
@@ -1069,7 +1068,7 @@ static const IPinVtbl AudioMediaStreamInputPin_IPin_Vtbl =
     BasePinImpl_QueryPinInfo,
     BasePinImpl_QueryDirection,
     BasePinImpl_QueryId,
-    BaseInputPinImpl_QueryAccept,
+    BasePinImpl_QueryAccept,
     BasePinImpl_EnumMediaTypes,
     BasePinImpl_QueryInternalConnections,
     BaseInputPinImpl_EndOfStream,

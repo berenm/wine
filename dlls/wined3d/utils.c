@@ -122,7 +122,6 @@ static const struct wined3d_format_channels formats[] =
     /* Bump mapping stuff */
     {WINED3DFMT_R5G5_SNORM_L6_UNORM,        5,  5,  0,  0,   0,  5,  0,  0,    2,   0,     0},
     {WINED3DFMT_R8G8_SNORM_L8X8_UNORM,      8,  8,  0,  0,   0,  8,  0,  0,    4,   0,     0},
-    {WINED3DFMT_R8G8B8A8_SNORM,             8,  8,  8,  8,   0,  8, 16, 24,    4,   0,     0},
     {WINED3DFMT_R10G11B11_SNORM,           10, 11, 11,  0,   0, 10, 21,  0,    4,   0,     0},
     {WINED3DFMT_R10G10B10X2_UINT,          10, 10, 10,  0,   0, 10, 20,  0,    4,   0,     0},
     {WINED3DFMT_R10G10B10X2_SNORM,         10, 10, 10,  0,   0, 10, 20,  0,    4,   0,     0},
@@ -133,8 +132,6 @@ static const struct wined3d_format_channels formats[] =
     {WINED3DFMT_S1_UINT_D15_UNORM,          0,  0,  0,  0,   0,  0,  0,  0,    2,  15,     1},
     {WINED3DFMT_X8D24_UNORM,                0,  0,  0,  0,   0,  0,  0,  0,    4,  24,     0},
     {WINED3DFMT_S4X4_UINT_D24_UNORM,        0,  0,  0,  0,   0,  0,  0,  0,    4,  24,     4},
-    {WINED3DFMT_D16_UNORM,                  0,  0,  0,  0,   0,  0,  0,  0,    2,  16,     0},
-    {WINED3DFMT_D32_FLOAT,                  0,  0,  0,  0,   0,  0,  0,  0,    4,  32,     0},
     {WINED3DFMT_S8_UINT_D24_FLOAT,          0,  0,  0,  0,   0,  0,  0,  0,    4,  24,     8},
     /* Vendor-specific formats */
     {WINED3DFMT_ATI1N,                      0,  0,  0,  0,   0,  0,  0,  0,    1,   0,     0},
@@ -2756,7 +2753,7 @@ static void query_internal_format(struct wined3d_adapter *adapter,
         struct wined3d_format *format, const struct wined3d_format_texture_info *texture_info,
         struct wined3d_gl_info *gl_info, BOOL srgb_write_supported, BOOL srgb_format)
 {
-    GLint count, multisample_types[MAX_MULTISAMPLE_TYPES];
+    GLint count, multisample_types[8];
     unsigned int i, max_log2;
     GLenum target;
 
@@ -2835,7 +2832,9 @@ static void query_internal_format(struct wined3d_adapter *adapter,
             count = 0;
             GL_EXTCALL(glGetInternalformativ(target, format->glInternal,
                     GL_NUM_SAMPLE_COUNTS, 1, &count));
-            count = min(count, MAX_MULTISAMPLE_TYPES);
+            if (count > ARRAY_SIZE(multisample_types))
+                FIXME("Unexpectedly high number of multisample types %d.\n", count);
+            count = min(count, ARRAY_SIZE(multisample_types));
             GL_EXTCALL(glGetInternalformativ(target, format->glInternal,
                     GL_SAMPLES, count, multisample_types));
             checkGLcall("query sample counts");
@@ -3217,8 +3216,8 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
                 0, CHANNEL_SOURCE_X, 0, CHANNEL_SOURCE_W, 0, CHANNEL_SOURCE_ONE, 0, CHANNEL_SOURCE_ONE);
     }
 
-    if (!gl_info->supported[APPLE_YCBCR_422] && gl_info->supported[ARB_FRAGMENT_PROGRAM]
-            && gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
+    if (!gl_info->supported[APPLE_YCBCR_422] && (gl_info->supported[ARB_FRAGMENT_PROGRAM]
+            || (gl_info->supported[ARB_FRAGMENT_SHADER] && gl_info->supported[ARB_VERTEX_SHADER])))
     {
         idx = get_format_idx(WINED3DFMT_YUY2);
         gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_YUY2);
@@ -3227,7 +3226,7 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
         gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_UYVY);
     }
     else if (!gl_info->supported[APPLE_YCBCR_422] && (!gl_info->supported[ARB_FRAGMENT_PROGRAM]
-            || !gl_info->supported[WINED3D_GL_LEGACY_CONTEXT]))
+            && (!gl_info->supported[ARB_FRAGMENT_SHADER] || !gl_info->supported[ARB_VERTEX_SHADER])))
     {
         idx = get_format_idx(WINED3DFMT_YUY2);
         gl_info->formats[idx].glInternal = 0;
@@ -3236,7 +3235,8 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
         gl_info->formats[idx].glInternal = 0;
     }
 
-    if (gl_info->supported[ARB_FRAGMENT_PROGRAM] && gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
+    if (gl_info->supported[ARB_FRAGMENT_PROGRAM]
+            || (gl_info->supported[ARB_FRAGMENT_SHADER] && gl_info->supported[ARB_VERTEX_SHADER]))
     {
         idx = get_format_idx(WINED3DFMT_YV12);
         format_set_flag(&gl_info->formats[idx], WINED3DFMT_FLAG_HEIGHT_SCALE);
@@ -3285,7 +3285,7 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
                 0, CHANNEL_SOURCE_X, 0, CHANNEL_SOURCE_X, 0, CHANNEL_SOURCE_X, 0, CHANNEL_SOURCE_ONE);
     }
 
-    if (gl_info->supported[ARB_FRAGMENT_PROGRAM])
+    if (gl_info->supported[ARB_FRAGMENT_PROGRAM] || gl_info->supported[ARB_FRAGMENT_SHADER])
     {
         idx = get_format_idx(WINED3DFMT_P8_UINT);
         gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_P8);
@@ -4652,8 +4652,8 @@ const char *debug_d3dstate(DWORD state)
         return wine_dbg_sprintf("STATE_CLIPPLANE(%#x)", state - STATE_CLIPPLANE(0));
     if (STATE_IS_MATERIAL(state))
         return "STATE_MATERIAL";
-    if (STATE_IS_FRONTFACE(state))
-        return "STATE_FRONTFACE";
+    if (STATE_IS_RASTERIZER(state))
+        return "STATE_RASTERIZER";
     if (STATE_IS_POINTSPRITECOORDORIGIN(state))
         return "STATE_POINTSPRITECOORDORIGIN";
     if (STATE_IS_BASEVERTEXINDEX(state))
@@ -4865,10 +4865,10 @@ void get_projection_matrix(const struct wined3d_context *context, const struct w
     if (context->last_was_rhw)
     {
         /* Transform D3D RHW coordinates to OpenGL clip coordinates. */
-        float x = state->viewport.x;
-        float y = state->viewport.y;
-        float w = state->viewport.width;
-        float h = state->viewport.height;
+        float x = state->viewports[0].x;
+        float y = state->viewports[0].y;
+        float w = state->viewports[0].width;
+        float h = state->viewports[0].height;
         float x_scale = 2.0f / w;
         float x_offset = (center_offset - (2.0f * x) - w) / w;
         float y_scale = flip ? 2.0f / h : 2.0f / -h;
@@ -4892,10 +4892,10 @@ void get_projection_matrix(const struct wined3d_context *context, const struct w
     else
     {
         float y_scale = flip ? -1.0f : 1.0f;
-        float x_offset = center_offset / state->viewport.width;
+        float x_offset = center_offset / state->viewports[0].width;
         float y_offset = flip
-                ? center_offset / state->viewport.height
-                : -center_offset / state->viewport.height;
+                ? center_offset / state->viewports[0].height
+                : -center_offset / state->viewports[0].height;
         float z_scale = clip_control ? 1.0f : 2.0f;
         float z_offset = clip_control ? 0.0f : -1.0f;
         const struct wined3d_matrix projection =
@@ -5095,9 +5095,10 @@ void get_pointsize(const struct wined3d_context *context, const struct wined3d_s
     b.d = state->render_states[WINED3D_RS_POINTSCALE_B];
     c.d = state->render_states[WINED3D_RS_POINTSCALE_C];
 
+    /* Always use first viewport, this path does not apply to d3d10/11 multiple viewports case. */
     if (state->render_states[WINED3D_RS_POINTSCALEENABLE])
     {
-        float scale_factor = state->viewport.height * state->viewport.height;
+        float scale_factor = state->viewports[0].height * state->viewports[0].height;
 
         out_att[0] = a.f / scale_factor;
         out_att[1] = b.f / scale_factor;

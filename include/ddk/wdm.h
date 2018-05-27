@@ -1374,6 +1374,8 @@ PVOID     WINAPI ExAllocatePoolWithTag(POOL_TYPE,SIZE_T,ULONG);
 PVOID     WINAPI ExAllocatePoolWithQuotaTag(POOL_TYPE,SIZE_T,ULONG);
 void      WINAPI ExFreePool(PVOID);
 void      WINAPI ExFreePoolWithTag(PVOID,ULONG);
+PSLIST_ENTRY WINAPI ExInterlockedPopEntrySList(PSLIST_HEADER,PKSPIN_LOCK);
+PSLIST_ENTRY WINAPI ExInterlockedPushEntrySList(PSLIST_HEADER,PSLIST_ENTRY,PKSPIN_LOCK);
 void      WINAPI ExReleaseFastMutexUnsafe(PFAST_MUTEX);
 
 NTSTATUS  WINAPI IoAllocateDriverObjectExtension(PDRIVER_OBJECT,PVOID,ULONG,PVOID*);
@@ -1419,8 +1421,10 @@ PVOID     WINAPI MmAllocateContiguousMemory(SIZE_T,PHYSICAL_ADDRESS);
 PVOID     WINAPI MmAllocateNonCachedMemory(SIZE_T);
 PMDL      WINAPI MmAllocatePagesForMdl(PHYSICAL_ADDRESS,PHYSICAL_ADDRESS,PHYSICAL_ADDRESS,SIZE_T);
 void      WINAPI MmFreeNonCachedMemory(PVOID,SIZE_T);
+void *    WINAPI MmGetSystemRoutineAddress(UNICODE_STRING*);
 PVOID     WINAPI MmMapLockedPagesSpecifyCache(PMDL,KPROCESSOR_MODE,MEMORY_CACHING_TYPE,PVOID,ULONG,ULONG);
 MM_SYSTEMSIZE WINAPI MmQuerySystemSize(void);
+void      WINAPI MmProbeAndLockPages(PMDLX, KPROCESSOR_MODE, LOCK_OPERATION);
 
 static inline void *MmGetSystemAddressForMdlSafe(MDL *mdl, ULONG priority)
 {

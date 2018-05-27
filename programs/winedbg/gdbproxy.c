@@ -72,13 +72,6 @@
 #define GDBPXY_TRC_WIN32_ERROR          0x20
 #define GDBPXY_TRC_COMMAND_FIXME        0x80
 
-struct gdb_ctx_Xpoint
-{
-    enum be_xpoint_type         type;   /* (-1) == be_xpoint_free means free */
-    void*                       addr;
-    unsigned long               val;
-};
-
 struct gdb_context
 {
     /* gdb information */
@@ -105,8 +98,6 @@ struct gdb_context
     CONTEXT                     context;
     /* Win32 information */
     struct dbg_process*         process;
-#define NUM_XPOINT      32
-    struct gdb_ctx_Xpoint       Xpoints[NUM_XPOINT];
     /* Unix environment */
     unsigned long               wine_segs[3];   /* load addresses of the ELF wine exec segments (text, bss and data) */
 };
@@ -1570,28 +1561,6 @@ static enum packet_return packet_thread(struct gdb_context* gdbctx)
     }
 }
 
-static BOOL read_memory(struct gdb_context *gdbctx, char *addr, char *buffer, SIZE_T blk_len, SIZE_T *r)
-{
-    /* Wrapper around process_io->read() that replaces values displaced by breakpoints. */
-
-    BOOL ret;
-
-    ret = gdbctx->process->process_io->read(gdbctx->process->handle, addr, buffer, blk_len, r);
-    if (ret)
-    {
-        struct gdb_ctx_Xpoint *xpt;
-
-        for (xpt = &gdbctx->Xpoints[NUM_XPOINT - 1]; xpt >= gdbctx->Xpoints; xpt--)
-        {
-            char *xpt_addr = xpt->addr;
-
-            if (xpt->type != be_xpoint_free && xpt_addr >= addr && xpt_addr < addr + blk_len)
-                buffer[xpt_addr - addr] = xpt->val;
-        }
-    }
-    return ret;
-}
-
 static enum packet_return packet_read_memory(struct gdb_context* gdbctx)
 {
     char               *addr;
@@ -1608,7 +1577,8 @@ static enum packet_return packet_read_memory(struct gdb_context* gdbctx)
     for (nread = 0; nread < len; nread += r, addr += r)
     {
         blk_len = min(sizeof(buffer), len - nread);
-        if (!read_memory(gdbctx, addr, buffer, blk_len, &r) || r == 0)
+        if (!gdbctx->process->process_io->read(gdbctx->process->handle, addr,
+            buffer, blk_len, &r) || r == 0)
         {
             /* fail at first address, return error */
             if (nread == 0) return packet_reply_error(gdbctx, EFAULT);
@@ -2163,97 +2133,6 @@ static enum packet_return packet_thread_alive(struct gdb_context* gdbctx)
     return packet_reply_error(gdbctx, ESRCH);
 }
 
-static enum packet_return packet_remove_breakpoint(struct gdb_context* gdbctx)
-{
-    void*                       addr;
-    unsigned                    len;
-    struct gdb_ctx_Xpoint*      xpt;
-    enum be_xpoint_type         t;
-
-    /* FIXME: check packet_len */
-    if (gdbctx->in_packet[0] < '0' || gdbctx->in_packet[0] > '4' ||
-        gdbctx->in_packet[1] != ',' ||
-        sscanf(gdbctx->in_packet + 2, "%p,%x", &addr, &len) != 2)
-        return packet_error;
-    if (gdbctx->trace & GDBPXY_TRC_COMMAND)
-        fprintf(stderr, "Remove bp %p[%u] typ=%c\n",
-                addr, len, gdbctx->in_packet[0]);
-    switch (gdbctx->in_packet[0])
-    {
-    case '0': t = be_xpoint_break; len = 0; break;
-    case '1': t = be_xpoint_watch_exec; break;
-    case '2': t = be_xpoint_watch_read; break;
-    case '3': t = be_xpoint_watch_write; break;
-    default: return packet_error;
-    }
-    for (xpt = &gdbctx->Xpoints[NUM_XPOINT - 1]; xpt >= gdbctx->Xpoints; xpt--)
-    {
-        if (xpt->addr == addr && xpt->type == t)
-        {
-            if (be_cpu->remove_Xpoint(gdbctx->process->handle,
-                                      gdbctx->process->process_io, &gdbctx->context,
-                                      t, xpt->addr, xpt->val, len))
-            {
-                xpt->type = be_xpoint_free;
-                return packet_ok;
-            }
-            break;
-        }
-    }
-    return packet_error;
-}
-
-static enum packet_return packet_set_breakpoint(struct gdb_context* gdbctx)
-{
-    void*                       addr;
-    unsigned                    len;
-    struct gdb_ctx_Xpoint*      xpt;
-    enum be_xpoint_type         t;
-
-    /* FIXME: check packet_len */
-    if (gdbctx->in_packet[0] < '0' || gdbctx->in_packet[0] > '4' ||
-        gdbctx->in_packet[1] != ',' ||
-        sscanf(gdbctx->in_packet + 2, "%p,%x", &addr, &len) != 2)
-        return packet_error;
-    if (gdbctx->trace & GDBPXY_TRC_COMMAND)
-        fprintf(stderr, "Set bp %p[%u] typ=%c\n",
-                addr, len, gdbctx->in_packet[0]);
-    switch (gdbctx->in_packet[0])
-    {
-    case '0': t = be_xpoint_break; len = 0; break;
-    case '1': t = be_xpoint_watch_exec; break;
-    case '2': t = be_xpoint_watch_read; break;
-    case '3': t = be_xpoint_watch_write; break;
-    default: return packet_error;
-    }
-    /* because of packet command handling, this should be made idempotent */
-    for (xpt = &gdbctx->Xpoints[NUM_XPOINT - 1]; xpt >= gdbctx->Xpoints; xpt--)
-    {
-        if (xpt->addr == addr && xpt->type == t)
-            return packet_ok; /* nothing to do */
-    }
-    /* really set the Xpoint */
-    for (xpt = &gdbctx->Xpoints[NUM_XPOINT - 1]; xpt >= gdbctx->Xpoints; xpt--)
-    {
-        if (xpt->type == be_xpoint_free)
-        {
-            if (be_cpu->insert_Xpoint(gdbctx->process->handle,
-                                      gdbctx->process->process_io, &gdbctx->context, 
-                                      t, addr, &xpt->val, len))
-            {
-                xpt->addr = addr;
-                xpt->type = t;
-                return packet_ok;
-            }
-            fprintf(stderr, "cannot set xpoint\n");
-            break;
-        }
-    }
-    /* no more entries... eech */
-    fprintf(stderr, "Running out of spots for {break|watch}points\n");
-    return packet_error;
-}
-
 /* =============================================== *
  *    P A C K E T  I N F R A S T R U C T U R E     *
  * =============================================== *
@@ -2287,8 +2166,6 @@ static struct packet_entry packet_entries[] =
         /*{'S', packet_step_signal}, hard(er) to implement */
         {'T', packet_thread_alive},
         {'v', packet_verbose},
-        {'z', packet_remove_breakpoint},
-        {'Z', packet_set_breakpoint},
 };
 
 static BOOL extract_packets(struct gdb_context* gdbctx)
@@ -2468,10 +2345,10 @@ static BOOL gdb_exec(const char* wine_path, unsigned port, unsigned flags)
     return TRUE;
 }
 
-static BOOL gdb_startup(struct gdb_context* gdbctx, DEBUG_EVENT* de, unsigned flags)
+static BOOL gdb_startup(struct gdb_context* gdbctx, DEBUG_EVENT* de, unsigned flags, unsigned port)
 {
     int                 sock;
-    struct sockaddr_in  s_addrs;
+    struct sockaddr_in  s_addrs = {0};
     socklen_t           s_len = sizeof(s_addrs);
     struct pollfd       pollfd;
     IMAGEHLP_MODULE64   imh_mod;
@@ -2484,6 +2361,12 @@ static BOOL gdb_startup(struct gdb_context* gdbctx, DEBUG_EVENT* de, unsigned fl
             fprintf(stderr, "Can't create socket");
         return FALSE;
     }
+
+    s_addrs.sin_family = AF_INET;
+    s_addrs.sin_addr.s_addr = INADDR_ANY;
+    s_addrs.sin_port = htons(port);
+    if (bind(sock, (struct sockaddr *)&s_addrs, sizeof(s_addrs)) == -1)
+        goto cleanup;
 
     if (listen(sock, 1) == -1 || getsockname(sock, (struct sockaddr*)&s_addrs, &s_len) == -1)
         goto cleanup;
@@ -2553,7 +2436,7 @@ cleanup:
     return ret;
 }
 
-static BOOL gdb_init_context(struct gdb_context* gdbctx, unsigned flags)
+static BOOL gdb_init_context(struct gdb_context* gdbctx, unsigned flags, unsigned port)
 {
     DEBUG_EVENT         de;
     int                 i;
@@ -2572,8 +2455,6 @@ static BOOL gdb_init_context(struct gdb_context* gdbctx, unsigned flags)
     gdbctx->in_trap = FALSE;
     gdbctx->trace = /*GDBPXY_TRC_PACKET | GDBPXY_TRC_COMMAND |*/ GDBPXY_TRC_COMMAND_ERROR | GDBPXY_TRC_COMMAND_FIXME | GDBPXY_TRC_WIN32_EVENT;
     gdbctx->process = NULL;
-    for (i = 0; i < NUM_XPOINT; i++)
-        gdbctx->Xpoints[i].type = -1;
     for (i = 0; i < sizeof(gdbctx->wine_segs) / sizeof(gdbctx->wine_segs[0]); i++)
         gdbctx->wine_segs[i] = 0;
 
@@ -2586,7 +2467,7 @@ static BOOL gdb_init_context(struct gdb_context* gdbctx, unsigned flags)
              * and the only one of this type  */
             assert(gdbctx->process == NULL && de.dwProcessId == dbg_curr_pid);
             /* gdbctx->dwProcessId = pid; */
-            if (!gdb_startup(gdbctx, &de, flags)) return FALSE;
+            if (!gdb_startup(gdbctx, &de, flags, port)) return FALSE;
             assert(!gdbctx->in_trap);
         }
         else
@@ -2599,13 +2480,13 @@ static BOOL gdb_init_context(struct gdb_context* gdbctx, unsigned flags)
     return TRUE;
 }
 
-static int gdb_remote(unsigned flags)
+static int gdb_remote(unsigned flags, unsigned port)
 {
     struct pollfd       pollfd;
     struct gdb_context  gdbctx;
     BOOL                doLoop;
 
-    for (doLoop = gdb_init_context(&gdbctx, flags); doLoop;)
+    for (doLoop = gdb_init_context(&gdbctx, flags, port); doLoop;)
     {
         pollfd.fd = gdbctx.sock;
         pollfd.events = POLLIN;
@@ -2647,7 +2528,8 @@ static int gdb_remote(unsigned flags)
 int gdb_main(int argc, char* argv[])
 {
 #ifdef HAVE_POLL
-    unsigned gdb_flags = 0;
+    unsigned gdb_flags = 0, port = 0;
+    char *port_end;
 
     argc--; argv++;
     while (argc > 0 && argv[0][0] == '-')
@@ -2664,11 +2546,22 @@ int gdb_main(int argc, char* argv[])
             argc--; argv++;
             continue;
         }
+        if (strcmp(argv[0], "--port") == 0 && argc > 1)
+        {
+            port = strtoul(argv[1], &port_end, 10);
+            if (*port_end)
+            {
+                fprintf(stderr, "Invalid port: %s\n", argv[1]);
+                return -1;
+            }
+            argc -= 2; argv += 2;
+            continue;
+        }
         return -1;
     }
     if (dbg_active_attach(argc, argv) == start_ok ||
         dbg_active_launch(argc, argv) == start_ok)
-        return gdb_remote(gdb_flags);
+        return gdb_remote(gdb_flags, port);
 #else
     fprintf(stderr, "GdbProxy mode not supported on this platform\n");
 #endif

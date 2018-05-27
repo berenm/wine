@@ -691,7 +691,7 @@ static inline void ctxthandle_gss_to_sspi( gss_ctx_id_t handle, LSA_SEC_HANDLE *
     *ctxt = (LSA_SEC_HANDLE)handle;
 }
 
-static SECURITY_STATUS status_gss_to_sspi( OM_uint32 status )
+static NTSTATUS status_gss_to_sspi( OM_uint32 status )
 {
     switch (status)
     {
@@ -710,9 +710,10 @@ static SECURITY_STATUS status_gss_to_sspi( OM_uint32 status )
     case GSS_S_OLD_TOKEN:            return SEC_E_INVALID_TOKEN;
     case GSS_S_UNSEQ_TOKEN:          return SEC_E_OUT_OF_SEQUENCE;
     case GSS_S_GAP_TOKEN:            return SEC_E_OUT_OF_SEQUENCE;
+    case GSS_S_FAILURE:              return SEC_E_INTERNAL_ERROR;
 
     default:
-        FIXME( "couldn't convert status 0x%08x to SECURITY_STATUS\n", status );
+        FIXME( "couldn't convert status 0x%08x to NTSTATUS\n", status );
         return SEC_E_INTERNAL_ERROR;
     }
 }
@@ -761,7 +762,7 @@ static void expirytime_gss_to_sspi( OM_uint32 expirytime, TimeStamp *timestamp )
     timestamp->HighPart = tmp.QuadPart >> 32;
 }
 
-static SECURITY_STATUS name_sspi_to_gss( const UNICODE_STRING *name_str, gss_name_t *name )
+static NTSTATUS name_sspi_to_gss( const UNICODE_STRING *name_str, gss_name_t *name )
 {
     OM_uint32 ret, minor_status;
     gss_OID type = GSS_C_NO_OID; /* FIXME: detect the appropriate value for this ourselves? */
@@ -790,6 +791,7 @@ static ULONG flags_isc_req_to_gss( ULONG flags )
     if (flags & ISC_REQ_INTEGRITY)       ret |= GSS_C_INTEG_FLAG;
     if (flags & ISC_REQ_NULL_SESSION)    ret |= GSS_C_ANON_FLAG;
     if (flags & ISC_REQ_USE_DCE_STYLE)   ret |= GSS_C_DCE_STYLE;
+    if (flags & ISC_REQ_IDENTIFY)        ret |= GSS_C_IDENTIFY_FLAG;
     return ret;
 }
 
@@ -803,6 +805,8 @@ static ULONG flags_gss_to_isc_ret( ULONG flags )
     if (flags & GSS_C_CONF_FLAG)     ret |= ISC_RET_CONFIDENTIALITY;
     if (flags & GSS_C_INTEG_FLAG)    ret |= ISC_RET_INTEGRITY;
     if (flags & GSS_C_ANON_FLAG)     ret |= ISC_RET_NULL_SESSION;
+    if (flags & GSS_C_DCE_STYLE)     ret |= ISC_RET_USED_DCE_STYLE;
+    if (flags & GSS_C_IDENTIFY_FLAG) ret |= ISC_RET_IDENTIFY;
     return ret;
 }
 
@@ -816,6 +820,8 @@ static ULONG flags_gss_to_asc_ret( ULONG flags )
     if (flags & GSS_C_CONF_FLAG)     ret |= ASC_RET_CONFIDENTIALITY;
     if (flags & GSS_C_INTEG_FLAG)    ret |= ASC_RET_INTEGRITY;
     if (flags & GSS_C_ANON_FLAG)     ret |= ASC_RET_NULL_SESSION;
+    if (flags & GSS_C_DCE_STYLE)     ret |= ASC_RET_USED_DCE_STYLE;
+    if (flags & GSS_C_IDENTIFY_FLAG) ret |= ASC_RET_IDENTIFY;
     return ret;
 }
 
@@ -925,8 +931,9 @@ static NTSTATUS acquire_credentials_handle( UNICODE_STRING *principal_us, gss_cr
     OM_uint32 ret, minor_status, expiry_time;
     gss_name_t principal = GSS_C_NO_NAME;
     gss_cred_id_t cred_handle;
+    NTSTATUS status;
 
-    if (principal_us && ((ret = name_sspi_to_gss( principal_us, &principal )) != SEC_E_OK)) return ret;
+    if (principal_us && ((status = name_sspi_to_gss( principal_us, &principal )) != SEC_E_OK)) return status;
 
     ret = pgss_acquire_cred( &minor_status, principal, GSS_C_INDEFINITE, GSS_C_NULL_OID_SET, cred_usage,
                               &cred_handle, NULL, &expiry_time );
@@ -1012,12 +1019,14 @@ static NTSTATUS NTAPI kerberos_SpInitLsaModeContext( LSA_SEC_HANDLE credential, 
 {
 #ifdef SONAME_LIBGSSAPI_KRB5
     static const ULONG supported = ISC_REQ_CONFIDENTIALITY | ISC_REQ_INTEGRITY | ISC_REQ_SEQUENCE_DETECT |
-                                   ISC_REQ_REPLAY_DETECT | ISC_REQ_MUTUAL_AUTH | ISC_REQ_USE_DCE_STYLE;
+                                   ISC_REQ_REPLAY_DETECT | ISC_REQ_MUTUAL_AUTH | ISC_REQ_USE_DCE_STYLE |
+                                   ISC_REQ_IDENTIFY | ISC_REQ_CONNECTION;
     OM_uint32 ret, minor_status, ret_flags = 0, expiry_time, req_flags = flags_isc_req_to_gss( context_req );
     gss_cred_id_t cred_handle;
     gss_ctx_id_t ctxt_handle;
     gss_buffer_desc input_token, output_token;
     gss_name_t target = GSS_C_NO_NAME;
+    NTSTATUS status;
     int idx;
 
     TRACE( "(%lx %lx %s 0x%08x %u %p %p %p %p %p %p %p)\n", credential, context, debugstr_us(target_name),
@@ -1041,7 +1050,7 @@ static NTSTATUS NTAPI kerberos_SpInitLsaModeContext( LSA_SEC_HANDLE credential, 
     output_token.length = 0;
     output_token.value  = NULL;
 
-    if (target_name && ((ret = name_sspi_to_gss( target_name, &target )) != SEC_E_OK)) return ret;
+    if (target_name && ((status = name_sspi_to_gss( target_name, &target )) != SEC_E_OK)) return status;
 
     ret = pgss_init_sec_context( &minor_status, cred_handle, &ctxt_handle, target, GSS_C_NO_OID, req_flags, 0,
                                  GSS_C_NO_CHANNEL_BINDINGS, &input_token, NULL, &output_token, &ret_flags,
@@ -1369,7 +1378,7 @@ static NTSTATUS SEC_ENTRY kerberos_SpMakeSignature( LSA_SEC_HANDLE context, ULON
 #endif
 }
 
-static SECURITY_STATUS SEC_ENTRY kerberos_SpVerifySignature( LSA_SEC_HANDLE context, SecBufferDesc *message,
+static NTSTATUS NTAPI kerberos_SpVerifySignature( LSA_SEC_HANDLE context, SecBufferDesc *message,
     ULONG message_seq_no, ULONG *quality_of_protection )
 {
 #ifdef SONAME_LIBGSSAPI_KRB5

@@ -929,26 +929,34 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemVerifierInformation = 51,
     SystemAddVerifier = 52,
     SystemSessionProcessesInformation	= 53,
-    Unknown54,
-    Unknown55,
-    Unknown56,
-    Unknown57,
+    SystemLoadGdiDriverInSystemSpace = 54,
+    SystemNumaProcessorMap = 55,
+    SystemPrefetcherInformation = 56,
+    SystemExtendedProcessInformation = 57,
     SystemRecommendedSharedDataAlignment = 58,
-    Unknown59,
-    Unknown60,
-    Unknown61,
-    Unknown62,
-    Unknown63,
-    Unknown64,
-    Unknown65,
-    Unknown66,
-    Unknown67,
-    Unknown68,
-    Unknown69,
-    Unknown70,
-    Unknown71,
-    Unknown72,
+    SystemComPlusPackage = 59,
+    SystemNumaAvailableMemory = 60,
+    SystemProcessorPowerInformation = 61,
+    SystemEmulationBasicInformation = 62,
+    SystemEmulationProcessorInformation = 63,
+    SystemExtendedHandleInformation = 64,
+    SystemLostDelayedWriteInformation = 65,
+    SystemBigPoolInformation = 66,
+    SystemSessionPoolTagInformation = 67,
+    SystemSessionMappedViewInformation = 68,
+    SystemHotpatchInformation = 69,
+    SystemObjectSecurityMode = 70,
+    SystemWatchdogTimerHandler = 71,
+    SystemWatchdogTimerInformation = 72,
     SystemLogicalProcessorInformation = 73,
+    SystemWow64SharedInformation = 74,
+    SystemRegisterFirmwareTableInformationHandler = 75,
+    SystemFirmwareTableInformation = 76,
+    SystemModuleInformationEx = 77,
+    SystemVerifierTriageInformation = 78,
+    SystemSuperfetchInformation = 79,
+    SystemMemoryListInformation = 80,
+    SystemFileCacheInformationEx = 81,
     SystemLogicalProcessorInformationEx = 107,
     SystemInformationClassMax
 } SYSTEM_INFORMATION_CLASS, *PSYSTEM_INFORMATION_CLASS;
@@ -2161,6 +2169,32 @@ typedef struct _LDR_MODULE
     HANDLE              ActivationContext;
 } LDR_MODULE, *PLDR_MODULE;
 
+typedef struct _LDR_DLL_LOADED_NOTIFICATION_DATA
+{
+    ULONG Flags;
+    const UNICODE_STRING *FullDllName;
+    const UNICODE_STRING *BaseDllName;
+    void *DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_LOADED_NOTIFICATION_DATA, *PLDR_DLL_LOADED_NOTIFICATION_DATA;
+
+typedef struct _LDR_DLL_UNLOADED_NOTIFICATION_DATA
+{
+    ULONG Flags;
+    const UNICODE_STRING *FullDllName;
+    const UNICODE_STRING *BaseDllName;
+    void *DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_UNLOADED_NOTIFICATION_DATA, *PLDR_DLL_UNLOADED_NOTIFICATION_DATA;
+
+typedef union _LDR_DLL_NOTIFICATION_DATA
+{
+    LDR_DLL_LOADED_NOTIFICATION_DATA Loaded;
+    LDR_DLL_UNLOADED_NOTIFICATION_DATA Unloaded;
+} LDR_DLL_NOTIFICATION_DATA, *PLDR_DLL_NOTIFICATION_DATA;
+
+typedef void (CALLBACK *PLDR_DLL_NOTIFICATION_FUNCTION)(ULONG, LDR_DLL_NOTIFICATION_DATA*, void*);
+
 /* those defines are (some of the) regular LDR_MODULE.Flags values */
 #define LDR_IMAGE_IS_DLL                0x00000004
 #define LDR_LOAD_IN_PROGRESS            0x00001000
@@ -2176,6 +2210,9 @@ typedef struct _LDR_MODULE
 
 /* flag for LdrAddRefDll */
 #define LDR_ADDREF_DLL_PIN              0x00000001
+
+#define LDR_DLL_NOTIFICATION_REASON_LOADED   1
+#define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
 
 /* FIXME: to be checked */
 #define MAXIMUM_FILENAME_LENGTH 256

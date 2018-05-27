@@ -136,6 +136,10 @@ static HRESULT shdr_handler(const char *data, DWORD data_size, DWORD tag, void *
             }
             break;
 
+        case TAG_RDEF:
+        case TAG_STAT:
+            break;
+
         default:
             FIXME("Unhandled chunk %s.\n", debugstr_an((const char *)&tag, 4));
             break;
@@ -326,7 +330,7 @@ static ULONG STDMETHODCALLTYPE d3d11_vertex_shader_AddRef(ID3D11VertexShader *if
 
     if (refcount == 1)
     {
-        ID3D11Device_AddRef(shader->device);
+        ID3D11Device2_AddRef(shader->device);
         wined3d_mutex_lock();
         wined3d_shader_incref(shader->wined3d_shader);
         wined3d_mutex_unlock();
@@ -344,14 +348,14 @@ static ULONG STDMETHODCALLTYPE d3d11_vertex_shader_Release(ID3D11VertexShader *i
 
     if (!refcount)
     {
-        ID3D11Device *device = shader->device;
+        ID3D11Device2 *device = shader->device;
 
         wined3d_mutex_lock();
         wined3d_shader_decref(shader->wined3d_shader);
         wined3d_mutex_unlock();
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -364,7 +368,7 @@ static void STDMETHODCALLTYPE d3d11_vertex_shader_GetDevice(ID3D11VertexShader *
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    *device = shader->device;
+    *device = (ID3D11Device *)shader->device;
     ID3D11Device_AddRef(*device);
 }
 
@@ -456,7 +460,7 @@ static void STDMETHODCALLTYPE d3d10_vertex_shader_GetDevice(ID3D10VertexShader *
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    ID3D11Device_QueryInterface(shader->device, &IID_ID3D10Device, (void **)device);
+    ID3D11Device2_QueryInterface(shader->device, &IID_ID3D10Device, (void **)device);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d10_vertex_shader_GetPrivateData(ID3D10VertexShader *iface,
@@ -571,8 +575,7 @@ static HRESULT d3d_vertex_shader_init(struct d3d_vertex_shader *shader, struct d
     }
     wined3d_mutex_unlock();
 
-    shader->device = &device->ID3D11Device_iface;
-    ID3D11Device_AddRef(shader->device);
+    ID3D11Device2_AddRef(shader->device = &device->ID3D11Device2_iface);
 
     return S_OK;
 }
@@ -653,7 +656,7 @@ static ULONG STDMETHODCALLTYPE d3d11_hull_shader_AddRef(ID3D11HullShader *iface)
 
     if (refcount == 1)
     {
-        ID3D11Device_AddRef(shader->device);
+        ID3D11Device2_AddRef(shader->device);
         wined3d_mutex_lock();
         wined3d_shader_incref(shader->wined3d_shader);
         wined3d_mutex_unlock();
@@ -671,7 +674,7 @@ static ULONG STDMETHODCALLTYPE d3d11_hull_shader_Release(ID3D11HullShader *iface
 
     if (!refcount)
     {
-        ID3D11Device *device = shader->device;
+        ID3D11Device2 *device = shader->device;
 
         wined3d_mutex_lock();
         wined3d_shader_decref(shader->wined3d_shader);
@@ -679,7 +682,7 @@ static ULONG STDMETHODCALLTYPE d3d11_hull_shader_Release(ID3D11HullShader *iface
 
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -692,7 +695,7 @@ static void STDMETHODCALLTYPE d3d11_hull_shader_GetDevice(ID3D11HullShader *ifac
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    *device = shader->device;
+    *device = (ID3D11Device *)shader->device;
     ID3D11Device_AddRef(*device);
 }
 
@@ -784,8 +787,7 @@ static HRESULT d3d11_hull_shader_init(struct d3d11_hull_shader *shader, struct d
     }
     wined3d_mutex_unlock();
 
-    shader->device = &device->ID3D11Device_iface;
-    ID3D11Device_AddRef(shader->device);
+    ID3D11Device2_AddRef(shader->device = &device->ID3D11Device2_iface);
 
     return S_OK;
 }
@@ -856,7 +858,7 @@ static ULONG STDMETHODCALLTYPE d3d11_domain_shader_AddRef(ID3D11DomainShader *if
 
     if (refcount == 1)
     {
-        ID3D11Device_AddRef(shader->device);
+        ID3D11Device2_AddRef(shader->device);
         wined3d_mutex_lock();
         wined3d_shader_incref(shader->wined3d_shader);
         wined3d_mutex_unlock();
@@ -874,7 +876,7 @@ static ULONG STDMETHODCALLTYPE d3d11_domain_shader_Release(ID3D11DomainShader *i
 
     if (!refcount)
     {
-        ID3D11Device *device = shader->device;
+        ID3D11Device2 *device = shader->device;
 
         wined3d_mutex_lock();
         wined3d_shader_decref(shader->wined3d_shader);
@@ -882,7 +884,7 @@ static ULONG STDMETHODCALLTYPE d3d11_domain_shader_Release(ID3D11DomainShader *i
 
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -895,7 +897,7 @@ static void STDMETHODCALLTYPE d3d11_domain_shader_GetDevice(ID3D11DomainShader *
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    *device = shader->device;
+    *device = (ID3D11Device *)shader->device;
     ID3D11Device_AddRef(*device);
 }
 
@@ -987,8 +989,7 @@ static HRESULT d3d11_domain_shader_init(struct d3d11_domain_shader *shader, stru
     }
     wined3d_mutex_unlock();
 
-    shader->device = &device->ID3D11Device_iface;
-    ID3D11Device_AddRef(shader->device);
+    ID3D11Device2_AddRef(shader->device = &device->ID3D11Device2_iface);
 
     return S_OK;
 }
@@ -1069,7 +1070,7 @@ static ULONG STDMETHODCALLTYPE d3d11_geometry_shader_AddRef(ID3D11GeometryShader
 
     if (refcount == 1)
     {
-        ID3D11Device_AddRef(shader->device);
+        ID3D11Device2_AddRef(shader->device);
         wined3d_mutex_lock();
         wined3d_shader_incref(shader->wined3d_shader);
         wined3d_mutex_unlock();
@@ -1087,7 +1088,7 @@ static ULONG STDMETHODCALLTYPE d3d11_geometry_shader_Release(ID3D11GeometryShade
 
     if (!refcount)
     {
-        ID3D11Device *device = shader->device;
+        ID3D11Device2 *device = shader->device;
 
         wined3d_mutex_lock();
         wined3d_shader_decref(shader->wined3d_shader);
@@ -1095,7 +1096,7 @@ static ULONG STDMETHODCALLTYPE d3d11_geometry_shader_Release(ID3D11GeometryShade
 
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -1108,7 +1109,7 @@ static void STDMETHODCALLTYPE d3d11_geometry_shader_GetDevice(ID3D11GeometryShad
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    *device = shader->device;
+    *device = (ID3D11Device *)shader->device;
     ID3D11Device_AddRef(*device);
 }
 
@@ -1200,7 +1201,7 @@ static void STDMETHODCALLTYPE d3d10_geometry_shader_GetDevice(ID3D10GeometryShad
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    ID3D11Device_QueryInterface(shader->device, &IID_ID3D10Device, (void **)device);
+    ID3D11Device2_QueryInterface(shader->device, &IID_ID3D10Device, (void **)device);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d10_geometry_shader_GetPrivateData(ID3D10GeometryShader *iface,
@@ -1526,8 +1527,7 @@ static HRESULT d3d_geometry_shader_init(struct d3d_geometry_shader *shader,
     }
     wined3d_mutex_unlock();
 
-    shader->device = &device->ID3D11Device_iface;
-    ID3D11Device_AddRef(shader->device);
+    ID3D11Device2_AddRef(shader->device = &device->ID3D11Device2_iface);
 
     return S_OK;
 }
@@ -1621,7 +1621,7 @@ static ULONG STDMETHODCALLTYPE d3d11_pixel_shader_AddRef(ID3D11PixelShader *ifac
 
     if (refcount == 1)
     {
-        ID3D11Device_AddRef(shader->device);
+        ID3D11Device2_AddRef(shader->device);
         wined3d_mutex_lock();
         wined3d_shader_incref(shader->wined3d_shader);
         wined3d_mutex_unlock();
@@ -1639,14 +1639,14 @@ static ULONG STDMETHODCALLTYPE d3d11_pixel_shader_Release(ID3D11PixelShader *ifa
 
     if (!refcount)
     {
-        ID3D11Device *device = shader->device;
+        ID3D11Device2 *device = shader->device;
 
         wined3d_mutex_lock();
         wined3d_shader_decref(shader->wined3d_shader);
         wined3d_mutex_unlock();
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -1659,7 +1659,7 @@ static void STDMETHODCALLTYPE d3d11_pixel_shader_GetDevice(ID3D11PixelShader *if
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    *device = shader->device;
+    *device = (ID3D11Device *)shader->device;
     ID3D11Device_AddRef(*device);
 }
 
@@ -1751,7 +1751,7 @@ static void STDMETHODCALLTYPE d3d10_pixel_shader_GetDevice(ID3D10PixelShader *if
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    ID3D11Device_QueryInterface(shader->device, &IID_ID3D10Device, (void **)device);
+    ID3D11Device2_QueryInterface(shader->device, &IID_ID3D10Device, (void **)device);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d10_pixel_shader_GetPrivateData(ID3D10PixelShader *iface,
@@ -1845,8 +1845,7 @@ static HRESULT d3d_pixel_shader_init(struct d3d_pixel_shader *shader, struct d3d
     }
     wined3d_mutex_unlock();
 
-    shader->device = &device->ID3D11Device_iface;
-    ID3D11Device_AddRef(shader->device);
+    ID3D11Device2_AddRef(shader->device = &device->ID3D11Device2_iface);
 
     return S_OK;
 }
@@ -1926,7 +1925,7 @@ static ULONG STDMETHODCALLTYPE d3d11_compute_shader_AddRef(ID3D11ComputeShader *
 
     if (refcount == 1)
     {
-        ID3D11Device_AddRef(shader->device);
+        ID3D11Device2_AddRef(shader->device);
         wined3d_mutex_lock();
         wined3d_shader_incref(shader->wined3d_shader);
         wined3d_mutex_unlock();
@@ -1944,7 +1943,7 @@ static ULONG STDMETHODCALLTYPE d3d11_compute_shader_Release(ID3D11ComputeShader 
 
     if (!refcount)
     {
-        ID3D11Device *device = shader->device;
+        ID3D11Device2 *device = shader->device;
 
         wined3d_mutex_lock();
         wined3d_shader_decref(shader->wined3d_shader);
@@ -1952,7 +1951,7 @@ static ULONG STDMETHODCALLTYPE d3d11_compute_shader_Release(ID3D11ComputeShader 
 
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -1965,7 +1964,7 @@ static void STDMETHODCALLTYPE d3d11_compute_shader_GetDevice(ID3D11ComputeShader
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    ID3D11Device_AddRef(*device = shader->device);
+    ID3D11Device_AddRef(*device = (ID3D11Device *)shader->device);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d11_compute_shader_GetPrivateData(ID3D11ComputeShader *iface,
@@ -2056,7 +2055,7 @@ static HRESULT d3d11_compute_shader_init(struct d3d11_compute_shader *shader, st
     }
     wined3d_mutex_unlock();
 
-    ID3D11Device_AddRef(shader->device = &device->ID3D11Device_iface);
+    ID3D11Device2_AddRef(shader->device = &device->ID3D11Device2_iface);
 
     return S_OK;
 }
@@ -2136,12 +2135,12 @@ static ULONG STDMETHODCALLTYPE d3d11_class_linkage_Release(ID3D11ClassLinkage *i
 
     if (!refcount)
     {
-        ID3D11Device *device = class_linkage->device;
+        ID3D11Device2 *device = class_linkage->device;
 
         wined3d_private_store_cleanup(&class_linkage->private_store);
         heap_free(class_linkage);
 
-        ID3D11Device_Release(device);
+        ID3D11Device2_Release(device);
     }
 
     return refcount;
@@ -2154,7 +2153,7 @@ static void STDMETHODCALLTYPE d3d11_class_linkage_GetDevice(ID3D11ClassLinkage *
 
     TRACE("iface %p, device %p.\n", iface, device);
 
-    ID3D11Device_AddRef(*device = class_linkage->device);
+    ID3D11Device_AddRef(*device = (ID3D11Device *)class_linkage->device);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d11_class_linkage_GetPrivateData(ID3D11ClassLinkage *iface,
@@ -2235,7 +2234,7 @@ HRESULT d3d11_class_linkage_create(struct d3d_device *device, struct d3d11_class
     object->refcount = 1;
     wined3d_private_store_init(&object->private_store);
 
-    ID3D11Device_AddRef(object->device = &device->ID3D11Device_iface);
+    ID3D11Device2_AddRef(object->device = &device->ID3D11Device2_iface);
 
     TRACE("Created class linkage %p.\n", object);
     *class_linkage = object;

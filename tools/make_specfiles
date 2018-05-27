@@ -330,6 +330,10 @@ my @dll_groups =
   "ext-ms-win-oleacc-l1-1-0",
  ],
  [
+  "secur32",
+  "sspicli",
+ ],
+ [
   "shell32",
   "api-ms-win-downlevel-shell32-l1-1-0",
   "api-ms-win-shell-shellcom-l1-1-0",
@@ -437,6 +441,10 @@ my @dll_groups =
   "api-ms-win-core-winrt-registration-l1-1-0",
   "api-ms-win-core-winrt-roparameterizediid-l1-1-0",
   "api-ms-win-core-winrt-string-l1-1-0",
+ ],
+ [
+  "uxtheme",
+  "ext-ms-win-uxtheme-themes-l1-1-0",
  ],
  [
   "bthprops.cpl",

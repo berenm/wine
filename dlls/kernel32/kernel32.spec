@@ -621,7 +621,7 @@
 @ stdcall GetConsoleTitleW(ptr long)
 @ stdcall GetConsoleWindow()
 @ stdcall GetCurrencyFormatA(long long str ptr str long)
-# @ stub GetCurrencyFormatEx
+@ stdcall GetCurrencyFormatEx(wstr long wstr ptr ptr long)
 @ stdcall GetCurrencyFormatW(long long str ptr str long)
 @ stdcall GetCurrentActCtx(ptr)
 @ stdcall GetCurrentConsoleFont(long long ptr)
@@ -1425,7 +1425,7 @@
 @ stdcall SetNamedPipeHandleState(long ptr ptr ptr)
 @ stdcall SetPriorityClass(long long)
 @ stdcall SetProcessAffinityMask(long long)
-# @ stub SetProcessAffinityUpdateMode
+@ stdcall SetProcessAffinityUpdateMode(long long)
 @ stdcall SetProcessDEPPolicy(long)
 # @ stub SetProcessPreferredUILanguages
 @ stdcall SetProcessPriorityBoost(long long)

@@ -35,6 +35,7 @@
 #include <shellapi.h>
 
 #include "wine/test.h"
+#include "utils.h"
 
 static UINT (WINAPI *pMsiQueryComponentStateA)
     (LPCSTR, LPCSTR, MSIINSTALLCONTEXT, LPCSTR, INSTALLSTATE*);
@@ -43,11 +44,11 @@ static UINT (WINAPI *pMsiSourceListEnumSourcesA)
 static INSTALLSTATE (WINAPI *pMsiGetComponentPathExA)
     (LPCSTR, LPCSTR, LPCSTR, MSIINSTALLCONTEXT, LPSTR, LPDWORD);
 
-static BOOL (WINAPI *pCheckTokenMembership)(HANDLE,PSID,PBOOL);
 static BOOL (WINAPI *pConvertSidToStringSidA)(PSID, LPSTR*);
-static BOOL (WINAPI *pOpenProcessToken)( HANDLE, DWORD, PHANDLE );
 static LONG (WINAPI *pRegDeleteKeyExA)(HKEY, LPCSTR, REGSAM, DWORD);
 static BOOL (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
+static BOOL (WINAPI *pWow64DisableWow64FsRedirection)(void **);
+static BOOL (WINAPI *pWow64RevertWow64FsRedirection)(void *);
 
 static HMODULE hsrclient = 0;
 static BOOL (WINAPI *pSRRemoveRestorePoint)(DWORD);
@@ -63,12 +64,12 @@ static const char *mstfile = "winetest.mst";
 static const WCHAR msifileW[] = {'m','s','i','t','e','s','t','.','m','s','i',0};
 static const WCHAR msifile2W[] = {'w','i','n','e','t','e','s','t','2','.','m','s','i',0};
 
-static CHAR CURR_DIR[MAX_PATH];
-static CHAR PROG_FILES_DIR[MAX_PATH];
-static CHAR PROG_FILES_DIR_NATIVE[MAX_PATH];
-static CHAR COMMON_FILES_DIR[MAX_PATH];
-static CHAR APP_DATA_DIR[MAX_PATH];
-static CHAR WINDOWS_DIR[MAX_PATH];
+char CURR_DIR[MAX_PATH];
+char PROG_FILES_DIR[MAX_PATH];
+char PROG_FILES_DIR_NATIVE[MAX_PATH];
+char COMMON_FILES_DIR[MAX_PATH];
+char APP_DATA_DIR[MAX_PATH];
+char WINDOWS_DIR[MAX_PATH];
 
 static const char *customdll;
 
@@ -695,14 +696,28 @@ static const CHAR wrv_component_dat[] = "Component\tComponentId\tDirectory_\tAtt
 static const CHAR ca1_install_exec_seq_dat[] = "Action\tCondition\tSequence\n"
                                                "s72\tS255\tI2\n"
                                                "InstallExecuteSequence\tAction\n"
+                                               "CostInitialize\t\t100\n"
+                                               "FileCost\t\t200\n"
+                                               "CostFinalize\t\t300\n"
+                                               "InstallValidate\t\t400\n"
+                                               "embednull\t\t600\n"
                                                "maintest\tMAIN_TEST\t700\n"
                                                "testretval\tTEST_RETVAL\t710\n";
 
 static const CHAR ca1_custom_action_dat[] = "Action\tType\tSource\tTarget\n"
                                              "s72\ti2\tS64\tS0\n"
                                              "CustomAction\tAction\n"
+                                             "embednull\t51\tembednullprop\ta[~]b\n"
+                                             "nested51\t51\tnested\t1\n"
+                                             "nested1\t1\tcustom.dll\tnested\n"
                                              "maintest\t1\tcustom.dll\tmain_test\n"
                                              "testretval\t1\tcustom.dll\ttest_retval\n";
+
+static const CHAR ca1_test_seq_dat[] = "Action\tCondition\tSequence\n"
+                                       "s72\tS255\tI2\n"
+                                       "TestSequence\tAction\n"
+                                       "nested1\t\t1\n"
+                                       "nested51\t\t2\n";
 
 static const CHAR ca51_component_dat[] = "Component\tComponentId\tDirectory_\tAttributes\tCondition\tKeyPath\n"
                                          "s72\tS38\ts72\ti2\tS255\tS72\n"
@@ -1320,14 +1335,17 @@ static const char da_install_exec_seq_dat[] =
     "immediate\t\t800\n"
     "InstallFinalize\t\t1100\n";
 
-typedef struct _msi_table
-{
-    const CHAR *filename;
-    const CHAR *data;
-    int size;
-} msi_table;
-
-#define ADD_TABLE(x) {#x".idt", x##_dat, sizeof(x##_dat)}
+static const CHAR x64_directory_dat[] =
+    "Directory\tDirectory_Parent\tDefaultDir\n"
+    "s72\tS72\tl255\n"
+    "Directory\tDirectory\n"
+    "CABOUTDIR\tMSITESTDIR\tcabout\n"
+    "CHANGEDDIR\tMSITESTDIR\tchanged:second\n"
+    "FIRSTDIR\tMSITESTDIR\tfirst\n"
+    "MSITESTDIR\tProgramFiles64Folder\tmsitest\n"
+    "NEWDIR\tCABOUTDIR\tnew\n"
+    "ProgramFiles64Folder\tTARGETDIR\t.\n"
+    "TARGETDIR\t\tSourceDir";
 
 static const msi_table tables[] =
 {
@@ -1699,9 +1717,16 @@ static const msi_table sf_tables[] =
 
 static const msi_table ca1_tables[] =
 {
+    ADD_TABLE(component),
+    ADD_TABLE(directory),
+    ADD_TABLE(feature),
+    ADD_TABLE(feature_comp),
+    ADD_TABLE(file),
     ADD_TABLE(property),
+    ADD_TABLE(directory),
     ADD_TABLE(ca1_install_exec_seq),
     ADD_TABLE(ca1_custom_action),
+    ADD_TABLE(ca1_test_seq),
 };
 
 static const msi_table ca51_tables[] =
@@ -1994,6 +2019,18 @@ static const msi_table da_tables[] =
     ADD_TABLE(da_custom_action),
 };
 
+static const msi_table x64_tables[] =
+{
+    ADD_TABLE(media),
+    ADD_TABLE(x64_directory),
+    ADD_TABLE(file),
+    ADD_TABLE(component),
+    ADD_TABLE(feature),
+    ADD_TABLE(feature_comp),
+    ADD_TABLE(property),
+    ADD_TABLE(install_exec_seq),
+};
+
 /* cabinet definitions */
 
 /* make the max size large so there is only one cab file */
@@ -2037,8 +2074,7 @@ static INT_PTR CDECL fci_open(char *pszFile, int oflag, int pmode, int *err, voi
     DWORD dwCreateDisposition = OPEN_EXISTING;
 
     dwAccess = GENERIC_READ | GENERIC_WRITE;
-    /* FILE_SHARE_DELETE is not supported by Windows Me/98/95 */
-    dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE;
+    dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 
     if (GetFileAttributesA(pszFile) != INVALID_FILE_ATTRIBUTES)
         dwCreateDisposition = OPEN_EXISTING;
@@ -2119,11 +2155,11 @@ static void init_functionpointers(void)
     GET_PROC(hmsi, MsiSourceListEnumSourcesA);
     GET_PROC(hmsi, MsiGetComponentPathExA);
 
-    GET_PROC(hadvapi32, CheckTokenMembership);
     GET_PROC(hadvapi32, ConvertSidToStringSidA);
-    GET_PROC(hadvapi32, OpenProcessToken);
     GET_PROC(hadvapi32, RegDeleteKeyExA)
     GET_PROC(hkernel32, IsWow64Process)
+    GET_PROC(hkernel32, Wow64DisableWow64FsRedirection);
+    GET_PROC(hkernel32, Wow64RevertWow64FsRedirection);
 
     hsrclient = LoadLibraryA("srclient.dll");
     GET_PROC(hsrclient, SRRemoveRestorePoint);
@@ -2132,18 +2168,16 @@ static void init_functionpointers(void)
 #undef GET_PROC
 }
 
-static BOOL is_process_limited(void)
+BOOL is_process_limited(void)
 {
     SID_IDENTIFIER_AUTHORITY NtAuthority = {SECURITY_NT_AUTHORITY};
     PSID Group = NULL;
     BOOL IsInGroup;
     HANDLE token;
 
-    if (!pCheckTokenMembership || !pOpenProcessToken) return FALSE;
-
     if (!AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
                                   DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &Group) ||
-        !pCheckTokenMembership(NULL, Group, &IsInGroup))
+        !CheckTokenMembership(NULL, Group, &IsInGroup))
     {
         trace("Could not check if the current user is an administrator\n");
         FreeSid(Group);
@@ -2157,7 +2191,7 @@ static BOOL is_process_limited(void)
         return TRUE;
     }
 
-    if (pOpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
     {
         BOOL ret;
         TOKEN_ELEVATION_TYPE type = TokenElevationTypeDefault;
@@ -2254,7 +2288,7 @@ static void set_cab_parameters(PCCAB pCabParams, const CHAR *name, DWORD max_siz
     lstrcpyA(pCabParams->szCab, name);
 }
 
-static void create_cab_file(const CHAR *name, DWORD max_size, const CHAR *files)
+void create_cab_file(const CHAR *name, DWORD max_size, const CHAR *files)
 {
     CCAB cabParams;
     LPCSTR ptr;
@@ -2285,7 +2319,7 @@ static void create_cab_file(const CHAR *name, DWORD max_size, const CHAR *files)
     ok(res, "Failed to destroy the cabinet\n");
 }
 
-static BOOL get_user_dirs(void)
+BOOL get_user_dirs(void)
 {
     HKEY hkey;
     DWORD type, size;
@@ -2304,12 +2338,13 @@ static BOOL get_user_dirs(void)
     return TRUE;
 }
 
-static BOOL get_system_dirs(void)
+BOOL get_system_dirs(void)
 {
     HKEY hkey;
     DWORD type, size;
 
-    if (RegOpenKeyA(HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion", &hkey))
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion",
+        0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &hkey))
         return FALSE;
 
     size = MAX_PATH;
@@ -2340,7 +2375,7 @@ static BOOL get_system_dirs(void)
     return TRUE;
 }
 
-static void create_file_data(LPCSTR name, LPCSTR data, DWORD size)
+void create_file_data(LPCSTR name, LPCSTR data, DWORD size)
 {
     HANDLE file;
     DWORD written;
@@ -2359,8 +2394,6 @@ static void create_file_data(LPCSTR name, LPCSTR data, DWORD size)
 
     CloseHandle(file);
 }
-
-#define create_file(name, size) create_file_data(name, name, size)
 
 static void create_test_files(void)
 {
@@ -2382,7 +2415,7 @@ static void create_test_files(void)
     DeleteFileA("five.txt");
 }
 
-static BOOL delete_pf(const CHAR *rel_path, BOOL is_file)
+BOOL delete_pf(const CHAR *rel_path, BOOL is_file)
 {
     CHAR path[MAX_PATH];
 
@@ -2518,17 +2551,75 @@ static void write_msi_summary_info(MSIHANDLE db, INT version, INT wordcount,
     MsiCloseHandle(summary);
 }
 
-#define create_database(name, tables, num_tables) \
-    create_database_wordcount(name, tables, num_tables, 100, 0, ";1033", \
-                              "{004757CA-5092-49C2-AD20-28E1CE0DF5F2}");
+static char *load_resource(const char *name)
+{
+    static char path[MAX_PATH];
+    DWORD written;
+    HANDLE file;
+    HRSRC res;
+    void *ptr;
 
-#define create_database_template(name, tables, num_tables, version, template) \
-    create_database_wordcount(name, tables, num_tables, version, 0, template, \
-                              "{004757CA-5092-49C2-AD20-28E1CE0DF5F2}");
+    GetTempFileNameA(".", name, 0, path);
 
-static void create_database_wordcount(const CHAR *name, const msi_table *tables,
-                                      int num_tables, INT version, INT wordcount,
-                                      const char *template, const char *packagecode)
+    file = CreateFileA(path, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, 0);
+    ok(file != INVALID_HANDLE_VALUE, "file creation failed, at %s, error %d\n", path, GetLastError());
+
+    res = FindResourceA(NULL, name, "TESTDLL");
+    ok( res != 0, "couldn't find resource\n" );
+    ptr = LockResource( LoadResource( GetModuleHandleA(NULL), res ));
+    WriteFile( file, ptr, SizeofResource( GetModuleHandleA(NULL), res ), &written, NULL );
+    ok( written == SizeofResource( GetModuleHandleA(NULL), res ), "couldn't write resource\n" );
+    CloseHandle( file );
+
+    return path;
+}
+
+static INT CALLBACK ok_callback(void *context, UINT message_type, MSIHANDLE record)
+{
+    if (message_type == INSTALLMESSAGE_USER)
+    {
+        char file[200];
+        char msg[2000];
+        DWORD len;
+
+        len = sizeof(file);
+        MsiRecordGetStringA(record, 2, file, &len);
+        len = sizeof(msg);
+        MsiRecordGetStringA(record, 5, msg, &len);
+
+        todo_wine_if(MsiRecordGetInteger(record, 1))
+        ok_(file, MsiRecordGetInteger(record, 3)) (MsiRecordGetInteger(record, 4), "%s", msg);
+
+        return 1;
+    }
+    return 0;
+}
+
+static void add_custom_dll(MSIHANDLE hdb)
+{
+    MSIHANDLE record;
+    UINT res;
+
+    if (!customdll)
+        customdll = load_resource("custom.dll");
+
+    MsiSetExternalUIRecord(ok_callback, INSTALLLOGMODE_USER, NULL, NULL);
+
+    res = run_query(hdb, 0, "CREATE TABLE `Binary` (`Name` CHAR(72) NOT NULL, `Data` OBJECT NOT NULL PRIMARY KEY `Name`)");
+    ok(res == ERROR_SUCCESS, "failed to create Binary table: %u\n", res);
+
+    record = MsiCreateRecord(1);
+    res = MsiRecordSetStreamA(record, 1, customdll);
+    ok(res == ERROR_SUCCESS, "failed to add %s to stream: %u\n", customdll, res);
+
+    res = run_query(hdb, record, "INSERT INTO `Binary` (`Name`, `Data`) VALUES ('custom.dll', ?)");
+    ok(res == ERROR_SUCCESS, "failed to insert into Binary table: %u\n", res);
+
+    MsiCloseHandle(record);
+}
+
+void create_database_wordcount(const CHAR *name, const msi_table *tables, int num_tables,
+    INT version, INT wordcount, const char *template, const char *packagecode)
 {
     MSIHANDLE db;
     UINT r;
@@ -2556,6 +2647,7 @@ static void create_database_wordcount(const CHAR *name, const msi_table *tables,
     }
 
     write_msi_summary_info(db, version, wordcount, template, packagecode);
+    add_custom_dll(db);
 
     r = MsiDatabaseCommit(db);
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %u\n", r);
@@ -2608,29 +2700,6 @@ static LONG delete_key( HKEY key, LPCSTR subkey, REGSAM access )
     if (pRegDeleteKeyExA)
         return pRegDeleteKeyExA( key, subkey, access, 0 );
     return RegDeleteKeyA( key, subkey );
-}
-
-static char *load_resource(const char *name)
-{
-    static char path[MAX_PATH];
-    DWORD written;
-    HANDLE file;
-    HRSRC res;
-    void *ptr;
-
-    GetTempFileNameA(".", name, 0, path);
-
-    file = CreateFileA(path, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, 0);
-    ok(file != INVALID_HANDLE_VALUE, "file creation failed, at %s, error %d\n", path, GetLastError());
-
-    res = FindResourceA(NULL, name, "TESTDLL");
-    ok( res != 0, "couldn't find resource\n" );
-    ptr = LockResource( LoadResource( GetModuleHandleA(NULL), res ));
-    WriteFile( file, ptr, SizeofResource( GetModuleHandleA(NULL), res ), &written, NULL );
-    ok( written == SizeofResource( GetModuleHandleA(NULL), res ), "couldn't write resource\n" );
-    CloseHandle( file );
-
-    return path;
 }
 
 static void test_MsiInstallProduct(void)
@@ -2968,7 +3037,7 @@ static void create_cc_test_files(void)
     DeleteFileA("caesar");
 }
 
-static void delete_cab_files(void)
+void delete_cab_files(void)
 {
     SHFILEOPSTRUCTA shfl;
     CHAR path[MAX_PATH+10];
@@ -3486,12 +3555,12 @@ error:
     RemoveDirectoryA("msitest");
 }
 
-static BOOL file_exists(LPCSTR file)
+BOOL file_exists(const char *file)
 {
     return GetFileAttributesA(file) != INVALID_FILE_ATTRIBUTES;
 }
 
-static BOOL pf_exists(LPCSTR file)
+BOOL pf_exists(const char *file)
 {
     CHAR path[MAX_PATH];
 
@@ -3524,7 +3593,7 @@ static void delete_pfmsitest_files(void)
     RemoveDirectoryA(path);
 }
 
-static UINT run_query(MSIHANDLE hdb, MSIHANDLE hrec, const char *query)
+UINT run_query(MSIHANDLE hdb, MSIHANDLE hrec, const char *query)
 {
     MSIHANDLE hview = 0;
     UINT r;
@@ -3926,7 +3995,7 @@ error:
     RemoveDirectoryA("msitest");
 }
 
-static void create_pf_data(LPCSTR file, LPCSTR data, BOOL is_file)
+void create_pf_data(LPCSTR file, LPCSTR data, BOOL is_file)
 {
     CHAR path[MAX_PATH];
 
@@ -4058,58 +4127,26 @@ error:
     DeleteFileA("augustus");
 }
 
-static void add_custom_dll(void)
-{
-    MSIHANDLE hdb = 0, record;
-    UINT res;
-
-    res = MsiOpenDatabaseW(msifileW, MSIDBOPEN_TRANSACT, &hdb);
-    ok(res == ERROR_SUCCESS, "failed to open db: %u\n", res);
-
-    res = run_query(hdb, 0, "CREATE TABLE `Binary` (`Name` CHAR(72) NOT NULL, `Data` OBJECT NOT NULL PRIMARY KEY `Name`)");
-    ok(res == ERROR_SUCCESS, "failed to create Binary table: %u\n", res);
-
-    record = MsiCreateRecord(1);
-    res = MsiRecordSetStreamA(record, 1, customdll);
-    ok(res == ERROR_SUCCESS, "failed to add %s to stream: %u\n", customdll, res);
-
-    res = run_query(hdb, record, "INSERT INTO `Binary` (`Name`, `Data`) VALUES ('custom.dll', ?)");
-    ok(res == ERROR_SUCCESS, "failed to insert into Binary table: %u\n", res);
-
-    res = MsiDatabaseCommit(hdb);
-    ok(res == ERROR_SUCCESS, "failed to commit database: %u\n", res);
-
-    MsiCloseHandle(record);
-    MsiCloseHandle(hdb);
-}
-
-static INT CALLBACK ok_callback(void *context, UINT message_type, MSIHANDLE record)
-{
-    if (message_type == INSTALLMESSAGE_USER)
-    {
-        char file[200];
-        char msg[2000];
-        DWORD len;
-
-        len = sizeof(file);
-        MsiRecordGetStringA(record, 2, file, &len);
-        len = sizeof(msg);
-        MsiRecordGetStringA(record, 5, msg, &len);
-
-        todo_wine_if(MsiRecordGetInteger(record, 1))
-        ok_(file, MsiRecordGetInteger(record, 3)) (MsiRecordGetInteger(record, 4), "%s", msg);
-
-        return 1;
-    }
-    return 0;
-}
-
 static void test_customaction1(void)
 {
+    MSIHANDLE hdb, record;
     UINT r;
 
+    create_test_files();
     create_database(msifile, ca1_tables, sizeof(ca1_tables) / sizeof(msi_table));
-    add_custom_dll();
+
+    /* create a test table */
+    MsiOpenDatabaseW(msifileW, MSIDBOPEN_TRANSACT, &hdb);
+    run_query(hdb, 0, "CREATE TABLE `Test` (`Name` CHAR(10), `Number` INTEGER, `Data` OBJECT PRIMARY KEY `Name`)");
+    create_file("unus", 10);
+    create_file("duo", 10);
+    record = MsiCreateRecord(1);
+    MsiRecordSetStreamA(record, 1, "unus");
+    run_query(hdb, record, "INSERT INTO `Test` (`Name`, `Number`, `Data`) VALUES ('one', 1, ?)");
+    MsiRecordSetStreamA(record, 1, "duo");
+    run_query(hdb, record, "INSERT INTO `Test` (`Name`, `Number`, `Data`) VALUES ('two', 2, ?)");
+    MsiDatabaseCommit(hdb);
+    MsiCloseHandle(hdb);
 
     MsiSetInternalUI(INSTALLUILEVEL_NONE, NULL);
 
@@ -4133,7 +4170,10 @@ static void test_customaction1(void)
     r = MsiInstallProductA(msifile, "TEST_RETVAL=1");
     ok(r == ERROR_INSTALL_FAILURE, "Expected ERROR_INSTALL_FAILURE, got %u\n", r);
 
+    delete_test_files();
     DeleteFileA(msifile);
+    DeleteFileA("unus");
+    DeleteFileA("duo");
 }
 
 static void test_customaction51(void)
@@ -5654,16 +5694,16 @@ static void test_package_validation(void)
 
         r = MsiInstallProductA(msifile, NULL);
         ok(r == ERROR_INSTALL_PACKAGE_INVALID, "Expected ERROR_INSTALL_PACKAGE_INVALID, got %u\n", r);
-        ok(!delete_pf_native("msitest\\maximus", TRUE), "file exists\n");
-        ok(!delete_pf_native("msitest", FALSE), "directory exists\n");
+        ok(!delete_pf("msitest\\maximus", TRUE), "file exists\n");
+        ok(!delete_pf("msitest", FALSE), "directory exists\n");
 
         DeleteFileA(msifile);
         create_database_template(msifile, pv_tables, sizeof(pv_tables)/sizeof(msi_table), 200, "x64;0");
 
         r = MsiInstallProductA(msifile, NULL);
         ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %u\n", r);
-        ok(delete_pf_native("msitest\\maximus", TRUE), "file exists\n");
-        ok(delete_pf_native("msitest", FALSE), "directory exists\n");
+        ok(delete_pf("msitest\\maximus", TRUE), "file exists\n");
+        ok(delete_pf("msitest", FALSE), "directory exists\n");
     }
     else
     {
@@ -6064,7 +6104,6 @@ static void test_deferred_action(void)
     sprintf(buffer, "TESTPATH=\"%s\"", file);
 
     create_database(msifile, da_tables, sizeof(da_tables) / sizeof(da_tables[0]));
-    add_custom_dll();
 
     MsiSetInternalUI(INSTALLUILEVEL_NONE, NULL);
 
@@ -6082,6 +6121,67 @@ todo_wine
     ok(DeleteFileA(file), "Directory not created\n");
 
 error:
+    DeleteFileA(msifile);
+}
+
+static void test_wow64(void)
+{
+    void *cookie;
+    UINT r;
+
+    if (!is_wow64)
+    {
+        skip("test must be run on WoW64\n");
+        return;
+    }
+
+    if (is_process_limited())
+    {
+        skip("process is limited\n");
+        return;
+    }
+
+    create_test_files();
+    create_database_template(msifile, x64_tables, sizeof(x64_tables)/sizeof(msi_table), 200, "x64;0");
+    r = MsiInstallProductA(msifile, NULL);
+    if (r == ERROR_INSTALL_PACKAGE_REJECTED)
+    {
+        skip("Not enough rights to perform tests\n");
+        goto error;
+    }
+
+    pWow64DisableWow64FsRedirection(&cookie);
+
+    ok(!delete_pf("msitest\\cabout\\new\\five.txt", TRUE), "File installed\n");
+    ok(!delete_pf("msitest\\cabout\\new", FALSE), "Directory created\n");
+    ok(!delete_pf("msitest\\cabout\\four.txt", TRUE), "File installed\n");
+    ok(!delete_pf("msitest\\cabout", FALSE), "Directory created\n");
+    ok(!delete_pf("msitest\\changed\\three.txt", TRUE), "File installed\n");
+    ok(!delete_pf("msitest\\changed", FALSE), "Directory created\n");
+    ok(!delete_pf("msitest\\first\\two.txt", TRUE), "File installed\n");
+    ok(!delete_pf("msitest\\first", FALSE), "Directory created\n");
+    ok(!delete_pf("msitest\\one.txt", TRUE), "File installed\n");
+    ok(!delete_pf("msitest\\filename", TRUE), "File installed\n");
+    ok(!delete_pf("msitest\\service.exe", TRUE), "File installed\n");
+    ok(!delete_pf("msitest", FALSE), "Directory created\n");
+
+    ok(delete_pf_native("msitest\\cabout\\new\\five.txt", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest\\cabout\\new", FALSE), "Directory not created\n");
+    ok(delete_pf_native("msitest\\cabout\\four.txt", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest\\cabout", FALSE), "Directory not created\n");
+    ok(delete_pf_native("msitest\\changed\\three.txt", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest\\changed", FALSE), "Directory not created\n");
+    ok(delete_pf_native("msitest\\first\\two.txt", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest\\first", FALSE), "Directory not created\n");
+    ok(delete_pf_native("msitest\\one.txt", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest\\filename", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest\\service.exe", TRUE), "File not installed\n");
+    ok(delete_pf_native("msitest", FALSE), "Directory not created\n");
+
+    pWow64RevertWow64FsRedirection(cookie);
+
+error:
+    delete_test_files();
     DeleteFileA(msifile);
 }
 
@@ -6131,9 +6231,6 @@ START_TEST(install)
     lstrcatA(log_file, "\\msitest.log");
     MsiEnableLogA(INSTALLLOGMODE_FATALEXIT, log_file, 0);
 
-    customdll = load_resource("custom.dll");
-    MsiSetExternalUIRecord(ok_callback, INSTALLLOGMODE_USER, NULL, NULL);
-
     if (pSRSetRestorePointA) /* test has side-effects on win2k3 that cause failures in following tests */
         test_MsiInstallProduct();
     test_MsiSetComponentState();
@@ -6178,6 +6275,7 @@ START_TEST(install)
     test_remove_upgrade_code();
     test_feature_tree();
     test_deferred_action();
+    test_wow64();
 
     DeleteFileA(customdll);
 

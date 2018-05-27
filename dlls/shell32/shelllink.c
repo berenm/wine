@@ -613,7 +613,7 @@ static LPWSTR Stream_LoadPath( LPCSTR p, DWORD maxlen )
     int len = 0, wlen;
     LPWSTR path;
 
-    while( p[len] && (len < maxlen) )
+    while( (len < maxlen) && p[len] )
         len++;
 
     wlen = MultiByteToWideChar(CP_ACP, 0, p, len, NULL, 0);
@@ -2664,14 +2664,14 @@ static HRESULT WINAPI propertystore_SetValue(IPropertyStore *iface, REFPROPERTYK
 {
     IShellLinkImpl *This = impl_from_IPropertyStore(iface);
     FIXME("(%p)->(%p %p): stub\n", This, key, value);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI propertystore_Commit(IPropertyStore *iface)
 {
     IShellLinkImpl *This = impl_from_IPropertyStore(iface);
     FIXME("(%p): stub\n", This);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static const IPropertyStoreVtbl propertystorevtbl = {
