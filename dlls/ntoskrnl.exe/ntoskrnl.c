@@ -52,6 +52,7 @@ WINE_DECLARE_DEBUG_CHANNEL(plugplay);
 
 BOOLEAN KdDebuggerEnabled = FALSE;
 ULONG InitSafeBootMode = 0;
+USHORT NtBuildNumber = 0;
 
 extern LONG CALLBACK vectored_handler( EXCEPTION_POINTERS *ptrs );
 
@@ -1193,6 +1194,16 @@ NTSTATUS WINAPI IoDeleteSymbolicLink( UNICODE_STRING *name )
 
 
 /***********************************************************************
+ *           IoGetDeviceAttachmentBaseRef   (NTOSKRNL.EXE.@)
+ */
+PDEVICE_OBJECT WINAPI IoGetDeviceAttachmentBaseRef( PDEVICE_OBJECT device )
+{
+    FIXME( "(%p): stub\n", device );
+    return NULL;
+}
+
+
+/***********************************************************************
  *           IoGetDeviceInterfaces   (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI IoGetDeviceInterfaces( const GUID *InterfaceClassGuid,
@@ -1803,7 +1814,24 @@ void WINAPI ExInitializeNPagedLookasideList(PNPAGED_LOOKASIDE_LIST Lookaside,
                                             ULONG Tag,
                                             USHORT Depth)
 {
-    FIXME( "stub: %p, %p, %p, %u, %lu, %u, %u\n", Lookaside, Allocate, Free, Flags, Size, Tag, Depth );
+    TRACE( "%p, %p, %p, %u, %lu, %u, %u\n", Lookaside, Allocate, Free, Flags, Size, Tag, Depth );
+
+    RtlInitializeSListHead( &Lookaside->L.u.ListHead );
+    Lookaside->L.Depth                 = 4;
+    Lookaside->L.MaximumDepth          = 256;
+    Lookaside->L.TotalAllocates        = 0;
+    Lookaside->L.u2.AllocateMisses     = 0;
+    Lookaside->L.TotalFrees            = 0;
+    Lookaside->L.u3.FreeMisses         = 0;
+    Lookaside->L.Type                  = NonPagedPool | Flags;
+    Lookaside->L.Tag                   = Tag;
+    Lookaside->L.Size                  = Size;
+    Lookaside->L.u4.Allocate           = Allocate ? Allocate : ExAllocatePoolWithTag;
+    Lookaside->L.u5.Free               = Free ? Free : ExFreePool;
+    Lookaside->L.LastTotalAllocates    = 0;
+    Lookaside->L.u6.LastAllocateMisses = 0;
+
+    /* FIXME: insert in global list of lookadside lists */
 }
 
 /***********************************************************************
@@ -1874,7 +1902,13 @@ void WINAPI KeInitializeEvent( PRKEVENT Event, EVENT_TYPE Type, BOOLEAN State )
  */
 void WINAPI KeInitializeMutex(PRKMUTEX Mutex, ULONG Level)
 {
-    FIXME( "stub: %p, %u\n", Mutex, Level );
+    TRACE( "%p, %u\n", Mutex, Level );
+    RtlZeroMemory( Mutex, sizeof(KMUTEX) );
+    Mutex->Header.Type = 2;
+    Mutex->Header.Size = 8;
+    Mutex->Header.SignalState = 1;
+    InitializeListHead( &Mutex->Header.WaitListHead );
+    Mutex->ApcDisable = 1;
 }
 
 
@@ -1895,7 +1929,7 @@ NTSTATUS WINAPI KeWaitForMutexObject(PRKMUTEX Mutex, KWAIT_REASON WaitReason, KP
 LONG WINAPI KeReleaseMutex(PRKMUTEX Mutex, BOOLEAN Wait)
 {
     FIXME( "stub: %p, %d\n", Mutex, Wait );
-    return STATUS_NOT_IMPLEMENTED;
+    return STATUS_SUCCESS;
 }
 
 
@@ -1905,6 +1939,9 @@ LONG WINAPI KeReleaseMutex(PRKMUTEX Mutex, BOOLEAN Wait)
 void WINAPI KeInitializeSemaphore( PRKSEMAPHORE Semaphore, LONG Count, LONG Limit )
 {
     FIXME( "(%p %d %d) stub\n", Semaphore , Count, Limit );
+
+    RtlZeroMemory(Semaphore, sizeof(KSEMAPHORE));
+    Semaphore->Header.Type = 5;
 }
 
 
@@ -1923,6 +1960,9 @@ void WINAPI KeInitializeSpinLock( PKSPIN_LOCK SpinLock )
 void WINAPI KeInitializeTimerEx( PKTIMER Timer, TIMER_TYPE Type )
 {
     FIXME( "stub: %p %d\n", Timer, Type );
+
+    RtlZeroMemory(Timer, sizeof(KTIMER));
+    Timer->Header.Type = Type ? 9 : 8;
 }
 
 
@@ -2185,6 +2225,16 @@ VOID WINAPI MmLockPagableSectionByHandle(PVOID ImageSectionHandle)
     FIXME("stub %p\n", ImageSectionHandle);
 }
 
+ /***********************************************************************
+ *           MmMapLockedPages   (NTOSKRNL.EXE.@)
+ */
+PVOID WINAPI MmMapLockedPages(PMDL MemoryDescriptorList, KPROCESSOR_MODE AccessMode)
+{
+    TRACE("%p %d\n", MemoryDescriptorList, AccessMode);
+    return MemoryDescriptorList->MappedSystemVa;
+}
+
+
 /***********************************************************************
  *           MmMapLockedPagesSpecifyCache  (NTOSKRNL.EXE.@)
  */
@@ -2247,6 +2297,16 @@ void WINAPI  MmUnlockPages(PMDLX MemoryDescriptorList)
 VOID WINAPI MmUnmapIoSpace( PVOID BaseAddress, SIZE_T NumberOfBytes )
 {
     FIXME( "stub: %p, %lu\n", BaseAddress, NumberOfBytes );
+}
+
+
+/***********************************************************************
+ *           MmUnmapLockedPages   (NTOSKRNL.EXE.@)
+ */
+void WINAPI MmUnmapLockedPages(PVOID BaseAddress, PMDLX MemoryDescriptorList)
+{
+    TRACE("%p %p\n", BaseAddress, MemoryDescriptorList);
+    /* Nothing to do */
 }
 
 
@@ -2682,6 +2742,13 @@ NTSTATUS WINAPI IoAcquireRemoveLockEx(PIO_REMOVE_LOCK lock, PVOID tag,
     return STATUS_NOT_IMPLEMENTED;
 }
 
+static void ntoskrnl_init(void)
+{
+    LARGE_INTEGER count;
+
+    KeQueryTickCount( &count );  /* initialize the global KeTickCount */
+    NtBuildNumber = NtCurrentTeb()->Peb->OSBuildNumber;
+}
 
 /*****************************************************
  *           DllMain
@@ -2689,7 +2756,6 @@ NTSTATUS WINAPI IoAcquireRemoveLockEx(PIO_REMOVE_LOCK lock, PVOID tag,
 BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 {
     static void *handler;
-    LARGE_INTEGER count;
 
     switch(reason)
     {
@@ -2698,7 +2764,7 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 #if defined(__i386__) || defined(__x86_64__)
         handler = RtlAddVectoredExceptionHandler( TRUE, vectored_handler );
 #endif
-        KeQueryTickCount( &count );  /* initialize the global KeTickCount */
+        ntoskrnl_init();
         break;
     case DLL_PROCESS_DETACH:
         if (reserved) break;

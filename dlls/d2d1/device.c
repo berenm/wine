@@ -2144,7 +2144,7 @@ static const struct ID2D1GdiInteropRenderTargetVtbl d2d_gdi_interop_render_targe
 };
 
 static HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, ID2D1Factory *factory,
-        IDXGISurface *surface, IUnknown *outer_unknown, const D2D1_RENDER_TARGET_PROPERTIES *desc)
+        IDXGISurface *surface, ID3D10Device *device, IUnknown *outer_unknown, const D2D1_RENDER_TARGET_PROPERTIES *desc)
 {
     D3D10_SUBRESOURCE_DATA buffer_data;
     D3D10_STATE_BLOCK_MASK state_mask;
@@ -3033,25 +3033,41 @@ static HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_t
     render_target->outer_unknown = outer_unknown ? outer_unknown :
             (IUnknown *)&render_target->ID2D1RenderTarget_iface;
 
-    if (FAILED(hr = IDXGISurface_GetDevice(surface, &IID_ID3D10Device, (void **)&render_target->device)))
+    if (surface == NULL)
     {
-        WARN("Failed to get device interface, hr %#x.\n", hr);
-        ID2D1Factory_Release(render_target->factory);
-        return hr;
+        ID3D10Device_AddRef(render_target->device = device);
     }
-
-    if (FAILED(hr = IDXGISurface_QueryInterface(surface, &IID_ID3D10Resource, (void **)&resource)))
+    else
     {
-        WARN("Failed to get ID3D10Resource interface, hr %#x.\n", hr);
-        goto err;
-    }
+        if (FAILED(hr = IDXGISurface_GetDevice(surface, &IID_ID3D10Device, (void **)&render_target->device)))
+        {
+            WARN("Failed to get device interface, hr %#x.\n", hr);
+            ID2D1Factory_Release(render_target->factory);
+            return hr;
+        }
 
-    hr = ID3D10Device_CreateRenderTargetView(render_target->device, resource, NULL, &render_target->view);
-    ID3D10Resource_Release(resource);
-    if (FAILED(hr))
-    {
-        WARN("Failed to create rendertarget view, hr %#x.\n", hr);
-        goto err;
+        if (FAILED(hr = IDXGISurface_QueryInterface(surface, &IID_ID3D10Resource, (void **)&resource)))
+        {
+            WARN("Failed to get ID3D10Resource interface, hr %#x.\n", hr);
+            goto err;
+        }
+
+        hr = ID3D10Device_CreateRenderTargetView(render_target->device, resource, NULL, &render_target->view);
+        ID3D10Resource_Release(resource);
+        if (FAILED(hr))
+        {
+            WARN("Failed to create rendertarget view, hr %#x.\n", hr);
+            goto err;
+        }
+
+        if (FAILED(hr = IDXGISurface_GetDesc(surface, &surface_desc)))
+        {
+            WARN("Failed to get surface desc, hr %#x.\n", hr);
+            goto err;
+        }
+
+        render_target->pixel_size.width = surface_desc.Width;
+        render_target->pixel_size.height = surface_desc.Height;
     }
 
     if (FAILED(hr = D3D10StateBlockMaskEnableAll(&state_mask)))
@@ -3176,15 +3192,7 @@ static HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_t
         goto err;
     }
 
-    if (FAILED(hr = IDXGISurface_GetDesc(surface, &surface_desc)))
-    {
-        WARN("Failed to get surface desc, hr %#x.\n", hr);
-        goto err;
-    }
-
     render_target->desc.pixelFormat = desc->pixelFormat;
-    render_target->pixel_size.width = surface_desc.Width;
-    render_target->pixel_size.height = surface_desc.Height;
     render_target->drawing_state.transform = identity;
 
     if (!d2d_clip_stack_init(&render_target->clip_stack))
@@ -3238,7 +3246,31 @@ HRESULT d2d_d3d_create_render_target(ID2D1Factory *factory, IDXGISurface *surfac
     if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    if (FAILED(hr = d2d_d3d_render_target_init(object, factory, surface, outer_unknown, desc)))
+    if (FAILED(hr = d2d_d3d_render_target_init(object, factory, surface, NULL, outer_unknown, desc)))
+    {
+        WARN("Failed to initialize render target, hr %#x.\n", hr);
+        HeapFree(GetProcessHeap(), 0, object);
+        return hr;
+    }
+
+    TRACE("Created render target %p.\n", object);
+    *render_target = &object->ID2D1RenderTarget_iface;
+
+    return S_OK;
+}
+
+HRESULT d2d_d3d_create_render_target_with_device(ID2D1Factory *factory,
+        ID3D10Device *device, IUnknown *outer_unknown,
+        const D2D1_RENDER_TARGET_PROPERTIES *desc,
+        ID2D1RenderTarget **render_target)
+{
+    struct d2d_d3d_render_target *object;
+    HRESULT hr;
+
+    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = d2d_d3d_render_target_init(object, factory, NULL, device, outer_unknown, desc)))
     {
         WARN("Failed to initialize render target, hr %#x.\n", hr);
         heap_free(object);
@@ -3354,9 +3386,41 @@ static void WINAPI d2d_device_GetFactory(ID2D1Device *iface, ID2D1Factory **fact
 static HRESULT WINAPI d2d_device_CreateDeviceContext(ID2D1Device *iface, D2D1_DEVICE_CONTEXT_OPTIONS options,
         ID2D1DeviceContext **context)
 {
-    FIXME("iface %p, options %#x, context %p stub!\n", iface, options, context);
+    struct d2d_device *device = impl_from_ID2D1Device(iface);
+    struct d2d_device_context *object;
+    ID3D10Device *d3d_device;
+    HRESULT hr;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, options %#x, context %p.\n", iface, options, context);
+    if (!context)
+        return E_POINTER;
+
+    if (FAILED(hr = IDXGIDevice_QueryInterface(device->dxgi_device,
+                    &IID_ID3D10Device, (void **)&d3d_device)))
+    {
+        WARN("Failed to query d3d device, hr %#x.\n", hr);
+        return hr;
+    }
+
+    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+    {
+        ID3D10Device_Release(d3d_device);
+        return E_OUTOFMEMORY;
+    }
+
+    hr = d2d_device_context_init(object, iface, options, d3d_device);
+    ID3D10Device_Release(d3d_device);
+    if (FAILED(hr))
+    {
+        HeapFree(GetProcessHeap(), 0, object);
+        WARN("Failed to create device context, hr %#x.\n", hr);
+        return hr;
+    }
+
+    *context = &object->ID2D1DeviceContext_iface;
+    TRACE("Created device context %p.\n", object);
+
+    return S_OK;
 }
 
 static HRESULT WINAPI d2d_device_CreatePrintControl(ID2D1Device *iface, IWICImagingFactory *wic_factory,
