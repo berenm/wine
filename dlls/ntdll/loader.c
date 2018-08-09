@@ -3523,21 +3523,22 @@ PIMAGE_NT_HEADERS WINAPI RtlImageNtHeader(HMODULE hModule)
 }
 
 
-/***********************************************************************
- *           attach_dlls
+/******************************************************************
+ *		LdrInitializeThunk (NTDLL.@)
  *
- * Attach to all the loaded dlls.
- * If this is the first time, perform the full process initialization.
  */
-NTSTATUS attach_dlls( CONTEXT *context, void **entry )
+void WINAPI LdrInitializeThunk( PCONTEXT context, ULONG_PTR unknown2,
+                                ULONG_PTR unknown3, ULONG_PTR unknown4 )
 {
     NTSTATUS status;
     WINE_MODREF *wm;
     LPCWSTR load_path = NtCurrentTeb()->Peb->ProcessParameters->DllPath.Buffer;
+    /* For convenience, we use unknown2 to pass a pointer to the entrypoint. */
+    void **entry = (void **)unknown2;
 
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
 
-    if (process_detaching) return STATUS_SUCCESS;
+    if (process_detaching) return;
 
     RtlEnterCriticalSection( &loader_section );
 
@@ -3593,7 +3594,7 @@ NTSTATUS attach_dlls( CONTEXT *context, void **entry )
     }
 
     RtlLeaveCriticalSection( &loader_section );
-    return STATUS_SUCCESS;
+    return;
 }
 
 
@@ -3706,12 +3707,7 @@ static void user_shared_data_init(void)
 }
 
 
-/******************************************************************
- *		LdrInitializeThunk (NTDLL.@)
- *
- */
-void WINAPI LdrInitializeThunk( void *kernel_start, ULONG_PTR unknown2,
-                                ULONG_PTR unknown3, ULONG_PTR unknown4 )
+void __wine_ldr_start_process( void *kernel_start )
 {
     static const WCHAR globalflagW[] = {'G','l','o','b','a','l','F','l','a','g',0};
     ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION runlevel;
@@ -3897,15 +3893,17 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
     return TRUE;
 }
 
+void *Wow64Transition;
 
 /***********************************************************************
  *           __wine_process_init
  */
 void __wine_process_init(void)
 {
+    static const WCHAR wow64cpuW[] = {'w','o','w','6','4','c','p','u','.','d','l','l',0};
     static const WCHAR kernel32W[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};
 
-    WINE_MODREF *wm;
+    WINE_MODREF *wm, *wow64cpu_wm;
     NTSTATUS status;
     ANSI_STRING func_name;
     void (* DECLSPEC_NORETURN CDECL init_func)(void);
@@ -3925,6 +3923,11 @@ void __wine_process_init(void)
 
     /* setup the load callback and create ntdll modref */
     wine_dll_set_callback( load_builtin_callback );
+
+    if ((status = load_builtin_dll( NULL, wow64cpuW, NULL, 0, 0, &wow64cpu_wm )) == STATUS_SUCCESS)
+        Wow64Transition = wow64cpu_wm->ldr.BaseAddress;
+    else
+        WARN( "could not load wow64cpu.dll, status %#x\n", status );
 
     if ((status = load_builtin_dll( NULL, kernel32W, NULL, 0, 0, &wm )) != STATUS_SUCCESS)
     {

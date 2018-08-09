@@ -2217,6 +2217,31 @@ typedef enum _SYSDBG_COMMAND {
   SysDbgWriteBusData
 } SYSDBG_COMMAND, *PSYSDBG_COMMAND;
 
+#define PS_ATTRIBUTE_THREAD  0x00010000
+#define PS_ATTRIBUTE_INPUT   0x00020000
+#define PS_ATTRIBUTE_UNKNOWN 0x00040000
+
+typedef enum _PS_ATTRIBUTE_NUM {
+    PsAttributeClientId = 3,
+} PS_ATTRIBUTE_NUM;
+
+#define PS_ATTRIBUTE_CLIENT_ID (PsAttributeClientId | PS_ATTRIBUTE_THREAD)
+
+typedef struct _PS_ATTRIBUTE {
+    ULONG Attribute;
+    SIZE_T Size;
+    union {
+        ULONG Value;
+        PVOID ValuePtr;
+    };
+    PSIZE_T ReturnLength;
+} PS_ATTRIBUTE;
+
+typedef struct _PS_ATTRIBUTE_LIST {
+    SIZE_T TotalLength;
+    PS_ATTRIBUTE Attributes[1];
+} PS_ATTRIBUTE_LIST, *PPS_ATTRIBUTE_LIST;
+
 
 /*************************************************************************
  * Loader structures
@@ -2347,7 +2372,7 @@ NTSYSAPI NTSTATUS  WINAPI LdrDisableThreadCalloutsForDll(HMODULE);
 NTSYSAPI NTSTATUS  WINAPI LdrFindEntryForAddress(const void*, PLDR_MODULE*);
 NTSYSAPI NTSTATUS  WINAPI LdrGetDllHandle(LPCWSTR, ULONG, const UNICODE_STRING*, HMODULE*);
 NTSYSAPI NTSTATUS  WINAPI LdrGetProcedureAddress(HMODULE, const ANSI_STRING*, ULONG, void**);
-NTSYSAPI void      WINAPI LdrInitializeThunk(void*,ULONG_PTR,ULONG_PTR,ULONG_PTR);
+NTSYSAPI void      WINAPI LdrInitializeThunk(PCONTEXT,ULONG_PTR,ULONG_PTR,ULONG_PTR);
 NTSYSAPI NTSTATUS  WINAPI LdrLoadDll(LPCWSTR, DWORD, const UNICODE_STRING*, HMODULE*);
 NTSYSAPI NTSTATUS  WINAPI LdrLockLoaderLock(ULONG,ULONG*,ULONG_PTR*);
 IMAGE_BASE_RELOCATION * WINAPI LdrProcessRelocationBlock(void*,UINT,USHORT*,INT_PTR);

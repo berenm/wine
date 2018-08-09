@@ -399,21 +399,47 @@ static void output_syscall_thunks_x86( DLLSPEC *spec )
         output ("\t%s %s\n", get_asm_ptr_keyword(), asm_name(odp->impl_name) );
     }
 
+    output( "\n/* syscall argument stack size table */\n\n" );
+    output( "\t.data\n" );
+    output( "%s\n", asm_globl("__wine_syscall_stack_size") );
+    for (i = 0; i < spec->nb_syscalls; i++)
+    {
+        ORDDEF *odp = spec->syscalls[i];
+        output( "\t.byte %d\n", get_args_size(odp) );
+    }
+
     output( "\n/* syscall dispatcher */\n\n" );
     output( "\t.text\n" );
     output( "\t.align %d\n", get_alignment(16) );
     output( "\t%s\n", func_declaration("__wine_syscall_dispatcher") );
     output( "%s\n", asm_globl("__wine_syscall_dispatcher") );
     output_cfi( ".cfi_startproc" );
-    output( "\tadd $4, %%esp\n" );
+    output( "\tpushl %%ebp\n" );
+    output( "\tmovl %%esp,%%ebp\n" );
+    output( "\tpushl %%esi\n" );
+    output( "\tpushl %%edi\n" );
+    output( "\tmovl %%edx,%%esi\n" );
     if (UsePIC)
     {
         output( "\tcall 1f\n" );
-        output( "1:\tpopl %%ecx\n" );
-        output( "\tjmpl *(%s-1b)(%%ecx,%%eax,%d)\n", asm_name("__wine_syscall_table"), get_ptr_size() );
+        output( "1:\tpopl %%edx\n" );
+        output( "movzbl (%s-1b)(%%edx,%%eax,1),%%ecx\n", asm_name("__wine_syscall_stack_size") );
     }
-    else output( "\tjmpl *%s(,%%eax,%d)\n", asm_name("__wine_syscall_table"), get_ptr_size() );
-    output( "\tret\n" );
+    else
+        output( "movzbl %s(%%eax),%%ecx\n", asm_name("__wine_syscall_stack_size") );
+
+    output( "\tsubl %%ecx,%%esp\n" );
+    output( "\tmovl %%esp,%%edi\n" );
+    output( "\tshrl $2,%%ecx\n" );
+    output( "\trep; movsl\n" );
+    if (UsePIC)
+        output( "\tcall *(%s-1b)(%%edx,%%eax,%d)\n", asm_name("__wine_syscall_table"), get_ptr_size() );
+    else
+        output( "\tcall *%s(,%%eax,%d)\n", asm_name("__wine_syscall_table"), get_ptr_size() );
+    output( "\tpop %%edi\n" );
+    output( "\tpop %%esi\n" );
+    output( "\tleave\n" );
+    output( "\tjmp *(%%esp)\n" );
     output_cfi( ".cfi_endproc" );
     output_function_size( "__wine_syscall_dispatcher" );
 }

@@ -154,7 +154,7 @@
 @ stdcall NtCreateSection(ptr long ptr ptr long long long)
 @ stdcall NtCreateSemaphore(ptr long ptr long long)
 @ stdcall NtCreateSymbolicLinkObject(ptr long ptr ptr)
-@ stub NtCreateThread
+@ stdcall NtCreateThread(ptr long ptr long ptr ptr ptr long)
 @ stdcall NtCreateThreadEx(ptr long ptr long ptr ptr long long long long ptr)
 @ stdcall NtCreateTimer(ptr long ptr long)
 @ stub NtCreateToken
@@ -1037,6 +1037,7 @@
 @ stdcall WinSqmIsOptedIn()
 @ stdcall WinSqmSetDWORD(ptr long long)
 @ stdcall WinSqmStartSession(ptr long long)
+@ extern Wow64Transition
 @ stdcall -private ZwAcceptConnectPort(ptr long ptr long ptr ptr) NtAcceptConnectPort
 @ stdcall -private ZwAccessCheck(ptr long long ptr ptr ptr ptr ptr) NtAccessCheck
 @ stdcall -private ZwAccessCheckAndAuditAlarm(ptr long ptr ptr ptr long ptr long ptr ptr ptr) NtAccessCheckAndAuditAlarm
@@ -1493,6 +1494,9 @@
 @ cdecl wine_server_release_fd(long long)
 @ cdecl wine_server_send_fd(long)
 @ cdecl __wine_make_process_system()
+
+# Loader
+@ cdecl __wine_ldr_start_process(ptr)
 
 # Virtual memory
 @ cdecl __wine_locked_recvmsg(long ptr long)
