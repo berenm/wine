@@ -396,11 +396,6 @@ static struct object *create_file( struct fd *root, const char *nameptr, data_si
     default:                set_error( STATUS_INVALID_PARAMETER ); goto done;
     }
 
-#ifdef O_DIRECT
-    if (options & FILE_WRITE_THROUGH)
-        flags |= O_DIRECT;
-#endif
-
     /* Note: inheritance of security descriptors only occurs on creation when sd is NULL */
     if (!sd && (create == FILE_CREATE || create == FILE_OVERWRITE_IF))
         sd = temp_sd = file_get_parent_sd( root, nameptr, len, options & FILE_DIRECTORY_FILE );

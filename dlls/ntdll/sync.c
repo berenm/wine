@@ -193,7 +193,7 @@ static inline NTSTATUS fast_sleep_srw( RTL_CONDITION_VARIABLE *variable,
     return STATUS_NOT_IMPLEMENTED;
 }
 
-static inline NTSTATUS fast_wake( RTL_CRITICAL_SECTION *crit )
+static inline NTSTATUS fast_wake( RTL_CONDITION_VARIABLE *variable, int val )
 {
     return STATUS_NOT_IMPLEMENTED;
 }
