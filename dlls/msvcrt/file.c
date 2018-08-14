@@ -1223,7 +1223,7 @@ void msvcrt_free_io(void)
     MSVCRT__flushall();
     MSVCRT__fcloseall();
 
-    for(i=0; i<ARRAY_SIZE(MSVCRT___pioinfo); i++)
+    for(i=0; i<sizeof(MSVCRT___pioinfo)/sizeof(MSVCRT___pioinfo[0]); i++)
     {
         if(!MSVCRT___pioinfo[i])
             continue;
@@ -1246,7 +1246,7 @@ void msvcrt_free_io(void)
         }
     }
 
-    for(i=0; i<ARRAY_SIZE(MSVCRT_fstream); i++)
+    for(i=0; i<sizeof(MSVCRT_fstream)/sizeof(MSVCRT_fstream[0]); i++)
         MSVCRT_free(MSVCRT_fstream[i]);
 }
 
@@ -1606,29 +1606,29 @@ static int msvcrt_get_flags(const MSVCRT_wchar_t* mode, int *open_flags, int* st
 
     mode++;
     while(*mode == ' ') mode++;
-    if(!MSVCRT_CHECK_PMT(!strncmpW(ccs, mode, ARRAY_SIZE(ccs))))
+    if(!MSVCRT_CHECK_PMT(!strncmpW(ccs, mode, sizeof(ccs)/sizeof(ccs[0]))))
       return -1;
-    mode += ARRAY_SIZE(ccs);
+    mode += sizeof(ccs)/sizeof(ccs[0]);
     while(*mode == ' ') mode++;
     if(!MSVCRT_CHECK_PMT(*mode == '='))
         return -1;
     mode++;
     while(*mode == ' ') mode++;
 
-    if(!strncmpiW(utf8, mode, ARRAY_SIZE(utf8)))
+    if(!strncmpiW(utf8, mode, sizeof(utf8)/sizeof(utf8[0])))
     {
       *open_flags |= MSVCRT__O_U8TEXT;
-      mode += ARRAY_SIZE(utf8);
+      mode += sizeof(utf8)/sizeof(utf8[0]);
     }
-    else if(!strncmpiW(utf16le, mode, ARRAY_SIZE(utf16le)))
+    else if(!strncmpiW(utf16le, mode, sizeof(utf16le)/sizeof(utf16le[0])))
     {
       *open_flags |= MSVCRT__O_U16TEXT;
-      mode += ARRAY_SIZE(utf16le);
+      mode += sizeof(utf16le)/sizeof(utf16le[0]);
     }
-    else if(!strncmpiW(unicode, mode, ARRAY_SIZE(unicode)))
+    else if(!strncmpiW(unicode, mode, sizeof(unicode)/sizeof(unicode[0])))
     {
       *open_flags |= MSVCRT__O_WTEXT;
-      mode += ARRAY_SIZE(unicode);
+      mode += sizeof(unicode)/sizeof(unicode[0]);
     }
     else
     {
@@ -2980,19 +2980,12 @@ int CDECL MSVCRT_stat64(const char* path, struct MSVCRT__stat64 * buf)
   while (plen && path[plen-1]==' ')
     plen--;
 
-  if (plen==2 && path[1]==':')
+  if (plen && (plen<2 || path[plen-2]!=':') &&
+          (path[plen-1]==':' || path[plen-1]=='\\' || path[plen-1]=='/'))
   {
     *MSVCRT__errno() = MSVCRT_ENOENT;
     return -1;
   }
-
-#if _MSVCR_VER<140
-  if (plen>=2 && path[plen-2]!=':' && (path[plen-1]=='\\' || path[plen-1]=='/'))
-  {
-    *MSVCRT__errno() = MSVCRT_ENOENT;
-    return -1;
-  }
-#endif
 
   if (!GetFileAttributesExA(path, GetFileExInfoStandard, &hfi))
   {
@@ -3135,19 +3128,12 @@ int CDECL MSVCRT__wstat64(const MSVCRT_wchar_t* path, struct MSVCRT__stat64 * bu
   while (plen && path[plen-1]==' ')
     plen--;
 
-  if (plen==2 && path[1]==':')
+  if(plen && (plen<2 || path[plen-2]!=':') &&
+          (path[plen-1]==':' || path[plen-1]=='\\' || path[plen-1]=='/'))
   {
     *MSVCRT__errno() = MSVCRT_ENOENT;
     return -1;
   }
-
-#if _MSVCR_VER<140
-  if (plen>=2 && path[plen-2]!=':' && (path[plen-1]=='\\' || path[plen-1]=='/'))
-  {
-    *MSVCRT__errno() = MSVCRT_ENOENT;
-    return -1;
-  }
-#endif
 
   if (!GetFileAttributesExW(path, GetFileExInfoStandard, &hfi))
   {
@@ -4719,53 +4705,31 @@ int CDECL MSVCRT_getc(MSVCRT_FILE* file)
 }
 
 /*********************************************************************
- *		gets_s (MSVCR80.@)
- */
-char * CDECL MSVCRT_gets_s(char *buf, MSVCRT_size_t len)
-{
-    char *buf_start = buf;
-    int cc;
-
-    if (!MSVCRT_CHECK_PMT(buf != NULL)) return NULL;
-    if (!MSVCRT_CHECK_PMT(len != 0)) return NULL;
-
-    MSVCRT__lock_file(MSVCRT_stdin);
-    for(cc = MSVCRT__fgetc_nolock(MSVCRT_stdin);
-            len != 0 && cc != MSVCRT_EOF && cc != '\n';
-            cc = MSVCRT__fgetc_nolock(MSVCRT_stdin))
-    {
-        if (cc != '\r')
-        {
-            *buf++ = (char)cc;
-            len--;
-        }
-    }
-    MSVCRT__unlock_file(MSVCRT_stdin);
-
-    if (!len)
-    {
-        *buf_start = 0;
-        MSVCRT__invalid_parameter(NULL, NULL, NULL, 0, 0);
-        return NULL;
-    }
-
-    if ((cc == MSVCRT_EOF) && (buf_start == buf))
-    {
-        TRACE(":nothing read\n");
-        return NULL;
-    }
-    *buf = '\0';
-
-    TRACE("got '%s'\n", buf_start);
-    return buf_start;
-}
-
-/*********************************************************************
- *              gets (MSVCRT.@)
+ *		gets (MSVCRT.@)
  */
 char * CDECL MSVCRT_gets(char *buf)
 {
-    return MSVCRT_gets_s(buf, -1);
+  int    cc;
+  char * buf_start = buf;
+
+  MSVCRT__lock_file(MSVCRT_stdin);
+  for(cc = MSVCRT__fgetc_nolock(MSVCRT_stdin); cc != MSVCRT_EOF && cc != '\n';
+          cc = MSVCRT__fgetc_nolock(MSVCRT_stdin))
+  {
+      if(cc != '\r')
+          *buf++ = (char)cc;
+  }
+  MSVCRT__unlock_file(MSVCRT_stdin);
+
+  if ((cc == MSVCRT_EOF) && (buf_start == buf))
+  {
+    TRACE(":nothing read\n");
+    return NULL;
+  }
+  *buf = '\0';
+
+  TRACE("got '%s'\n", buf_start);
+  return buf_start;
 }
 
 /*********************************************************************

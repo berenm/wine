@@ -103,7 +103,7 @@ static void WINAPI DOSVM_DefaultHandler( CONTEXT *context )
  */
 static INTPROC DOSVM_GetBuiltinHandler( BYTE intnum )
 {
-    if (intnum < ARRAY_SIZE(DOSVM_VectorsBuiltin)) {
+    if (intnum < sizeof(DOSVM_VectorsBuiltin)/sizeof(INTPROC)) {
         INTPROC proc = DOSVM_VectorsBuiltin[intnum];
         if (proc)
             return proc;
@@ -274,7 +274,7 @@ BOOL DOSVM_EmulateInterruptPM( CONTEXT *context, BYTE intnum )
     else if (wine_ldt_is_system(context->SegCs))
     {
         INTPROC proc;
-        if (intnum >= ARRAY_SIZE(DOSVM_VectorsBuiltin)) return FALSE;
+        if (intnum >= sizeof(DOSVM_VectorsBuiltin)/sizeof(INTPROC)) return FALSE;
         if (!(proc = DOSVM_VectorsBuiltin[intnum])) return FALSE;
         proc( context );
     }

@@ -48,20 +48,6 @@ int msgbox_res_id(HWND hwnd, UINT textid, UINT captionid, UINT type)
     return IDCANCEL;
 }
 
-static BOOL is_visible(void)
-{
-    USEROBJECTFLAGS flags;
-    HWINSTA winstation;
-
-    if (!(winstation = GetProcessWindowStation()))
-        return FALSE;
-
-    if (!(GetUserObjectInformationA(winstation, UOI_FLAGS, &flags, sizeof(flags), NULL)))
-        return FALSE;
-
-    return flags.dwFlags & WSF_VISIBLE;
-}
-
 static WCHAR *get_program_name(HANDLE hProcess)
 {
     WCHAR image_name[MAX_PATH];
@@ -376,7 +362,7 @@ int display_crash_dialog(void)
     /* dbg_curr_process->handle is not set */
     HANDLE hProcess;
 
-    if (!DBG_IVAR(ShowCrashDialog) || !is_visible())
+    if (!DBG_IVAR(ShowCrashDialog))
         return TRUE;
 
     hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, dbg_curr_pid);

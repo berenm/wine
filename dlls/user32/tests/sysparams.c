@@ -46,7 +46,6 @@ static BOOL (WINAPI *pGetProcessDpiAwarenessInternal)(HANDLE,DPI_AWARENESS*);
 static BOOL (WINAPI *pSetProcessDpiAwarenessInternal)(DPI_AWARENESS);
 static UINT (WINAPI *pGetDpiForSystem)(void);
 static UINT (WINAPI *pGetDpiForWindow)(HWND);
-static BOOL (WINAPI *pGetDpiForMonitorInternal)(HMONITOR,UINT,UINT*,UINT*);
 static DPI_AWARENESS_CONTEXT (WINAPI *pGetThreadDpiAwarenessContext)(void);
 static DPI_AWARENESS_CONTEXT (WINAPI *pSetThreadDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
 static DPI_AWARENESS_CONTEXT (WINAPI *pGetWindowDpiAwarenessContext)(HWND);
@@ -56,7 +55,6 @@ static INT (WINAPI *pGetSystemMetricsForDpi)(INT,UINT);
 static BOOL (WINAPI *pSystemParametersInfoForDpi)(UINT,UINT,void*,UINT,UINT);
 static BOOL (WINAPI *pLogicalToPhysicalPointForPerMonitorDPI)(HWND,POINT*);
 static BOOL (WINAPI *pPhysicalToLogicalPointForPerMonitorDPI)(HWND,POINT*);
-static LONG (WINAPI *pGetAutoRotationState)(PAR_STATE);
 
 static BOOL strict;
 static int dpi, real_dpi;
@@ -712,7 +710,7 @@ static void test_SPI_SETMOUSE( void )                  /*      4 */
     POINT proj_change7[] = { {6, 6}, {14, 6}, {32, 6}, {40, 40}, {44, 40}, {400, 400} };
     POINT proj_change8[] = { {6, 6}, {28, 6}, {32, 6}, {40, 40}, {44, 40}, {400, 400} };
 
-    int nchange = ARRAY_SIZE(req_change);
+    int nchange = sizeof( req_change ) / sizeof( POINT );
 
     trace("testing SPI_{GET,SET}MOUSE\n");
     SetLastError(0xdeadbeef);
@@ -877,7 +875,7 @@ static void test_SPI_SETKEYBOARDSPEED( void )          /*     10 */
     if (!test_error_msg(rc,"SPI_{GET,SET}KEYBOARDSPEED"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -966,7 +964,7 @@ static void test_SPI_SETSCREENSAVETIMEOUT( void )      /*     14 */
     if (!test_error_msg(rc,"SPI_{GET,SET}SCREENSAVETIMEOUT"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -1003,7 +1001,7 @@ static void test_SPI_SETSCREENSAVEACTIVE( void )       /*     17 */
     if (!test_error_msg(rc,"SPI_{GET,SET}SCREENSAVEACTIVE"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -1044,7 +1042,7 @@ static void test_SPI_SETKEYBOARDDELAY( void )          /*     23 */
     if (!test_error_msg(rc,"SPI_{GET,SET}KEYBOARDDELAY"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT delay;
         char buf[10];
@@ -1145,7 +1143,7 @@ static void test_SPI_SETICONTITLEWRAP( void )          /*     26 */
     if (!test_error_msg(rc,"SPI_{GET,SET}ICONTITLEWRAP"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         UINT regval;
@@ -1189,7 +1187,7 @@ static void test_SPI_SETMENUDROPALIGNMENT( void )      /*     28 */
     if (!test_error_msg(rc,"SPI_{GET,SET}MENUDROPALIGNMENT"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -1225,7 +1223,7 @@ static void test_SPI_SETDOUBLECLKWIDTH( void )         /*     29 */
     trace("testing SPI_{GET,SET}DOUBLECLKWIDTH\n");
     old_width = GetSystemMetrics( SM_CXDOUBLECLK );
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         char buf[10];
 
@@ -1259,7 +1257,7 @@ static void test_SPI_SETDOUBLECLKHEIGHT( void )        /*     30 */
     trace("testing SPI_{GET,SET}DOUBLECLKHEIGHT\n");
     old_height = GetSystemMetrics( SM_CYDOUBLECLK );
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         char buf[10];
 
@@ -1349,7 +1347,7 @@ static void test_SPI_SETMOUSEBUTTONSWAP( void )        /*     33 */
     trace("testing SPI_{GET,SET}MOUSEBUTTONSWAP\n");
     old_b = GetSystemMetrics( SM_SWAPBUTTON );
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         SetLastError(0xdeadbeef);
         rc=SystemParametersInfoA( SPI_SETMOUSEBUTTONSWAP, vals[i], 0,
@@ -1404,7 +1402,7 @@ static void test_SPI_SETDRAGFULLWINDOWS( void )        /*     37 */
     if (!test_error_msg(rc,"SPI_{GET,SET}DRAGFULLWINDOWS"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -1927,7 +1925,7 @@ static void test_SPI_SETSHOWSOUNDS( void )             /*     57 */
     if (!test_error_msg(rc,"SPI_{GET,SET}SHOWSOUNDS"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -1964,7 +1962,7 @@ static void test_SPI_SETKEYBOARDPREF( void )           /*     69 */
     if (!test_error_msg(rc,"SPI_{GET,SET}KEYBOARDPREF"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         BOOL v;
 
@@ -1999,7 +1997,7 @@ static void test_SPI_SETSCREENREADER( void )           /*     71 */
     if (!test_error_msg(rc,"SPI_{GET,SET}SCREENREADER"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         BOOL v;
 
@@ -2038,7 +2036,7 @@ static void test_SPI_SETFONTSMOOTHING( void )         /*     75 */
     SystemParametersInfoA( SPI_GETFONTSMOOTHINGCONTRAST, 0, &old_contrast, 0 );
     SystemParametersInfoA( SPI_GETFONTSMOOTHINGORIENTATION, 0, &old_orient, 0 );
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -2115,7 +2113,7 @@ static void test_SPI_SETLOWPOWERACTIVE( void )         /*     85 */
     if (!test_error_msg(rc,"SPI_{GET,SET}LOWPOWERACTIVE"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -2153,7 +2151,7 @@ static void test_SPI_SETPOWEROFFACTIVE( void )         /*     86 */
     if (!test_error_msg(rc,"SPI_{GET,SET}POWEROFFACTIVE"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -2191,7 +2189,7 @@ static void test_SPI_SETSNAPTODEFBUTTON( void )         /*     95 */
     if (!test_error_msg(rc,"SPI_GETSNAPTODEFBUTTON"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
 
@@ -2226,7 +2224,7 @@ static void test_SPI_SETMOUSEHOVERWIDTH( void )      /*     99 */
     if (!test_error_msg(rc,"SPI_{GET,SET}MOUSEHOVERWIDTH"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -2263,7 +2261,7 @@ static void test_SPI_SETMOUSEHOVERHEIGHT( void )      /*     101 */
     if (!test_error_msg(rc,"SPI_{GET,SET}MOUSEHOVERHEIGHT"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -2304,7 +2302,7 @@ static void test_SPI_SETMOUSEHOVERTIME( void )      /*     103 */
     if (!test_error_msg(rc,"SPI_{GET,SET}MOUSEHOVERTIME"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -2343,7 +2341,7 @@ static void test_SPI_SETWHEELSCROLLLINES( void )      /*     105 */
     if (!test_error_msg(rc,"SPI_{GET,SET}WHEELSCROLLLINES"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -2382,7 +2380,7 @@ static void test_SPI_SETMENUSHOWDELAY( void )      /*     107 */
     if (!test_error_msg(rc,"SPI_{GET,SET}MENUSHOWDELAY"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -2421,7 +2419,7 @@ static void test_SPI_SETWHEELSCROLLCHARS( void )      /*     108 */
     if (!test_error_msg(rc,"SPI_{GET,SET}WHEELSCROLLCHARS"))
         return;
 
-    for (i=0;i<ARRAY_SIZE(vals);i++)
+    for (i=0;i<sizeof(vals)/sizeof(*vals);i++)
     {
         UINT v;
         char buf[10];
@@ -2491,7 +2489,7 @@ static void test_WM_DISPLAYCHANGE(void)
 
     displaychange_sem = CreateSemaphoreW(NULL, 0, 1, NULL);
 
-    for(i = 0; i < ARRAY_SIZE(test_bpps); i++) {
+    for(i = 0; i < sizeof(test_bpps)/sizeof(test_bpps[0]); i++) {
         last_bpp = -1;
 
         memset(&mode, 0, sizeof(mode));
@@ -3550,26 +3548,6 @@ static void test_dpi_window(void)
         dpi = pGetDpiForWindow( hwnd );
         ok( dpi == (i == DPI_AWARENESS_UNAWARE ? USER_DEFAULT_SCREEN_DPI : real_dpi),
             "%lu: got %u / %u\n", i, dpi, real_dpi );
-        if (pGetDpiForMonitorInternal)
-        {
-            BOOL res;
-            SetLastError( 0xdeadbeef );
-            res = pGetDpiForMonitorInternal( MonitorFromWindow( hwnd, 0 ), 0, &dpi, NULL );
-            ok( !res, "succeeded\n" );
-            ok( GetLastError() == ERROR_INVALID_ADDRESS, "wrong error %u\n", GetLastError() );
-            SetLastError( 0xdeadbeef );
-            res = pGetDpiForMonitorInternal( MonitorFromWindow( hwnd, 0 ), 3, &dpi, &dpi );
-            ok( !res, "succeeded\n" );
-            ok( GetLastError() == ERROR_BAD_ARGUMENTS, "wrong error %u\n", GetLastError() );
-            SetLastError( 0xdeadbeef );
-            res = pGetDpiForMonitorInternal( MonitorFromWindow( hwnd, 0 ), 3, &dpi, NULL );
-            ok( !res, "succeeded\n" );
-            ok( GetLastError() == ERROR_BAD_ARGUMENTS, "wrong error %u\n", GetLastError() );
-            res = pGetDpiForMonitorInternal( MonitorFromWindow( hwnd, 0 ), 0, &dpi, &dpi );
-            ok( res, "failed err %u\n", GetLastError() );
-            ok( dpi == (i == DPI_AWARENESS_UNAWARE ? USER_DEFAULT_SCREEN_DPI : real_dpi),
-                "%lu: got %u / %u\n", i, dpi, real_dpi );
-        }
         msg.hwnd = hwnd;
         for (j = DPI_AWARENESS_UNAWARE; j <= DPI_AWARENESS_PER_MONITOR_AWARE; j++)
         {
@@ -3643,27 +3621,6 @@ static void test_dpi_window(void)
     pSetThreadDpiAwarenessContext( orig );
 }
 
-static void test_GetAutoRotationState(void)
-{
-    AR_STATE state;
-    BOOL ret;
-
-    if (!pGetAutoRotationState)
-    {
-        win_skip("GetAutoRotationState not supported\n");
-        return;
-    }
-
-    SetLastError(0xdeadbeef);
-    ret = pGetAutoRotationState(NULL);
-    ok(!ret, "Expected GetAutoRotationState to fail\n");
-    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
-
-    state = 0;
-    ret = pGetAutoRotationState(&state);
-    ok(ret, "Expected GetAutoRotationState to succeed, error %d\n", GetLastError());
-}
-
 START_TEST(sysparams)
 {
     int argc;
@@ -3681,7 +3638,6 @@ START_TEST(sysparams)
     pSetProcessDPIAware = (void*)GetProcAddress(hdll, "SetProcessDPIAware");
     pGetDpiForSystem = (void*)GetProcAddress(hdll, "GetDpiForSystem");
     pGetDpiForWindow = (void*)GetProcAddress(hdll, "GetDpiForWindow");
-    pGetDpiForMonitorInternal = (void*)GetProcAddress(hdll, "GetDpiForMonitorInternal");
     pSetProcessDpiAwarenessContext = (void*)GetProcAddress(hdll, "SetProcessDpiAwarenessContext");
     pGetProcessDpiAwarenessInternal = (void*)GetProcAddress(hdll, "GetProcessDpiAwarenessInternal");
     pSetProcessDpiAwarenessInternal = (void*)GetProcAddress(hdll, "SetProcessDpiAwarenessInternal");
@@ -3694,7 +3650,6 @@ START_TEST(sysparams)
     pSystemParametersInfoForDpi = (void*)GetProcAddress(hdll, "SystemParametersInfoForDpi");
     pLogicalToPhysicalPointForPerMonitorDPI = (void*)GetProcAddress(hdll, "LogicalToPhysicalPointForPerMonitorDPI");
     pPhysicalToLogicalPointForPerMonitorDPI = (void*)GetProcAddress(hdll, "PhysicalToLogicalPointForPerMonitorDPI");
-    pGetAutoRotationState = (void*)GetProcAddress(hdll, "GetAutoRotationState");
 
     hInstance = GetModuleHandleA( NULL );
     hdc = GetDC(0);
@@ -3716,7 +3671,6 @@ START_TEST(sysparams)
     test_metrics_for_dpi( 192 );
     test_EnumDisplaySettings( );
     test_GetSysColorBrush( );
-    test_GetAutoRotationState( );
 
     change_counter = 0;
     change_last_param = 0;

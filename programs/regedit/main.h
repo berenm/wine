@@ -30,6 +30,8 @@
 
 #define	SPLIT_WIDTH	5
 
+#define ARRAY_SIZE(A) (sizeof(A)/sizeof(*A))
+
 #define MAX_NEW_KEY_LEN  128
 #define KEY_MAX_LEN      1024
 
@@ -150,7 +152,7 @@ int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort);
 BOOL RefreshListView(HWND hwndLV, HKEY hKeyRoot, LPCWSTR keyPath, LPCWSTR highlightValue);
 HWND StartValueRename(HWND hwndLV);
 LPWSTR GetItemText(HWND hwndLV, UINT item);
-WCHAR *GetValueName(HWND hwndLV);
+LPCWSTR GetValueName(HWND hwndLV);
 BOOL ListWndNotifyProc(HWND hWnd, WPARAM wParam, LPARAM lParam, BOOL *Result);
 BOOL IsDefaultValue(HWND hwndLV, int i);
 

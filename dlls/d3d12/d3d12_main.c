@@ -34,6 +34,8 @@
 
 #include <vkd3d.h>
 
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+
 WINE_DEFAULT_DEBUG_CHANNEL(d3d12);
 WINE_DECLARE_DEBUG_CHANNEL(winediag);
 

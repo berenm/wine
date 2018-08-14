@@ -87,6 +87,8 @@ static const shvheader mycomputer_header[] =
     { NULL, 0, IDS_SHV_COLUMN7, SHCOLSTATE_TYPE_STR | SHCOLSTATE_ONBYDEFAULT, LVCFMT_RIGHT, 10 },
 };
 
+#define MYCOMPUTERSHELLVIEWCOLUMNS sizeof(mycomputer_header)/sizeof(shvheader)
+
 /**************************************************************************
 *    ISF_MyComputer_Constructor
 */
@@ -797,7 +799,7 @@ static HRESULT WINAPI ISF_MyComputer_fnGetDefaultColumnState (
 
     TRACE ("(%p)->(%d %p)\n", This, iColumn, pcsFlags);
 
-    if (!pcsFlags || iColumn >= ARRAY_SIZE(mycomputer_header))
+    if (!pcsFlags || iColumn >= MYCOMPUTERSHELLVIEWCOLUMNS)
         return E_INVALIDARG;
 
     *pcsFlags = mycomputer_header[iColumn].pcsFlags;
@@ -824,7 +826,7 @@ static HRESULT WINAPI ISF_MyComputer_fnGetDetailsOf (IShellFolder2 *iface,
 
     TRACE ("(%p)->(%p %i %p)\n", This, pidl, iColumn, psd);
 
-    if (!psd || iColumn >= ARRAY_SIZE(mycomputer_header))
+    if (!psd || iColumn >= MYCOMPUTERSHELLVIEWCOLUMNS)
         return E_INVALIDARG;
 
     if (!pidl)
@@ -869,7 +871,7 @@ static HRESULT WINAPI ISF_MyComputer_fnMapColumnToSCID (IShellFolder2 *iface, UI
 
     TRACE("(%p)->(%u %p)\n", This, column, scid);
 
-    if (column >= ARRAY_SIZE(mycomputer_header))
+    if (column >= MYCOMPUTERSHELLVIEWCOLUMNS)
         return E_INVALIDARG;
 
     return shellfolder_map_column_to_scid(mycomputer_header, column, scid);

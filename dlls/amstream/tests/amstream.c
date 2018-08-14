@@ -468,7 +468,7 @@ static void test_media_streams(void)
 
                 /* Pin name is "I{guid MSPID_PrimaryVideo or MSPID_PrimaryAudio}" */
                 id[0] = 'I';
-                StringFromGUID2(i ? &MSPID_PrimaryAudio : &MSPID_PrimaryVideo, id + 1, 39);
+                StringFromGUID2(i ? &MSPID_PrimaryAudio : &MSPID_PrimaryVideo, id + 1, 40);
 
                 hr = IPin_ConnectedTo(pins[i], &pin);
                 ok(hr == VFW_E_NOT_CONNECTED, "IPin_ConnectedTo returned: %x\n", hr);
@@ -479,7 +479,7 @@ static void test_media_streams(void)
                 ok(!lstrcmpW(info.achName, id), "Pin name is %s instead of %s\n", wine_dbgstr_w(info.achName), wine_dbgstr_w(id));
                 hr = IPin_EnumMediaTypes(pins[i], &enum_media_types);
                 ok(hr == S_OK, "IPin_EnumMediaTypes returned: %x\n", hr);
-                hr = IEnumMediaTypes_Next(enum_media_types, ARRAY_SIZE(media_types), media_types, &nb_media_types);
+                hr = IEnumMediaTypes_Next(enum_media_types, sizeof(media_types) / sizeof(media_types[0]), media_types, &nb_media_types);
                 ok(SUCCEEDED(hr), "IEnumMediaTypes_Next returned: %x\n", hr);
                 ok(nb_media_types > 0, "nb_media_types should be >0\n");
                 IEnumMediaTypes_Release(enum_media_types);

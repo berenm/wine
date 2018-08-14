@@ -104,7 +104,8 @@ static void ShowLastError(void)
     LPWSTR lpMsgBuf;
     WCHAR wszTitle[MAX_LOAD_STRING];
 
-    LoadStringW(globals.hMainInst, IDS_TYPELIBTITLE, wszTitle, ARRAY_SIZE(wszTitle));
+    LoadStringW(globals.hMainInst, IDS_TYPELIBTITLE, wszTitle,
+            sizeof(wszTitle)/sizeof(wszTitle[0]));
     FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
             NULL, error, 0, (LPWSTR)&lpMsgBuf, 0, NULL);
     MessageBoxW(NULL, lpMsgBuf, wszTitle, MB_OK | MB_ICONERROR);
@@ -736,7 +737,7 @@ static int EnumImplTypes(ITypeInfo *pTypeInfo, int cImplTypes, HTREEITEM hParent
     if(!cImplTypes) return 0;
 
     LoadStringW(globals.hMainInst, IDS_INHERITINTERFACES, wszInheritedInterfaces,
-                ARRAY_SIZE(wszInheritedInterfaces));
+            sizeof(wszInheritedInterfaces)/sizeof(wszInheritedInterfaces[0]));
 
     U(tvis).item.mask = TVIF_TEXT;
     U(tvis).item.cchTextMax = MAX_LOAD_STRING;
@@ -1199,11 +1200,12 @@ static int PopulateTree(void)
         WCHAR wszError[MAX_LOAD_STRING];
         DWORD_PTR args[2];
 
-        LoadStringW(globals.hMainInst, IDS_ERROR_LOADTYPELIB, wszError, ARRAY_SIZE(wszError));
+        LoadStringW(globals.hMainInst, IDS_ERROR_LOADTYPELIB,
+                wszError, sizeof(wszError)/sizeof(wszError[0]));
         args[0] = (DWORD_PTR)typelib.wszFileName;
         args[1] = hRes;
         FormatMessageW(FORMAT_MESSAGE_FROM_STRING|FORMAT_MESSAGE_ARGUMENT_ARRAY,
-                       wszError, 0, 0, wszMessage, ARRAY_SIZE(wszMessage), (__ms_va_list*)args);
+                       wszError, 0, 0, wszMessage, sizeof(wszMessage)/sizeof(*wszMessage), (__ms_va_list*)args);
         MessageBoxW(globals.hMainWnd, wszMessage, NULL, MB_OK|MB_ICONEXCLAMATION);
         return 1;
     }
@@ -1533,8 +1535,8 @@ static void UpdateTypeLibStatusBar(int itemID)
 {
     WCHAR info[MAX_LOAD_STRING];
 
-    if(!LoadStringW(globals.hMainInst, itemID, info, ARRAY_SIZE(info)))
-        LoadStringW(globals.hMainInst, IDS_READY, info, ARRAY_SIZE(info));
+    if(!LoadStringW(globals.hMainInst, itemID, info, sizeof(info)/sizeof(info[0])))
+        LoadStringW(globals.hMainInst, IDS_READY, info, sizeof(info)/sizeof(info[0]));
 
     SendMessageW(typelib.hStatusBar, SB_SETTEXTW, 0, (LPARAM)info);
 }
@@ -1637,7 +1639,7 @@ BOOL TypeLibRegisterClassW(void)
 BOOL CreateTypeLibWindow(HINSTANCE hInst, WCHAR *wszFileName)
 {
     WCHAR wszTitle[MAX_LOAD_STRING];
-    LoadStringW(hInst, IDS_TYPELIBTITLE, wszTitle, ARRAY_SIZE(wszTitle));
+    LoadStringW(hInst, IDS_TYPELIBTITLE, wszTitle, sizeof(wszTitle)/sizeof(wszTitle[0]));
 
     if(wszFileName) lstrcpyW(typelib.wszFileName, wszFileName);
     else

@@ -42,7 +42,7 @@ typedef struct {
 
 static inline IMediaStreamFilterImpl *impl_from_IMediaStreamFilter(IMediaStreamFilter *iface)
 {
-    return CONTAINING_RECORD((IBaseFilter *)iface, IMediaStreamFilterImpl, filter.IBaseFilter_iface);
+    return CONTAINING_RECORD(iface, IMediaStreamFilterImpl, filter);
 }
 
 /*** IUnknown methods ***/
@@ -159,8 +159,9 @@ static HRESULT WINAPI MediaStreamFilterImpl_EnumPins(IMediaStreamFilter *iface, 
 
 static HRESULT WINAPI MediaStreamFilterImpl_FindPin(IMediaStreamFilter *iface, LPCWSTR id, IPin **pin)
 {
-    IMediaStreamFilterImpl *This = impl_from_IMediaStreamFilter(iface);
-    return BaseFilterImpl_FindPin(&This->filter.IBaseFilter_iface, id, pin);
+    FIXME("(%p)->(%s,%p): Stub!\n", iface, debugstr_w(id), pin);
+
+    return E_NOTIMPL;
 }
 
 static HRESULT WINAPI MediaStreamFilterImpl_QueryFilterInfo(IMediaStreamFilter *iface, FILTER_INFO *info)

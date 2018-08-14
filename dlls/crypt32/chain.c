@@ -265,10 +265,10 @@ typedef struct _CertificateChain
     LONG ref;
 } CertificateChain;
 
-DWORD CRYPT_IsCertificateSelfSigned(const CERT_CONTEXT *cert)
+BOOL CRYPT_IsCertificateSelfSigned(PCCERT_CONTEXT cert)
 {
-    DWORD size, status = 0;
     PCERT_EXTENSION ext;
+    DWORD size;
     BOOL ret;
 
     if ((ext = CertFindExtension(szOID_AUTHORITY_KEY_IDENTIFIER2,
@@ -296,9 +296,10 @@ DWORD CRYPT_IsCertificateSelfSigned(const CERT_CONTEXT *cert)
                          &info->AuthorityCertIssuer.rgAltEntry[i];
                 if (directoryName)
                 {
-                    if (CertCompareCertificateName(cert->dwCertEncodingType, &directoryName->u.DirectoryName, &cert->pCertInfo->Issuer)
-                            && CertCompareIntegerBlob(&info->AuthorityCertSerialNumber, &cert->pCertInfo->SerialNumber))
-                        status = CERT_TRUST_HAS_NAME_MATCH_ISSUER;
+                    ret = CertCompareCertificateName(cert->dwCertEncodingType,
+                     &directoryName->u.DirectoryName, &cert->pCertInfo->Issuer)
+                     && CertCompareIntegerBlob(&info->AuthorityCertSerialNumber,
+                     &cert->pCertInfo->SerialNumber);
                 }
                 else
                 {
@@ -316,12 +317,16 @@ DWORD CRYPT_IsCertificateSelfSigned(const CERT_CONTEXT *cert)
 
                     if (buf)
                     {
-                        CertGetCertificateContextProperty(cert, CERT_KEY_IDENTIFIER_PROP_ID, buf, &size);
-                        if (!memcmp(buf, info->KeyId.pbData, size))
-                            status = CERT_TRUST_HAS_KEY_MATCH_ISSUER;
+                        CertGetCertificateContextProperty(cert,
+                         CERT_KEY_IDENTIFIER_PROP_ID, buf, &size);
+                        ret = !memcmp(buf, info->KeyId.pbData, size);
                         CryptMemFree(buf);
                     }
+                    else
+                        ret = FALSE;
                 }
+                else
+                    ret = FALSE;
             }
             LocalFree(info);
         }
@@ -339,9 +344,10 @@ DWORD CRYPT_IsCertificateSelfSigned(const CERT_CONTEXT *cert)
         {
             if (info->CertIssuer.cbData && info->CertSerialNumber.cbData)
             {
-                if (CertCompareCertificateName(cert->dwCertEncodingType, &info->CertIssuer, &cert->pCertInfo->Issuer)
-                        && CertCompareIntegerBlob(&info->CertSerialNumber, &cert->pCertInfo->SerialNumber))
-                    status = CERT_TRUST_HAS_NAME_MATCH_ISSUER;
+                ret = CertCompareCertificateName(cert->dwCertEncodingType,
+                 &info->CertIssuer, &cert->pCertInfo->Issuer) &&
+                 CertCompareIntegerBlob(&info->CertSerialNumber,
+                 &cert->pCertInfo->SerialNumber);
             }
             else if (info->KeyId.cbData)
             {
@@ -355,23 +361,24 @@ DWORD CRYPT_IsCertificateSelfSigned(const CERT_CONTEXT *cert)
                     {
                         CertGetCertificateContextProperty(cert,
                          CERT_KEY_IDENTIFIER_PROP_ID, buf, &size);
-                        if (!memcmp(buf, info->KeyId.pbData, size))
-                            status = CERT_TRUST_HAS_KEY_MATCH_ISSUER;
+                        ret = !memcmp(buf, info->KeyId.pbData, size);
                         CryptMemFree(buf);
                     }
+                    else
+                        ret = FALSE;
                 }
+                else
+                    ret = FALSE;
             }
+            else
+                ret = FALSE;
             LocalFree(info);
         }
     }
     else
-        if (CertCompareCertificateName(cert->dwCertEncodingType, &cert->pCertInfo->Subject, &cert->pCertInfo->Issuer))
-            status = CERT_TRUST_HAS_NAME_MATCH_ISSUER;
-
-    if (status)
-        status |= CERT_TRUST_IS_SELF_SIGNED;
-
-    return status;
+        ret = CertCompareCertificateName(cert->dwCertEncodingType,
+         &cert->pCertInfo->Subject, &cert->pCertInfo->Issuer);
+    return ret;
 }
 
 static void CRYPT_FreeChainElement(PCERT_CHAIN_ELEMENT element)
@@ -1883,7 +1890,6 @@ static void CRYPT_CheckSimpleChain(CertificateChainEngine *engine,
     int i;
     BOOL pathLengthConstraintViolated = FALSE;
     CERT_BASIC_CONSTRAINTS2_INFO constraints = { FALSE, FALSE, 0 };
-    DWORD status;
 
     TRACE_(chain)("checking chain with %d elements for time %s\n",
      chain->cElement, filetime_to_str(time));
@@ -1971,9 +1977,10 @@ static void CRYPT_CheckSimpleChain(CertificateChainEngine *engine,
     }
     CRYPT_CheckChainNameConstraints(chain);
     CRYPT_CheckChainPolicies(chain);
-    if ((status = CRYPT_IsCertificateSelfSigned(rootElement->pCertContext)))
+    if (CRYPT_IsCertificateSelfSigned(rootElement->pCertContext))
     {
-        rootElement->TrustStatus.dwInfoStatus |= status;
+        rootElement->TrustStatus.dwInfoStatus |=
+         CERT_TRUST_IS_SELF_SIGNED | CERT_TRUST_HAS_NAME_MATCH_ISSUER;
         CRYPT_CheckRootCert(engine->hRoot, rootElement);
     }
     CRYPT_CombineTrustStatus(&chain->TrustStatus, &rootElement->TrustStatus);
@@ -2694,20 +2701,10 @@ static void CRYPT_VerifyChainRevocation(PCERT_CHAIN_CONTEXT chain,
                     revocationPara.pIssuerCert =
                      chain->rgpChain[i]->rgpElement[j + 1]->pCertContext;
                 else
-                    revocationPara.pIssuerCert = certToCheck;
-
+                    revocationPara.pIssuerCert = NULL;
                 ret = CertVerifyRevocation(X509_ASN_ENCODING,
                  CERT_CONTEXT_REVOCATION_TYPE, 1, (void **)&certToCheck,
                  revocationFlags, &revocationPara, &revocationStatus);
-
-                if (!ret && revocationStatus.dwError == CRYPT_E_NO_REVOCATION_CHECK &&
-                    revocationPara.pIssuerCert == certToCheck)
-                {
-                    FIXME("Unable to find CRL for CA certificate\n");
-                    ret = TRUE;
-                    revocationStatus.dwError = 0;
-                }
-
                 if (!ret)
                 {
                     PCERT_CHAIN_ELEMENT element = CRYPT_FindIthElementInChain(

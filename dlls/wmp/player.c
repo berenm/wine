@@ -1365,9 +1365,7 @@ static const IWMPNetworkVtbl WMPNetworkVtbl = {
 
 static HRESULT WINAPI WMPControls_QueryInterface(IWMPControls *iface, REFIID riid, void **ppv)
 {
-    if(IsEqualGUID(riid, &IID_IUnknown)) {
-        *ppv = iface;
-    }else if(IsEqualGUID(riid, &IID_IDispatch)) {
+    if(IsEqualGUID(riid, &IID_IDispatch)) {
         *ppv = iface;
     }else if(IsEqualGUID(riid, &IID_IWMPControls)) {
         *ppv = iface;

@@ -63,6 +63,8 @@ static const shvheader printers_header[] = {
     { NULL, 0, IDS_SHV_COL_MODEL, SHCOLSTATE_TYPE_STR | SHCOLSTATE_ONBYDEFAULT, LVCFMT_LEFT, 20 }
 };
 
+#define PRINTERS_FOLDER_COL_NUM sizeof(printers_header)/sizeof(shvheader)
+
 static HRESULT WINAPI IShellFolder_Printers_fnQueryInterface(IShellFolder2 *iface,
                REFIID riid, LPVOID *ppvObj)
 {
@@ -281,7 +283,7 @@ static HRESULT WINAPI IShellFolder_Printers_fnGetDefaultColumnState (
 
     TRACE("(%p)->(%d %p)\n", This, iColumn, pcsFlags);
 
-    if (iColumn >= ARRAY_SIZE(printers_header))
+    if (iColumn >= PRINTERS_FOLDER_COL_NUM)
         return E_INVALIDARG;
 
     *pcsFlags = printers_header[iColumn].pcsFlags;
@@ -304,7 +306,7 @@ static HRESULT WINAPI IShellFolder_Printers_fnGetDetailsOf (IShellFolder2 *iface
 
     TRACE("(%p)->(%p %i %p)\n", This, pidl, iColumn, psd);
 
-    if (iColumn >= ARRAY_SIZE(printers_header))
+    if (iColumn >= PRINTERS_FOLDER_COL_NUM)
         return E_NOTIMPL;
 
     if (!pidl)
@@ -321,7 +323,7 @@ static HRESULT WINAPI IShellFolder_Printers_fnMapColumnToSCID (IShellFolder2 *if
 
     TRACE("(%p)->(%u %p)\n", This, column, scid);
 
-    if (column >= ARRAY_SIZE(printers_header))
+    if (column >= PRINTERS_FOLDER_COL_NUM)
         return E_INVALIDARG;
 
     return shellfolder_map_column_to_scid(printers_header, column, scid);

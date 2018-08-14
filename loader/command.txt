@@ -1,0 +1,1 @@
+./wine ~/Play\ On\ Linux/Halo_Online/drive_c/Games/Halo\ Online/eldorado.exe

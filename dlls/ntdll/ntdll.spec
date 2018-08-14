@@ -3,7 +3,6 @@
 #if you change a Nt.. function DON'T FORGET to change the
 #Zw one too.
 
-@ stdcall ApiSetQueryApiSetPresence(ptr ptr)
 @ stub CsrAllocateCaptureBuffer
 @ stub CsrAllocateCapturePointer
 @ stub CsrAllocateMessagePointer
@@ -131,7 +130,7 @@
 @ stdcall NtCompleteConnectPort(ptr)
 # @ stub NtCompressKey
 @ stdcall NtConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr)
-@ stdcall NtContinue(ptr long)
+@ stub NtContinue
 # @ stub NtCreateDebugObject
 @ stdcall NtCreateDirectoryObject(ptr long ptr)
 @ stdcall NtCreateEvent(ptr long ptr long long)
@@ -154,7 +153,7 @@
 @ stdcall NtCreateSection(ptr long ptr ptr long long long)
 @ stdcall NtCreateSemaphore(ptr long ptr long long)
 @ stdcall NtCreateSymbolicLinkObject(ptr long ptr ptr)
-@ stdcall NtCreateThread(ptr long ptr long ptr ptr ptr long)
+@ stub NtCreateThread
 @ stdcall NtCreateThreadEx(ptr long ptr long ptr ptr long long long long ptr)
 @ stdcall NtCreateTimer(ptr long ptr long)
 @ stub NtCreateToken
@@ -179,7 +178,7 @@
 # @ stub NtEnumerateSystemEnvironmentValuesEx
 @ stdcall NtEnumerateValueKey(long long long ptr long ptr)
 @ stub NtExtendSection
-@ stdcall NtFilterToken(long long ptr ptr ptr ptr)
+# @ stub NtFilterToken
 @ stdcall NtFindAtom(ptr long ptr)
 @ stdcall NtFlushBuffersFile(long ptr)
 @ stdcall NtFlushInstructionCache(long ptr long)
@@ -677,7 +676,6 @@
 # @ stub RtlGetSetBootStatusData
 @ stdcall RtlGetThreadErrorMode()
 @ stdcall RtlGetUnloadEventTrace()
-@ stdcall RtlGetUnloadEventTraceEx(ptr ptr ptr)
 @ stub RtlGetUserInfoHeap
 @ stdcall RtlGetVersion(ptr)
 @ stub RtlGuidToPropertySetName
@@ -902,7 +900,6 @@
 # @ stub RtlSetThreadPoolStartFunc
 @ stdcall RtlSetTimeZoneInformation(ptr)
 # @ stub RtlSetTimer
-@ stdcall RtlSetUnhandledExceptionFilter(ptr)
 @ stub RtlSetUnicodeCallouts
 @ stub RtlSetUserFlagsHeap
 @ stub RtlSetUserValueHeap
@@ -1037,7 +1034,6 @@
 @ stdcall WinSqmIsOptedIn()
 @ stdcall WinSqmSetDWORD(ptr long long)
 @ stdcall WinSqmStartSession(ptr long long)
-@ extern Wow64Transition
 @ stdcall -private ZwAcceptConnectPort(ptr long ptr long ptr ptr) NtAcceptConnectPort
 @ stdcall -private ZwAccessCheck(ptr long long ptr ptr ptr ptr ptr) NtAccessCheck
 @ stdcall -private ZwAccessCheckAndAuditAlarm(ptr long ptr ptr ptr long ptr long ptr ptr ptr) NtAccessCheckAndAuditAlarm
@@ -1071,7 +1067,7 @@
 @ stdcall -private ZwCompleteConnectPort(ptr) NtCompleteConnectPort
 # @ stub ZwCompressKey
 @ stdcall -private ZwConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr) NtConnectPort
-@ stdcall -private ZwContinue(ptr long) NtContinue
+@ stub ZwContinue
 # @ stub ZwCreateDebugObject
 @ stdcall -private ZwCreateDirectoryObject(ptr long ptr) NtCreateDirectoryObject
 @ stdcall -private ZwCreateEvent(ptr long ptr long long) NtCreateEvent
@@ -1488,25 +1484,17 @@
 
 # Server interface
 @ cdecl -norelay wine_server_call(ptr)
-@ cdecl wine_server_close_fds_by_type(long)
 @ cdecl wine_server_fd_to_handle(long long long ptr)
 @ cdecl wine_server_handle_to_fd(long long ptr ptr)
 @ cdecl wine_server_release_fd(long long)
 @ cdecl wine_server_send_fd(long)
 @ cdecl __wine_make_process_system()
 
-# Loader
-@ cdecl __wine_ldr_start_process(ptr)
-
 # Virtual memory
 @ cdecl __wine_locked_recvmsg(long ptr long)
 
-# Token
-@ cdecl __wine_create_default_token(long)
-
 # Version
 @ cdecl wine_get_version() NTDLL_wine_get_version
-@ cdecl wine_get_patches() NTDLL_wine_get_patches
 @ cdecl wine_get_build_id() NTDLL_wine_get_build_id
 @ cdecl wine_get_host_version(ptr ptr) NTDLL_wine_get_host_version
 
@@ -1519,8 +1507,3 @@
 # Filesystem
 @ cdecl wine_nt_to_unix_file_name(ptr ptr long long)
 @ cdecl wine_unix_to_nt_file_name(ptr ptr)
-
-@ cdecl __wine_esync_set_queue_fd(long)
-
-# User shared data
-@ cdecl __wine_user_shared_data()

@@ -1018,7 +1018,7 @@ static void test_GetTempPathA(char* tmp_dir)
     len = GetTempPathA(slen / 2, buf);
     ok(len == slen || broken(len == slen + 1) /* read the big comment above */ ,
        "expected %d, got %d\n", slen, len);
-    for(len = 0; len < ARRAY_SIZE(buf); len++)
+    for(len = 0; len < sizeof(buf) / sizeof(buf[0]); len++)
         ok(buf[len] == 'a', "expected 'a' at [%d], got 0x%x\n", len, buf[len]);
 }
 
@@ -1029,7 +1029,7 @@ static void test_GetTempPathW(char* tmp_dir)
     WCHAR tmp_dirW[MAX_PATH];
     static const WCHAR fooW[] = {'f','o','o',0};
 
-    MultiByteToWideChar(CP_ACP, 0, tmp_dir, -1, tmp_dirW, ARRAY_SIZE(tmp_dirW));
+    MultiByteToWideChar(CP_ACP,0,tmp_dir,-1,tmp_dirW,sizeof(tmp_dirW)/sizeof(*tmp_dirW));
     len_with_null = lstrlenW(tmp_dirW) + 1;
 
     /* This one is different from ANSI version: ANSI version doesn't
@@ -1064,18 +1064,18 @@ static void test_GetTempPathW(char* tmp_dir)
     ok(lstrcmpiW(buf, tmp_dirW) == 0, "GetTempPathW returned an incorrect temporary path\n");
     ok(len == lstrlenW(buf), "returned length should be equal to the length of string\n");
 
-    for(len = 0; len < ARRAY_SIZE(buf); len++)
+    for(len = 0; len < sizeof(buf) / sizeof(buf[0]); len++)
         buf[len] = 'a';
     len = GetTempPathW(len, buf);
     ok(lstrcmpiW(buf, tmp_dirW) == 0, "GetTempPathW returned an incorrect temporary path\n");
     ok(len == lstrlenW(buf), "returned length should be equal to the length of string\n");
     /* The rest of the buffer must be zeroed */
     slen = len + 1;
-    for(len++; len < ARRAY_SIZE(buf); len++)
+    for(len++; len < sizeof(buf) / sizeof(buf[0]); len++)
         ok(buf[len] == '\0', "expected NULL at [%d], got 0x%x\n", len, buf[len]);
 
     /* When the buffer is not long enough the length passed is zeroed */
-    for(len = 0; len < ARRAY_SIZE(buf); len++)
+    for(len = 0; len < sizeof(buf) / sizeof(buf[0]); len++)
         buf[len] = 'a';
     len = GetTempPathW(slen / 2, buf);
     ok(len == slen || broken(len == slen + 1) /* read the big comment above */ ,
@@ -1096,7 +1096,7 @@ static void test_GetTempPathW(char* tmp_dir)
 
     for(len = 0; len < slen / 2; len++)
         ok(buf[len] == '\0', "expected NULL at [%d], got 0x%x\n", len, buf[len]);
-    for(; len < ARRAY_SIZE(buf); len++)
+    for(; len < sizeof(buf) / sizeof(buf[0]); len++)
         ok(buf[len] == 'a', "expected 'a' at [%d], got 0x%x\n", len, buf[len]);
 
     /* bogus application from bug 38220 passes the count value in sizeof(buffer)
@@ -1186,7 +1186,7 @@ static void test_GetTempPath(void)
 static void test_GetLongPathNameA(void)
 {
     DWORD length, explength, hostsize;
-    char tempfile[MAX_PATH], *name;
+    char tempfile[MAX_PATH];
     char longpath[MAX_PATH];
     char unc_prefix[MAX_PATH];
     char unc_short[MAX_PATH], unc_long[MAX_PATH];
@@ -1197,15 +1197,7 @@ static void test_GetLongPathNameA(void)
         return;
 
     GetTempPathA(MAX_PATH, tempfile);
-    name = tempfile + strlen(tempfile);
-
-    strcpy(name, "*");
-    SetLastError(0xdeadbeef);
-    length = pGetLongPathNameA(tempfile, temppath, MAX_PATH);
-    ok(!length, "GetLongPathNameA should fail\n");
-    ok(GetLastError() == ERROR_INVALID_NAME, "wrong error %d\n", GetLastError());
-
-    strcpy(name, "longfilename.longext");
+    lstrcatA(tempfile, "longfilename.longext");
 
     file = CreateFileA(tempfile, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     CloseHandle(file);
@@ -1339,7 +1331,7 @@ static void test_GetLongPathNameW(void)
      * files.
      */
     name[0] = 0;
-    while (lstrlenW(name) < (ARRAY_SIZE(name) - 1))
+    while (lstrlenW(name) < (sizeof(name)/sizeof(WCHAR) - 1))
         lstrcatW(name, letterX);
 
     GetTempPathW(MAX_PATH, tempdir);
@@ -1409,7 +1401,6 @@ static void test_GetShortPathNameW(void)
     static const WCHAR name[] = { 't', 'e', 's', 't', 0 };
     static const WCHAR backSlash[] = { '\\', 0 };
     static const WCHAR a_bcdeW[] = {'a','.','b','c','d','e',0};
-    static const WCHAR wildW[] = { '*',0 };
     WCHAR path[MAX_PATH], tmppath[MAX_PATH], *ptr;
     WCHAR short_path[MAX_PATH];
     DWORD length;
@@ -1438,7 +1429,7 @@ static void test_GetShortPathNameW(void)
     lstrcatW( path, test_path );
     lstrcatW( path, backSlash );
     short_path[0] = 0;
-    length = GetShortPathNameW( path, short_path, ARRAY_SIZE( short_path ));
+    length = GetShortPathNameW( path, short_path, sizeof(short_path) / sizeof(*short_path) );
     ok( length, "GetShortPathNameW returned 0.\n" );
 
     lstrcpyW( path, tmppath );
@@ -1469,16 +1460,9 @@ static void test_GetShortPathNameW(void)
     ok( file != INVALID_HANDLE_VALUE, "File was not created.\n" );
     CloseHandle( file );
 
-    length = GetShortPathNameW( path, short_path, ARRAY_SIZE( short_path ));
+    length = GetShortPathNameW( path, short_path, sizeof(short_path)/sizeof(*short_path) );
     ok( length, "GetShortPathNameW failed: %u.\n", GetLastError() );
 
-    lstrcpyW(ptr, wildW);
-    SetLastError(0xdeadbeef);
-    length = GetShortPathNameW( path, short_path, sizeof(short_path)/sizeof(*short_path) );
-    ok(!length, "GetShortPathNameW should fail\n");
-    ok(GetLastError() == ERROR_INVALID_NAME, "wrong error %d\n", GetLastError());
-
-    lstrcpyW(ptr, a_bcdeW);
     ret = DeleteFileW( path );
     ok( ret, "Cannot delete file.\n" );
     *ptr = 0;
@@ -1768,7 +1752,7 @@ static void create_manifest_file(const char *filename, const char *manifest)
 
     MultiByteToWideChar( CP_ACP, 0, filename, -1, path, MAX_PATH );
 
-    GetTempPathW(ARRAY_SIZE(manifest_path), manifest_path);
+    GetTempPathW(sizeof(manifest_path)/sizeof(WCHAR), manifest_path);
     lstrcatW(manifest_path, path);
 
     file = CreateFileW(manifest_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -1793,7 +1777,7 @@ static HANDLE test_create(const char *file)
     HANDLE handle;
 
     MultiByteToWideChar(CP_ACP, 0, file, -1, path, MAX_PATH);
-    GetTempPathW(ARRAY_SIZE(manifest_path), manifest_path);
+    GetTempPathW(sizeof(manifest_path)/sizeof(WCHAR), manifest_path);
     lstrcatW(manifest_path, path);
 
     memset(&actctx, 0, sizeof(ACTCTXW));
@@ -1822,11 +1806,10 @@ static void test_SearchPathA(void)
     static const CHAR testdeprelA[] = "./testdep.dll";
     static const CHAR kernel32A[] = "kernel32.dll";
     static const CHAR fileA[] = "";
-    CHAR pathA[MAX_PATH], buffA[MAX_PATH], path2A[MAX_PATH], path3A[MAX_PATH], curdirA[MAX_PATH];
-    CHAR tmpdirA[MAX_PATH], *ptrA = NULL;
+    CHAR pathA[MAX_PATH], buffA[MAX_PATH], path2A[MAX_PATH];
+    CHAR *ptrA = NULL;
     ULONG_PTR cookie;
     HANDLE handle;
-    BOOL bret;
     DWORD ret;
 
     if (!pSearchPathA)
@@ -1835,18 +1818,18 @@ static void test_SearchPathA(void)
         return;
     }
 
-    GetWindowsDirectoryA(pathA, ARRAY_SIZE(pathA));
+    GetWindowsDirectoryA(pathA, sizeof(pathA)/sizeof(CHAR));
 
     /* NULL filename */
     SetLastError(0xdeadbeef);
-    ret = pSearchPathA(pathA, NULL, NULL, ARRAY_SIZE(buffA), buffA, &ptrA);
+    ret = pSearchPathA(pathA, NULL, NULL, sizeof(buffA)/sizeof(CHAR), buffA, &ptrA);
     ok(ret == 0, "Expected failure, got %d\n", ret);
     ok(GetLastError() == ERROR_INVALID_PARAMETER,
       "Expected ERROR_INVALID_PARAMETER, got %x\n", GetLastError());
 
     /* empty filename */
     SetLastError(0xdeadbeef);
-    ret = pSearchPathA(pathA, fileA, NULL, ARRAY_SIZE(buffA), buffA, &ptrA);
+    ret = pSearchPathA(pathA, fileA, NULL, sizeof(buffA)/sizeof(CHAR), buffA, &ptrA);
     ok(ret == 0, "Expected failure, got %d\n", ret);
     ok(GetLastError() == ERROR_INVALID_PARAMETER,
       "Expected ERROR_INVALID_PARAMETER, got %x\n", GetLastError());
@@ -1862,66 +1845,44 @@ static void test_SearchPathA(void)
     delete_manifest_file("main.manifest");
 
     /* search fails without active context */
-    ret = pSearchPathA(NULL, testdepA, NULL, ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, testdepA, NULL, sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(ret == 0, "got %d\n", ret);
 
-    ret = pSearchPathA(NULL, kernel32A, NULL, ARRAY_SIZE(path2A), path2A, NULL);
+    ret = pSearchPathA(NULL, kernel32A, NULL, sizeof(path2A)/sizeof(CHAR), path2A, NULL);
     ok(ret && ret == strlen(path2A), "got %d\n", ret);
 
     ret = pActivateActCtx(handle, &cookie);
     ok(ret, "failed to activate context, %u\n", GetLastError());
 
     /* works when activated */
-    ret = pSearchPathA(NULL, testdepA, NULL, ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, testdepA, NULL, sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(ret && ret == strlen(buffA), "got %d\n", ret);
 
-    ret = pSearchPathA(NULL, "testdep.dll", ".ext", ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, "testdep.dll", ".ext", sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(ret && ret == strlen(buffA), "got %d\n", ret);
 
-    ret = pSearchPathA(NULL, "testdep", ".dll", ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, "testdep", ".dll", sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(ret && ret == strlen(buffA), "got %d\n", ret);
 
-    ret = pSearchPathA(NULL, "testdep", ".ext", ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, "testdep", ".ext", sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(!ret, "got %d\n", ret);
 
     /* name contains path */
-    ret = pSearchPathA(NULL, testdeprelA, NULL, ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, testdeprelA, NULL, sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(!ret, "got %d\n", ret);
 
     /* fails with specified path that doesn't contain this file */
-    ret = pSearchPathA(pathA, testdepA, NULL, ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(pathA, testdepA, NULL, sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(!ret, "got %d\n", ret);
 
     /* path is redirected for wellknown names too */
-    ret = pSearchPathA(NULL, kernel32A, NULL, ARRAY_SIZE(buffA), buffA, NULL);
+    ret = pSearchPathA(NULL, kernel32A, NULL, sizeof(buffA)/sizeof(CHAR), buffA, NULL);
     ok(ret && ret == strlen(buffA), "got %d\n", ret);
     ok(strcmp(buffA, path2A), "got wrong path %s, %s\n", buffA, path2A);
 
     ret = pDeactivateActCtx(0, cookie);
     ok(ret, "failed to deactivate context, %u\n", GetLastError());
     pReleaseActCtx(handle);
-
-    /* test the search path priority of the working directory */
-    GetTempPathA(sizeof(tmpdirA), tmpdirA);
-    ret = GetCurrentDirectoryA(MAX_PATH, curdirA);
-    ok(ret, "failed to obtain working directory.\n");
-    sprintf(pathA, "%s\\%s", tmpdirA, kernel32A);
-    ret = pSearchPathA(NULL, kernel32A, NULL, sizeof(path2A)/sizeof(CHAR), path2A, NULL);
-    ok(ret && ret == strlen(path2A), "got %d\n", ret);
-    bret = CopyFileA(path2A, pathA, FALSE);
-    ok(bret != 0, "failed to copy test executable to temp directory, %u\n", GetLastError());
-    sprintf(path3A, "%s%s%s", curdirA, curdirA[strlen(curdirA)-1] != '\\' ? "\\" : "", kernel32A);
-    bret = CopyFileA(path2A, path3A, FALSE);
-    ok(bret != 0, "failed to copy test executable to launch directory, %u\n", GetLastError());
-    bret = SetCurrentDirectoryA(tmpdirA);
-    ok(bret, "failed to change working directory\n");
-    ret = pSearchPathA(NULL, kernel32A, ".exe", sizeof(buffA), buffA, NULL);
-    ok(ret && ret == strlen(buffA), "got %d\n", ret);
-    ok(strcmp(buffA, path3A) == 0, "expected %s, got %s\n", path3A, buffA);
-    bret = SetCurrentDirectoryA(curdirA);
-    ok(bret, "failed to reset working directory\n");
-    DeleteFileA(path3A);
-    DeleteFileA(pathA);
 }
 
 static void test_SearchPathW(void)
@@ -1950,14 +1911,14 @@ static void test_SearchPathW(void)
 if (0)
 {
     /* NULL filename, crashes on nt4 */
-    pSearchPathW(pathW, NULL, NULL, ARRAY_SIZE(buffW), buffW, &ptrW);
+    pSearchPathW(pathW, NULL, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, &ptrW);
 }
 
-    GetWindowsDirectoryW(pathW, ARRAY_SIZE(pathW));
+    GetWindowsDirectoryW(pathW, sizeof(pathW)/sizeof(WCHAR));
 
     /* empty filename */
     SetLastError(0xdeadbeef);
-    ret = pSearchPathW(pathW, fileW, NULL, ARRAY_SIZE(buffW), buffW, &ptrW);
+    ret = pSearchPathW(pathW, fileW, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, &ptrW);
     ok(ret == 0, "Expected failure, got %d\n", ret);
     ok(GetLastError() == ERROR_INVALID_PARAMETER,
       "Expected ERROR_INVALID_PARAMETER, got %x\n", GetLastError());
@@ -1973,50 +1934,50 @@ if (0)
     delete_manifest_file("main.manifest");
 
     /* search fails without active context */
-    ret = pSearchPathW(NULL, testdepW, NULL, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, testdepW, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(ret == 0, "got %d\n", ret);
 
-    ret = pSearchPathW(NULL, kernel32dllW, NULL, ARRAY_SIZE(path2W), path2W, NULL);
+    ret = pSearchPathW(NULL, kernel32dllW, NULL, sizeof(path2W)/sizeof(WCHAR), path2W, NULL);
     ok(ret && ret == lstrlenW(path2W), "got %d\n", ret);
 
     /* full path, name without 'dll' extension */
-    GetSystemDirectoryW(pathW, ARRAY_SIZE(pathW));
-    ret = pSearchPathW(pathW, kernel32W, NULL, ARRAY_SIZE(path2W), path2W, NULL);
+    GetSystemDirectoryW(pathW, sizeof(pathW)/sizeof(WCHAR));
+    ret = pSearchPathW(pathW, kernel32W, NULL, sizeof(path2W)/sizeof(WCHAR), path2W, NULL);
     ok(ret == 0, "got %d\n", ret);
 
-    GetWindowsDirectoryW(pathW, ARRAY_SIZE(pathW));
+    GetWindowsDirectoryW(pathW, sizeof(pathW)/sizeof(WCHAR));
 
     ret = pActivateActCtx(handle, &cookie);
     ok(ret, "failed to activate context, %u\n", GetLastError());
 
     /* works when activated */
-    ret = pSearchPathW(NULL, testdepW, NULL, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, testdepW, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(ret && ret == lstrlenW(buffW), "got %d\n", ret);
 
-    ret = pSearchPathW(NULL, testdepW, extW, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, testdepW, extW, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(ret && ret == lstrlenW(buffW), "got %d\n", ret);
 
-    ret = pSearchPathW(NULL, testdep1W, dllW, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, testdep1W, dllW, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(ret && ret == lstrlenW(buffW), "got %d\n", ret);
 
-    ret = pSearchPathW(NULL, testdep1W, extW, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, testdep1W, extW, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(!ret, "got %d\n", ret);
 
     /* name contains path */
-    ret = pSearchPathW(NULL, testdeprelW, NULL, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, testdeprelW, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(!ret, "got %d\n", ret);
 
     /* fails with specified path that doesn't contain this file */
-    ret = pSearchPathW(pathW, testdepW, NULL, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(pathW, testdepW, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(!ret, "got %d\n", ret);
 
     /* path is redirected for wellknown names too, meaning it takes precedence over normal search order */
-    ret = pSearchPathW(NULL, kernel32dllW, NULL, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, kernel32dllW, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(ret && ret == lstrlenW(buffW), "got %d\n", ret);
     ok(lstrcmpW(buffW, path2W), "got wrong path %s, %s\n", wine_dbgstr_w(buffW), wine_dbgstr_w(path2W));
 
     /* path is built using on manifest file name */
-    ret = pSearchPathW(NULL, ole32W, NULL, ARRAY_SIZE(buffW), buffW, NULL);
+    ret = pSearchPathW(NULL, ole32W, NULL, sizeof(buffW)/sizeof(WCHAR), buffW, NULL);
     ok(ret && ret == lstrlenW(buffW), "got %d\n", ret);
 
     ret = pDeactivateActCtx(0, cookie);
@@ -2049,7 +2010,7 @@ static void test_GetFullPathNameA(void)
         {"",   MAX_PATH, output, &filepart},
     };
 
-    for (i = 0; i < ARRAY_SIZE(invalid_parameters); i++)
+    for (i = 0; i < sizeof(invalid_parameters)/sizeof(invalid_parameters[0]); i++)
     {
         SetLastError(0xdeadbeef);
         strcpy(output, "deadbeef");
@@ -2079,7 +2040,7 @@ static void test_GetFullPathNameA(void)
             { "c:\\\x83\x8f\x83\x43\x83\x93\\wine.c", "wine.c" },
             { "c:\\demo\\\x97\xa0\x95\x5c", "\x97\xa0\x95\x5c" }
         };
-        for (i = 0; i < ARRAY_SIZE(testset); i++) {
+        for (i = 0; i < sizeof(testset)/sizeof(testset[0]); i++) {
             ret = GetFullPathNameA(testset[i].input, sizeof(output),
                                    output, &filepart);
             ok(ret, "[%d] GetFullPathName error %u\n", i, GetLastError());
@@ -2127,7 +2088,7 @@ static void test_GetFullPathNameW(void)
         return;
     }
 
-    for (i = 0; i < ARRAY_SIZE(invalid_parameters); i++)
+    for (i = 0; i < sizeof(invalid_parameters)/sizeof(invalid_parameters[0]); i++)
     {
         SetLastError(0xdeadbeef);
         lstrcpyW(output, deadbeefW);
@@ -2300,7 +2261,7 @@ static void test_CheckNameLegalDOS8Dot3(void)
     br = pCheckNameLegalDOS8Dot3A("testtest.txt", NULL, 0, NULL, NULL);
     ok(br == FALSE, "CheckNameLegalDOS8Dot3A should have failed\n");
 
-    for(i = 0; i < ARRAY_SIZE(cases); ++i){
+    for(i = 0; i < sizeof(cases)/sizeof(*cases); ++i){
         br = pCheckNameLegalDOS8Dot3W(cases[i].name, NULL, 0, &has_space, &is_legal);
         ok(br == TRUE, "CheckNameLegalDOS8Dot3W failed for %s\n", wine_dbgstr_w(cases[i].name));
         ok(is_legal == cases[i].should_be_legal, "Got wrong legality for %s\n", wine_dbgstr_w(cases[i].name));

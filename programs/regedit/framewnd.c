@@ -853,11 +853,10 @@ static BOOL _CmdWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case ID_EDIT_MODIFY:
     case ID_EDIT_MODIFY_BIN:
     {
-        WCHAR *valueName = GetValueName(g_pChildWnd->hListWnd);
-        WCHAR *keyPath = GetItemPath(g_pChildWnd->hTreeWnd, 0, &hKeyRoot);
+        LPCWSTR valueName = GetValueName(g_pChildWnd->hListWnd);
+        WCHAR* keyPath = GetItemPath(g_pChildWnd->hTreeWnd, 0, &hKeyRoot);
         ModifyValue(hWnd, hKeyRoot, keyPath, valueName);
         heap_free(keyPath);
-        heap_free(valueName);
         break;
     }
     case ID_EDIT_FIND:

@@ -577,23 +577,6 @@ static BOOL GetFileDialog95(FileOpenDlgInfos *info, UINT dlg_type)
         ret = FALSE;
     }
 
-    /* set the lpstrFileTitle */
-    if (ret && info->ofnInfos->lpstrFile && info->ofnInfos->lpstrFileTitle)
-    {
-        if (info->unicode)
-        {
-            LPOPENFILENAMEW ofn = info->ofnInfos;
-            WCHAR *file_title = PathFindFileNameW(ofn->lpstrFile);
-            lstrcpynW(ofn->lpstrFileTitle, file_title, ofn->nMaxFileTitle);
-        }
-        else
-        {
-            LPOPENFILENAMEA ofn = (LPOPENFILENAMEA)info->ofnInfos;
-            char *file_title = PathFindFileNameA(ofn->lpstrFile);
-            lstrcpynA(ofn->lpstrFileTitle, file_title, ofn->nMaxFileTitle);
-        }
-    }
-
     if (current_dir)
     {
         SetCurrentDirectoryW(current_dir);
@@ -1257,10 +1240,6 @@ static LRESULT FILEDLG95_OnWMSize(HWND hwnd, WPARAM wParam)
                             rc.right - rc.left + chgx,
                             rc.bottom - rc.top + chgy,
                             SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER);
-                    break;
-                case IDC_TOOLBARPLACES:
-                    DeferWindowPos( hdwp, ctrl, NULL, 0, 0, rc.right - rc.left, rc.bottom - rc.top + chgy,
-                                    SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER);
                     break;
             }
         }
@@ -2904,6 +2883,23 @@ BOOL FILEDLG95_OnOpen(HWND hwnd)
               lpszTemp = PathFindExtensionA(tempFileA);
               fodInfos->ofnInfos->nFileExtension = (*lpszTemp) ? (lpszTemp - tempFileA) + 1 : 0;
           }
+
+          /* set the lpstrFileTitle */
+          if(fodInfos->ofnInfos->lpstrFileTitle)
+	  {
+            LPWSTR lpstrFileTitle = PathFindFileNameW(lpstrPathAndFile);
+            if(fodInfos->unicode)
+            {
+              LPOPENFILENAMEW ofn = fodInfos->ofnInfos;
+	      lstrcpynW(ofn->lpstrFileTitle, lpstrFileTitle, ofn->nMaxFileTitle);
+            }
+            else
+            {
+              LPOPENFILENAMEA ofn = (LPOPENFILENAMEA)fodInfos->ofnInfos;
+              WideCharToMultiByte(CP_ACP, 0, lpstrFileTitle, -1,
+                    ofn->lpstrFileTitle, ofn->nMaxFileTitle, NULL, NULL);
+            }
+	  }
 
           /* copy currently selected filter to lpstrCustomFilter */
           if (fodInfos->ofnInfos->lpstrCustomFilter)

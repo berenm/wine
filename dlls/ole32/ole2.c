@@ -967,7 +967,7 @@ static HRESULT WINAPI EnumOLEVERB_Next(
         LPWSTR pwszOLEVERB;
         LPWSTR pwszMenuFlags;
         LPWSTR pwszAttribs;
-        LONG res = RegEnumKeyW(This->hkeyVerb, This->index, wszSubKey, ARRAY_SIZE(wszSubKey));
+        LONG res = RegEnumKeyW(This->hkeyVerb, This->index, wszSubKey, sizeof(wszSubKey)/sizeof(wszSubKey[0]));
         if (res == ERROR_NO_MORE_ITEMS)
         {
             hr = S_FALSE;

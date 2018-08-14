@@ -187,6 +187,7 @@ static const struct
 
 static struct list format_list = LIST_INIT( format_list );
 
+#define NB_BUILTIN_FORMATS (sizeof(builtin_formats) / sizeof(builtin_formats[0]))
 #define GET_ATOM(prop)  (((prop) < FIRST_XATOM) ? (Atom)(prop) : X11DRV_Atoms[(prop) - FIRST_XATOM])
 
 static DWORD clipboard_thread_id;
@@ -294,9 +295,9 @@ static void register_builtin_formats(void)
     struct clipboard_format *formats;
     unsigned int i;
 
-    if (!(formats = HeapAlloc( GetProcessHeap(), 0, ARRAY_SIZE(builtin_formats) * sizeof(*formats)))) return;
+    if (!(formats = HeapAlloc( GetProcessHeap(), 0, NB_BUILTIN_FORMATS * sizeof(*formats)))) return;
 
-    for (i = 0; i < ARRAY_SIZE(builtin_formats); i++)
+    for (i = 0; i < NB_BUILTIN_FORMATS; i++)
     {
         if (builtin_formats[i].name)
             formats[i].id = RegisterClipboardFormatW( builtin_formats[i].name );
@@ -982,7 +983,7 @@ static HANDLE import_targets( Atom type, const void *data, size_t size )
     register_x11_formats( properties, count );
 
     /* the builtin formats contain duplicates, so allocate some extra space */
-    if (!(formats = HeapAlloc( GetProcessHeap(), 0, (count + ARRAY_SIZE(builtin_formats)) * sizeof(*formats ))))
+    if (!(formats = HeapAlloc( GetProcessHeap(), 0, (count + NB_BUILTIN_FORMATS) * sizeof(*formats ))))
         return 0;
 
     pos = 0;
@@ -1453,8 +1454,7 @@ static BOOL export_targets( Display *display, Window win, Atom prop, Atom target
     if (!(formats = get_clipboard_formats( &count ))) return FALSE;
 
     /* the builtin formats contain duplicates, so allocate some extra space */
-    if (!(targets = HeapAlloc( GetProcessHeap(), 0,
-                               (count + ARRAY_SIZE(builtin_formats)) * sizeof(*targets) )))
+    if (!(targets = HeapAlloc( GetProcessHeap(), 0, (count + NB_BUILTIN_FORMATS) * sizeof(*targets) )))
     {
         HeapFree( GetProcessHeap(), 0, formats );
         return FALSE;

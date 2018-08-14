@@ -92,7 +92,6 @@ static const struct object_ops serial_ops =
     add_queue,                    /* add_queue */
     remove_queue,                 /* remove_queue */
     default_fd_signaled,          /* signaled */
-    NULL,                         /* get_esync_fd */
     no_satisfied,                 /* satisfied */
     no_signal,                    /* signal */
     serial_get_fd,                /* get_fd */
@@ -103,7 +102,6 @@ static const struct object_ops serial_ops =
     no_link_name,                 /* link_name */
     NULL,                         /* unlink_name */
     no_open_file,                 /* open_file */
-    no_alloc_handle,              /* alloc_handle */
     fd_close_handle,              /* close_handle */
     serial_destroy                /* destroy */
 };

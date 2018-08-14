@@ -410,6 +410,8 @@ static const TEST test[] =
 	},
 };
 
+#define TEST_COUNT (sizeof(test) / sizeof(TEST))
+
 /* This function can be useful if you are modifying the test cases and want to
    output the contents of a DCB structure. */
 /*static print_dcb(DCB *pdcb)
@@ -580,7 +582,7 @@ static void test_BuildCommDCBW(const char *string, const TEST *ptest, int initia
 	WCHAR wide_string[sizeof(ptest->string)];
 	static int reportedDCBW = 0;
 
-	MultiByteToWideChar(CP_ACP, 0, string, -1, wide_string, ARRAY_SIZE(wide_string));
+	MultiByteToWideChar(CP_ACP, 0, string, -1, wide_string, sizeof(wide_string) / sizeof(WCHAR));
 
 	/* set initial conditions */
 	memset(&dcb, initial_value, sizeof(DCB));
@@ -608,7 +610,7 @@ static void test_BuildCommDCBAndTimeoutsW(const char *string, const TEST *ptest,
 	WCHAR wide_string[sizeof(ptest->string)];
 	static int reportedDCBAndTW = 0;
 
-	MultiByteToWideChar(CP_ACP, 0, string, -1, wide_string, ARRAY_SIZE(wide_string));
+	MultiByteToWideChar(CP_ACP, 0, string, -1, wide_string, sizeof(wide_string) / sizeof(WCHAR));
 
 	/* set initial conditions */
 	memset(&dcb, initial_value, sizeof(DCB));
@@ -654,7 +656,7 @@ static void test_BuildCommDCB(void)
 	if(!port)
 		trace("Could not find a valid COM port.  Some tests will be skipped.\n");
 
-        for(i = 0; i < ARRAY_SIZE(test); i++)
+	for(i = 0; i < TEST_COUNT; i++)
 	{
                 char string[sizeof(test[i].string)];
 

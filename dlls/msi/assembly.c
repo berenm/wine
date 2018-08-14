@@ -652,9 +652,6 @@ UINT ACTION_MsiPublishAssemblies( MSIPACKAGE *package )
 {
     MSICOMPONENT *comp;
 
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szMsiPublishAssemblies);
-
     LIST_FOR_EACH_ENTRY(comp, &package->components, MSICOMPONENT, entry)
     {
         LONG res;
@@ -719,9 +716,6 @@ UINT ACTION_MsiPublishAssemblies( MSIPACKAGE *package )
 UINT ACTION_MsiUnpublishAssemblies( MSIPACKAGE *package )
 {
     MSICOMPONENT *comp;
-
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szMsiUnpublishAssemblies);
 
     LIST_FOR_EACH_ENTRY(comp, &package->components, MSICOMPONENT, entry)
     {

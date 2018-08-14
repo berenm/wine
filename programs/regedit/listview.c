@@ -63,7 +63,7 @@ LPWSTR GetItemText(HWND hwndLV, UINT item)
     return NULL;
 }
 
-WCHAR *GetValueName(HWND hwndLV)
+LPCWSTR GetValueName(HWND hwndLV)
 {
     INT item;
 

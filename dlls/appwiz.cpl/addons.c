@@ -65,8 +65,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(appwizcpl);
 #define GECKO_SHA "???"
 #endif
 
-#define MONO_VERSION "4.7.3"
-#define MONO_SHA "d24a8017371c7e8224a1778bb43a113ed7ed9720efd9d0cda175d42db6106d3a"
+#define MONO_VERSION "4.7.1"
+#define MONO_SHA "2c8d5db7f833c3413b2519991f5af1f433d59a927564ec6f38a3f1f8b2c629aa"
 
 typedef struct {
     const char *version;
@@ -513,7 +513,7 @@ static HRESULT WINAPI InstallCallback_OnStopBinding(IBindStatusCallback *iface,
 
         cache_file_name = get_cache_file_name(TRUE);
         if(cache_file_name) {
-            CopyFileW(msi_file, cache_file_name, FALSE);
+            MoveFileW(msi_file, cache_file_name);
             heap_free(cache_file_name);
         }
     }else {

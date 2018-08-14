@@ -1048,12 +1048,6 @@ void signal_init_process(void)
     exit(1);
 }
 
-/**********************************************************************
- *    signal_init_early
- */
-void signal_init_early(void)
-{
-}
 
 /**********************************************************************
  *              RtlAddFunctionTable   (NTDLL.@)
@@ -1307,7 +1301,7 @@ PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
         init_thread_context( ctx, entry, arg, relay );
     }
     ctx->ContextFlags = CONTEXT_FULL;
-    LdrInitializeThunk( ctx, (ULONG_PTR *)&ctx->R0, 0, 0 );
+    attach_dlls( ctx, (void **)&ctx->R0 );
     return ctx;
 }
 

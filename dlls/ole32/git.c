@@ -122,14 +122,9 @@ StdGlobalInterfaceTable_QueryInterface(IGlobalInterfaceTable* iface,
   /* Do we implement that interface? */
   if (IsEqualIID(&IID_IUnknown, riid) ||
       IsEqualIID(&IID_IGlobalInterfaceTable, riid))
-  {
     *ppvObject = iface;
-  }
   else
-  {
-    FIXME("(%s), not supported.\n", debugstr_guid(riid));
     return E_NOINTERFACE;
-  }
 
   /* Now inc the refcount */
   IGlobalInterfaceTable_AddRef(iface);
@@ -319,10 +314,13 @@ static HRESULT WINAPI
 GITCF_CreateInstance(LPCLASSFACTORY iface, LPUNKNOWN pUnk,
                      REFIID riid, LPVOID *ppv)
 {
-  IGlobalInterfaceTable *git = get_std_git();
-  HRESULT hr = IGlobalInterfaceTable_QueryInterface(git, riid, ppv);
-  IGlobalInterfaceTable_Release(git);
-  return hr;
+  if (IsEqualIID(riid,&IID_IGlobalInterfaceTable)) {
+    IGlobalInterfaceTable *git = get_std_git();
+    return IGlobalInterfaceTable_QueryInterface(git, riid, ppv);
+  }
+
+  FIXME("(%s), not supported.\n",debugstr_guid(riid));
+  return E_NOINTERFACE;
 }
 
 static HRESULT WINAPI GITCF_LockServer(LPCLASSFACTORY iface, BOOL fLock)

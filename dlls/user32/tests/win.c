@@ -84,6 +84,8 @@ static const char* szAWRClass = "Winsize";
 static HMENU hmenu;
 static DWORD our_pid;
 
+#define COUNTOF(arr) (sizeof(arr)/sizeof(arr[0]))
+
 static void dump_minmax_info( const MINMAXINFO *minmax )
 {
     trace("Reserved=%d,%d MaxSize=%d,%d MaxPos=%d,%d MinTrack=%d,%d MaxTrack=%d,%d\n",
@@ -2158,7 +2160,7 @@ static void test_mdi(void)
     client_cs.hWindowMenu = 0;
     client_cs.idFirstChild = 1;
 
-    for (i = 0; i < ARRAY_SIZE(style); i++)
+    for (i = 0; i < sizeof(style)/sizeof(style[0]); i++)
     {
         SCROLLINFO si;
         BOOL ret, gotit;
@@ -4381,65 +4383,15 @@ static void test_window_styles(void)
     }
 }
 
-static HWND root_dialog(HWND hwnd)
-{
-    while ((GetWindowLongA(hwnd, GWL_EXSTYLE) & WS_EX_CONTROLPARENT) &&
-           (GetWindowLongA(hwnd, GWL_STYLE) & (WS_CHILD|WS_POPUP)) == WS_CHILD)
-    {
-        HWND parent = GetParent(hwnd);
-
-        /* simple detector for a window being a dialog */
-        if (!DefDlgProcA(parent, DM_GETDEFID, 0, 0))
-            break;
-
-        hwnd = parent;
-
-        if (!(GetWindowLongA(hwnd, GWL_STYLE) & DS_CONTROL))
-            break;
-    }
-
-    return hwnd;
-}
-
 static INT_PTR WINAPI empty_dlg_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     return 0;
 }
 
-static LRESULT expected_id;
-
 static INT_PTR WINAPI empty_dlg_proc3(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     if (msg == WM_INITDIALOG)
-    {
-        HWND parent = GetParent(hwnd);
-        LRESULT id, ret;
-
-        id = DefDlgProcA(parent, DM_GETDEFID, 0, 0);
-        if (!id || root_dialog(hwnd) == hwnd)
-            parent = 0;
-
-        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
-        if (!parent)
-            ok(id == MAKELONG(IDOK,DC_HASDEFID), "expected (IDOK,DC_HASDEFID), got %08lx\n", id);
-        else
-            ok(id == expected_id, "expected %08lx, got %08lx\n", expected_id, id);
-
-        ret = DefDlgProcA(hwnd, DM_SETDEFID, 0x3333, 0);
-        ok(ret, "DefDlgProc(DM_SETDEFID) failed\n");
-        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
-        ok(id == MAKELONG(0x3333,DC_HASDEFID), "expected (0x3333,DC_HASDEFID), got %08lx\n", id);
-
-        if (parent)
-        {
-            id = DefDlgProcA(parent, DM_GETDEFID, 0, 0);
-            ok(id == MAKELONG(0x3333,DC_HASDEFID), "expected (0x3333,DC_HASDEFID), got %08lx\n", id);
-
-            expected_id = MAKELONG(0x3333,DC_HASDEFID);
-        }
-
         EndDialog(hwnd, 0);
-    }
 
     return 0;
 }
@@ -4458,16 +4410,6 @@ static INT_PTR WINAPI empty_dlg_proc2(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
         struct dialog_param *param = (struct dialog_param *)lparam;
         BOOL parent_is_child;
         HWND disabled_hwnd;
-        LRESULT id, ret;
-
-        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
-        ok(id == MAKELONG(IDOK,DC_HASDEFID), "expected (IDOK,DC_HASDEFID), got %08lx\n", id);
-        ret = DefDlgProcA(hwnd, DM_SETDEFID, 0x2222, 0);
-        ok(ret, "DefDlgProc(DM_SETDEFID) failed\n");
-        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
-        ok(id == MAKELONG(0x2222,DC_HASDEFID), "expected (0x2222,DC_HASDEFID), got %08lx\n", id);
-
-        expected_id = MAKELONG(0x2222,DC_HASDEFID);
 
         parent_is_child = (GetWindowLongA(param->parent, GWL_STYLE) & (WS_POPUP | WS_CHILD)) == WS_CHILD;
 
@@ -4509,25 +4451,6 @@ static INT_PTR WINAPI empty_dlg_proc2(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
         DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
         ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
 
-        param->dlg_data->style |= DS_CONTROL;
-        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
-        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
-
-        param->dlg_data->dwExtendedStyle |= WS_EX_CONTROLPARENT;
-        SetWindowLongA(hwnd, GWL_EXSTYLE, GetWindowLongA(hwnd, GWL_EXSTYLE) | WS_EX_CONTROLPARENT);
-        SetWindowLongA(hwnd, GWL_STYLE, style & ~DS_CONTROL);
-        param->dlg_data->style &= ~DS_CONTROL;
-        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
-        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
-
-        SetWindowLongA(hwnd, GWL_STYLE, style | DS_CONTROL);
-        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
-        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
-
-        param->dlg_data->style |= DS_CONTROL;
-        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
-        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
-
         EndDialog(hwnd, 0);
     }
     return 0;
@@ -4546,7 +4469,6 @@ static void check_dialog_style(DWORD style_in, DWORD ex_style_in, DWORD style_ou
     DWORD style, ex_style;
     HWND hwnd, grand_parent = 0, parent = 0;
     struct dialog_param param;
-    LRESULT id, ret;
 
     if (style_in & WS_CHILD)
     {
@@ -4573,13 +4495,6 @@ static void check_dialog_style(DWORD style_in, DWORD ex_style_in, DWORD style_ou
 
     hwnd = CreateDialogIndirectParamA(GetModuleHandleA(NULL), &dlg_data.dt, parent, empty_dlg_proc, 0);
     ok(hwnd != 0, "dialog creation failed, style %#x, exstyle %#x\n", style_in, ex_style_in);
-
-    id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
-    ok(id == MAKELONG(IDOK,DC_HASDEFID), "expected (IDOK,DC_HASDEFID), got %08lx\n", id);
-    ret = DefDlgProcA(hwnd, DM_SETDEFID, 0x1111, 0);
-    ok(ret, "DefDlgProc(DM_SETDEFID) failed\n");
-    id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
-    ok(id == MAKELONG(0x1111,DC_HASDEFID), "expected (0x1111,DC_HASDEFID), got %08lx\n", id);
 
     flush_events( TRUE );
 
@@ -5374,9 +5289,9 @@ static void test_AWR_window_size(BOOL menu)
     /* A exhaustive check of all the styles takes too long
      * so just do a (hopefully representative) sample
      */
-    for (i = 0; i < ARRAY_SIZE(styles); ++i)
+    for (i = 0; i < COUNTOF(styles); ++i)
         test_AWRwindow(szAWRClass, styles[i], 0, menu);
-    for (i = 0; i < ARRAY_SIZE(exStyles); ++i) {
+    for (i = 0; i < COUNTOF(exStyles); ++i) {
         test_AWRwindow(szAWRClass, WS_POPUP, exStyles[i], menu);
         test_AWRwindow(szAWRClass, WS_THICKFRAME, exStyles[i], menu);
     }
@@ -5391,13 +5306,13 @@ static void test_AWR_flags(void)
     DWORD i, j, k, style, exstyle;
     RECT rect, rect2;
 
-    for (i = 0; i < (1 << ARRAY_SIZE(styles)); i++)
+    for (i = 0; i < (1 << COUNTOF(styles)); i++)
     {
-        for (k = style = 0; k < ARRAY_SIZE(styles); k++) if (i & (1 << k)) style |= styles[k];
+        for (k = style = 0; k < COUNTOF(styles); k++) if (i & (1 << k)) style |= styles[k];
 
-        for (j = 0; j < (1 << ARRAY_SIZE(exStyles)); j++)
+        for (j = 0; j < (1 << COUNTOF(exStyles)); j++)
         {
-            for (k = exstyle = 0; k < ARRAY_SIZE(exStyles); k++) if (j & (1 << k)) exstyle |= exStyles[k];
+            for (k = exstyle = 0; k < COUNTOF(exStyles); k++) if (j & (1 << k)) exstyle |= exStyles[k];
             SetRect( &rect, 100, 100, 200, 200 );
             rect2 = rect;
             AdjustWindowRectEx( &rect, style, FALSE, exstyle );
@@ -5414,6 +5329,7 @@ static void test_AWR_flags(void)
         }
     }
 }
+#undef COUNTOF
 
 #define SHOWSYSMETRIC(SM) trace(#SM "=%d\n", GetSystemMetrics(SM))
 
@@ -6477,7 +6393,7 @@ static void test_set_window_style(void)
     cls.lpszClassName = "TestSetWindowStylesClass";
     ok(RegisterClassA(&cls), "RegisterClass failed\n");
 
-    for (i = 0; i < ARRAY_SIZE(tests); i++)
+    for (i = 0; i < sizeof(tests) / sizeof(*tests); i++)
     {
         expected_style = tests[i].style;
         if (tests[i].creation_style & WS_MINIMIZE)
@@ -6944,7 +6860,7 @@ static void test_gettext(void)
     num_gettext_msgs = 0;
     memset( bufW, 0xcc, sizeof(bufW) );
     g_wm_gettext_override.buffW = bufW;
-    buf_len = GetWindowTextW( hwnd2, bufW, ARRAY_SIZE(bufW));
+    buf_len = GetWindowTextW( hwnd2, bufW, sizeof(bufW)/sizeof(WCHAR) );
     ok( buf_len == 0, "got %d\n", buf_len );
     ok( *bufW == 0, "got %x\n", *bufW );
     ok( num_gettext_msgs == 1, "got %u WM_GETTEXT messages\n", num_gettext_msgs );
@@ -7042,7 +6958,7 @@ static void test_gettext(void)
 
     memset( bufW, 0x1c, sizeof(bufW) );
     g_wm_gettext_override.dont_terminate = TRUE;
-    buf_len = GetWindowTextW( hwnd, bufW, ARRAY_SIZE(bufW));
+    buf_len = GetWindowTextW( hwnd, bufW, sizeof(bufW)/sizeof(bufW[0]) );
     ok( buf_len == 4, "Unexpected text length, %d\n", buf_len );
     ok( !memcmp(bufW, textW, 4 * sizeof(WCHAR)), "Unexpected window text, %s\n", wine_dbgstr_w(bufW) );
     ok( bufW[4] == 0, "Unexpected buffer contents, %#x\n", bufW[4] );
@@ -7061,7 +6977,7 @@ static void test_gettext(void)
 
     memset( bufW, 0x1c, sizeof(bufW) );
     g_wm_gettext_override.dont_terminate = TRUE;
-    buf_len = GetWindowTextW( hwnd2, bufW, ARRAY_SIZE(bufW));
+    buf_len = GetWindowTextW( hwnd2, bufW, sizeof(bufW)/sizeof(bufW[0]) );
     ok( buf_len == 4, "Unexpected text length, %d\n", buf_len );
     ok( !memcmp(bufW, textW, 4 * sizeof(WCHAR)), "Unexpected window text, %s\n", wine_dbgstr_w(bufW) );
     ok( bufW[4] == 0x1c1c, "Unexpected buffer contents, %#x\n", bufW[4] );
@@ -7486,7 +7402,7 @@ static void test_hwnd_message(void)
     if (parent) ok( !IsWindowVisible( parent ), "HWND_MESSAGE parent is visible\n" );
 
     /* GetWindowLong */
-    for (i = 0; i < ARRAY_SIZE(tests); i++)
+    for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++)
     {
         SetLastError( 0xdeadbeef );
         result = GetWindowLongPtrW( parent, tests[i].offset );
@@ -7766,14 +7682,14 @@ static void test_fullscreen(void)
     cls.lpszClassName = "fullscreen_class";
     RegisterClassA(&cls);
 
-    for (i = 0; i < ARRAY_SIZE(t_style); i++)
+    for (i = 0; i < sizeof(t_style)/sizeof(t_style[0]); i++)
     {
         DWORD style, ex_style;
 
         /* avoid a WM interaction */
         assert(!(t_style[i] & WS_VISIBLE));
 
-        for (j = 0; j < ARRAY_SIZE(t_ex_style); j++)
+        for (j = 0; j < sizeof(t_ex_style)/sizeof(t_ex_style[0]); j++)
         {
             int fixup;
 
@@ -8308,7 +8224,7 @@ static void test_FlashWindowEx(void)
 
     SetLastError(0xdeadbeef);
     ret = pFlashWindowEx(&finfo);
-    ok(!ret, "previous window state should not be active\n");
+    todo_wine ok(!ret, "previous window state should not be active\n");
 
     finfo.cbSize = sizeof(FLASHWINFO) - 1;
     SetLastError(0xdeadbeef);
@@ -8359,7 +8275,7 @@ static void test_FlashWindowEx(void)
     finfo.dwFlags = FLASHW_STOP;
     SetLastError(0xdeadbeef);
     ret = pFlashWindowEx(&finfo);
-    todo_wine ok(prev != ret, "previous window state should be different\n");
+    ok(prev != ret, "previous window state should be different\n");
 
     DestroyWindow( hwnd );
 }
@@ -8517,7 +8433,7 @@ static void create_window_tree(HWND parent, HWND *window, int size)
     memset(window, 0, size * sizeof(window[0]));
 
     pos = 0;
-    for (i = 0; i < ARRAY_SIZE(style); i++)
+    for (i = 0; i < sizeof(style)/sizeof(style[0]); i++)
     {
         assert(pos < size);
         window[pos] = CreateWindowExA(0, "my_window", NULL, style[i] | WS_CHILD,
@@ -8664,7 +8580,7 @@ static void test_child_window_from_point(void)
     ok(parent != 0, "CreateWindowEx failed\n");
     trace("parent %p\n", parent);
 
-    create_window_tree(parent, window, ARRAY_SIZE(window));
+    create_window_tree(parent, window, sizeof(window)/sizeof(window[0]));
 
     found_invisible = 0;
     found_disabled = 0;
@@ -8673,14 +8589,14 @@ static void test_child_window_from_point(void)
     found_extransparent = 0;
 
     /* FIXME: also test WindowFromPoint, ChildWindowFromPoint, ChildWindowFromPointEx */
-    for (i = 0; i < ARRAY_SIZE(real_child_pos); i++)
+    for (i = 0; i < sizeof(real_child_pos)/sizeof(real_child_pos[0]); i++)
     {
         struct window_attributes attrs;
 
         pt.x = pt.y = 50;
         hwnd = RealChildWindowFromPoint(parent, pt);
         ok(hwnd != 0, "RealChildWindowFromPoint failed\n");
-        ret = window_to_index(hwnd, window, ARRAY_SIZE(window));
+        ret = window_to_index(hwnd, window, sizeof(window)/sizeof(window[0]));
         /* FIXME: remove once Wine is fixed */
         todo_wine_if (ret != real_child_pos[i])
             ok(ret == real_child_pos[i], "expected %d, got %d\n", real_child_pos[i], ret);
@@ -9869,7 +9785,7 @@ static void test_LockWindowUpdate(HWND parent)
     UpdateWindow(parent);
     flush_events(TRUE);
 
-    for (i = 0; i < ARRAY_SIZE(tests); ++i)
+    for (i = 0; i < sizeof(tests) / sizeof(tests[0]); ++i)
     {
         HDC hdc;
         POINT p = {10, 10};
@@ -10134,7 +10050,7 @@ static void test_desktop( void )
     DWORD_PTR result;
     int i;
 
-    for (i = 0; i < ARRAY_SIZE(tests); i++)
+    for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++)
     {
         SetLastError( 0xdeadbeef );
         result = GetWindowLongPtrW( desktop, tests[i].offset );
@@ -10230,7 +10146,7 @@ static void test_topmost(void)
     ok(!is_topmost(hwnd), "hwnd %p topmost state is wrong\n", hwnd);
     ok(!is_topmost(hwnd2), "hwnd %p topmost state is wrong\n", hwnd2);
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10270,7 +10186,7 @@ todo_wine
     ok(!is_topmost(hwnd2), "hwnd %p topmost state is wrong\n", hwnd2);
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, 0, hwnd2, owner, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10284,7 +10200,7 @@ todo_wine
     ok(!is_topmost(hwnd2), "hwnd %p topmost state is wrong\n", hwnd2);
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, 0, hwnd2, owner, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10305,7 +10221,7 @@ if (!is_wine) /* FIXME: remove once Wine is fixed */
     ok(!is_topmost(hwnd2), "hwnd %p topmost state is wrong\n", hwnd2);
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, 0, hwnd2, owner, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     hwnd_child2 = create_tool_window(WS_VISIBLE|WS_POPUP, hwnd);
     ok(hwnd_child2 != 0, "Failed to create popup window (%d)\n", GetLastError());
@@ -10355,7 +10271,7 @@ todo_wine
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
     check_z_order(hwnd_child, hwnd_child2, 0, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10379,7 +10295,7 @@ todo_wine
     ok(!is_topmost(hwnd_grandchild), "hwnd %p topmost state is wrong\n", hwnd_grandchild);
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
     check_z_order(hwnd_child, hwnd_child2, 0, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10403,7 +10319,7 @@ todo_wine
     ok(!is_topmost(hwnd_grandchild), "hwnd %p topmost state is wrong\n", hwnd_grandchild);
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
     check_z_order(hwnd_child, hwnd_child2, 0, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd_child, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10437,7 +10353,7 @@ todo_wine
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
     check_z_order(hwnd_child, hwnd_child2, 0, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd_child, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10460,7 +10376,7 @@ todo_wine
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
     check_z_order(hwnd_child, hwnd_child2, 0, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd_grandchild, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10481,7 +10397,7 @@ if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd_child, 0, hwnd_child2, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd_child, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10505,7 +10421,7 @@ if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, 0, hwnd2, owner, FALSE);
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd_child, 0, hwnd_child2, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     swp_after(hwnd_child, HWND_TOPMOST);
     ok(!is_topmost(owner), "hwnd %p topmost state is wrong\n", owner);
@@ -10529,7 +10445,7 @@ if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd, hwnd2, 0, owner, FALSE);
 if (!is_wine) /* FIXME: remove once Wine is fixed */
     check_z_order(hwnd_child, 0, hwnd_child2, hwnd, FALSE);
-    reset_window_state(state, ARRAY_SIZE(state));
+    reset_window_state(state, sizeof(state)/sizeof(state[0]));
 
     DestroyWindow(hwnd_grandchild);
     DestroyWindow(hwnd_child);
@@ -10787,27 +10703,6 @@ static void test_destroy_quit(void)
     CloseHandle( thread1 );
 }
 
-static void test_IsWindowEnabled(void)
-{
-    BOOL ret;
-    HWND hwnd;
-
-    ret = IsWindowEnabled(NULL);
-    ok(!ret, "Expect IsWindowEnabled() return FALSE\n");
-
-    hwnd = GetDesktopWindow();
-    ret = IsWindowEnabled(hwnd);
-    ok(ret, "Expect IsWindowEnabled() return TRUE\n");
-
-    hwnd = create_tool_window(WS_CHILD | WS_VISIBLE, hwndMain);
-    ret = IsWindowEnabled(hwnd);
-    ok(ret, "Expect IsWindowEnabled() return TRUE\n");
-    EnableWindow(hwnd, FALSE);
-    ret = IsWindowEnabled(hwnd);
-    ok(!ret, "Expect IsWindowEnabled() return FALSE\n");
-    DestroyWindow(hwnd);
-}
-
 START_TEST(win)
 {
     char **argv;
@@ -10964,7 +10859,6 @@ START_TEST(win)
     test_hide_window();
     test_minimize_window(hwndMain);
     test_destroy_quit();
-    test_IsWindowEnabled();
 
     /* add the tests above this line */
     if (hhook) UnhookWindowsHookEx(hhook);

@@ -753,9 +753,6 @@ UINT ACTION_RegisterClassInfo(MSIPACKAGE *package)
     MSICLASS *cls;
     UINT r;
 
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szRegisterClassInfo);
-
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
         return r;
@@ -920,9 +917,6 @@ UINT ACTION_UnregisterClassInfo( MSIPACKAGE *package )
     MSICLASS *cls;
     HKEY hkey, hkey2;
     UINT r;
-
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szUnregisterClassInfo);
 
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
@@ -1089,9 +1083,6 @@ UINT ACTION_RegisterProgIdInfo(MSIPACKAGE *package)
     MSIRECORD *uirow;
     UINT r;
 
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szRegisterProgIdInfo);
-
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
         return r;
@@ -1151,9 +1142,6 @@ UINT ACTION_UnregisterProgIdInfo( MSIPACKAGE *package )
     MSIRECORD *uirow;
     LONG res;
     UINT r;
-
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szUnregisterProgIdInfo);
 
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
@@ -1267,9 +1255,6 @@ UINT ACTION_RegisterExtensionInfo(MSIPACKAGE *package)
     LONG res;
     UINT r;
 
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szRegisterExtensionInfo);
-
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
         return r;
@@ -1378,9 +1363,6 @@ UINT ACTION_UnregisterExtensionInfo( MSIPACKAGE *package )
     LONG res;
     UINT r;
 
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szUnregisterExtensionInfo);
-
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
         return r;
@@ -1464,9 +1446,6 @@ UINT ACTION_RegisterMIMEInfo(MSIPACKAGE *package)
     MSIMIME *mt;
     UINT r;
 
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szRegisterMIMEInfo);
-
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)
         return r;
@@ -1520,9 +1499,6 @@ UINT ACTION_UnregisterMIMEInfo( MSIPACKAGE *package )
     MSIRECORD *uirow;
     MSIMIME *mime;
     UINT r;
-
-    if (package->script == SCRIPT_NONE)
-        return msi_schedule_action(package, SCRIPT_INSTALL, szUnregisterMIMEInfo);
 
     r = load_classes_and_such( package );
     if (r != ERROR_SUCCESS)

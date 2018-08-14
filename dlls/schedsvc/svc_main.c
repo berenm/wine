@@ -47,17 +47,9 @@ static DWORD WINAPI tasks_monitor_thread(void *arg)
     static const WCHAR tasksW[] = { '\\','T','a','s','k','s','\\',0 };
     WCHAR path[MAX_PATH];
     HANDLE htasks, hport, htimer;
-    JOBOBJECT_ASSOCIATE_COMPLETION_PORT job_info;
+    JOBOBJECT_ASSOCIATE_COMPLETION_PORT info;
     OVERLAPPED ov;
     LARGE_INTEGER period;
-    struct
-    {
-        FILE_NOTIFY_INFORMATION data;
-        WCHAR name_buffer[MAX_PATH];
-    } info;
-
-    /* the buffer must be DWORD aligned */
-    C_ASSERT(!(sizeof(info) & 3));
 
     TRACE("Starting...\n");
 
@@ -99,9 +91,9 @@ static DWORD WINAPI tasks_monitor_thread(void *arg)
         return -1;
     }
 
-    job_info.CompletionKey = hjob_queue;
-    job_info.CompletionPort = hport;
-    if (!SetInformationJobObject(hjob_queue, JobObjectAssociateCompletionPortInformation, &job_info, sizeof(job_info)))
+    info.CompletionKey = hjob_queue;
+    info.CompletionPort = hport;
+    if (!SetInformationJobObject(hjob_queue, JobObjectAssociateCompletionPortInformation, &info, sizeof(info)))
     {
         ERR("SetInformationJobObject failed\n");
         return -1;
@@ -110,15 +102,28 @@ static DWORD WINAPI tasks_monitor_thread(void *arg)
     memset(&ov, 0, sizeof(ov));
     ov.hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
 
-    memset(&info, 0, sizeof(info));
-    ReadDirectoryChangesW(htasks, &info, sizeof(info), FALSE,
-                          FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
-                          NULL, &ov, NULL);
-
     for (;;)
     {
+        struct
+        {
+            FILE_NOTIFY_INFORMATION data;
+            WCHAR name_buffer[MAX_PATH];
+        } info;
         HANDLE events[4];
         DWORD ret;
+
+        /* the buffer must be DWORD aligned */
+        C_ASSERT(!(sizeof(info) & 3));
+
+        memset(&info, 0, sizeof(info));
+
+        ret = ReadDirectoryChangesW(htasks, &info, sizeof(info), FALSE,
+                                    FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
+                                    NULL, &ov, NULL);
+        if (!ret) break;
+
+        if (info.data.NextEntryOffset)
+            FIXME("got multiple entries\n");
 
         events[0] = done_event;
         events[1] = htimer;
@@ -154,9 +159,6 @@ static DWORD WINAPI tasks_monitor_thread(void *arg)
             }
             continue;
         }
-
-        if (info.data.NextEntryOffset)
-            FIXME("got multiple entries\n");
 
         /* Directory change notification */
         info.data.FileName[info.data.FileNameLength/sizeof(WCHAR)] = 0;
@@ -202,11 +204,6 @@ static DWORD WINAPI tasks_monitor_thread(void *arg)
             if (!SetWaitableTimer(htimer, &period, 0, NULL, NULL, FALSE))
                 ERR("SetWaitableTimer failed\n");
         }
-
-        memset(&info, 0, sizeof(info));
-        if (!ReadDirectoryChangesW(htasks, &info, sizeof(info), FALSE,
-                                   FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
-                                   NULL, &ov, NULL)) break;
     }
 
     CancelWaitableTimer(htimer);

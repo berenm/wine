@@ -89,6 +89,9 @@ static const Format MPEG3_Formats[] =
     {1,  0, 48000}, {2,  0, 48000}
 };
 
+#define	NUM_PCM_FORMATS		(sizeof(PCM_Formats) / sizeof(PCM_Formats[0]))
+#define	NUM_MPEG3_FORMATS	(sizeof(MPEG3_Formats) / sizeof(MPEG3_Formats[0]))
+
 /***********************************************************************
  *           MPEG3_GetFormatIndex
  */
@@ -100,12 +103,12 @@ static	DWORD	MPEG3_GetFormatIndex(LPWAVEFORMATEX wfx)
     switch (wfx->wFormatTag)
     {
     case WAVE_FORMAT_PCM:
-	hi = ARRAY_SIZE(PCM_Formats);
+	hi = NUM_PCM_FORMATS;
 	fmts = PCM_Formats;
 	break;
     case WAVE_FORMAT_MPEG:
     case WAVE_FORMAT_MPEGLAYER3:
-	hi = ARRAY_SIZE(MPEG3_Formats);
+	hi = NUM_MPEG3_FORMATS;
 	fmts = MPEG3_Formats;
 	break;
     default:
@@ -212,7 +215,6 @@ static void MPEG3_Reset(PACMDRVSTREAMINSTANCE adsi, AcmMpeg3Data* aad)
  */
 static	LRESULT	MPEG3_StreamOpen(PACMDRVSTREAMINSTANCE adsi)
 {
-    LRESULT error = MMSYSERR_NOTSUPPORTED;
     AcmMpeg3Data*	aad;
     int err;
 
@@ -236,18 +238,6 @@ static	LRESULT	MPEG3_StreamOpen(PACMDRVSTREAMINSTANCE adsi)
               adsi->pwfxSrc->wFormatTag == WAVE_FORMAT_MPEG) &&
              adsi->pwfxDst->wFormatTag == WAVE_FORMAT_PCM)
     {
-        if (adsi->pwfxSrc->wFormatTag == WAVE_FORMAT_MPEGLAYER3)
-        {
-            MPEGLAYER3WAVEFORMAT *formatmp3 = (MPEGLAYER3WAVEFORMAT *)adsi->pwfxSrc;
-
-            if (adsi->pwfxSrc->cbSize < MPEGLAYER3_WFX_EXTRA_BYTES ||
-                formatmp3->wID != MPEGLAYER3_ID_MPEG)
-            {
-                error = ACMERR_NOTPOSSIBLE;
-                goto theEnd;
-            }
-        }
-
 	/* resampling or mono <=> stereo not available
          * MPEG3 algo only define 16 bit per sample output
          */
@@ -283,7 +273,7 @@ static	LRESULT	MPEG3_StreamOpen(PACMDRVSTREAMINSTANCE adsi)
  theEnd:
     HeapFree(GetProcessHeap(), 0, aad);
     adsi->dwDriver = 0L;
-    return error;
+    return MMSYSERR_NOTSUPPORTED;
 }
 
 /***********************************************************************
@@ -743,7 +733,7 @@ static	LRESULT	MPEG3_FormatTagDetails(PACMFORMATTAGDETAILSW aftd, DWORD dwQuery)
     case 0:
 	aftd->dwFormatTag = WAVE_FORMAT_PCM;
 	aftd->cbFormatSize = sizeof(PCMWAVEFORMAT);
-	aftd->cStandardFormats = ARRAY_SIZE(PCM_Formats);
+	aftd->cStandardFormats = NUM_PCM_FORMATS;
         lstrcpyW(aftd->szFormatTag, szPcm);
         break;
     case 1:
@@ -778,7 +768,7 @@ static	LRESULT	MPEG3_FormatDetails(PACMFORMATDETAILSW afd, DWORD dwQuery)
 	switch (afd->dwFormatTag)
         {
 	case WAVE_FORMAT_PCM:
-	    if (afd->dwFormatIndex >= ARRAY_SIZE(PCM_Formats)) return ACMERR_NOTPOSSIBLE;
+	    if (afd->dwFormatIndex >= NUM_PCM_FORMATS) return ACMERR_NOTPOSSIBLE;
 	    afd->pwfx->nChannels = PCM_Formats[afd->dwFormatIndex].nChannels;
 	    afd->pwfx->nSamplesPerSec = PCM_Formats[afd->dwFormatIndex].rate;
 	    afd->pwfx->wBitsPerSample = PCM_Formats[afd->dwFormatIndex].nBits;

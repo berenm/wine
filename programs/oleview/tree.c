@@ -108,8 +108,10 @@ void CreateInst(HTREEITEM item, WCHAR *wszMachineName)
 
     if(FAILED(hRes))
     {
-        LoadStringW(globals.hMainInst, IDS_CGCOFAIL, wszMessage, ARRAY_SIZE(wszMessage));
-        LoadStringW(globals.hMainInst, IDS_ABOUT, wszTitle, ARRAY_SIZE(wszTitle));
+        LoadStringW(globals.hMainInst, IDS_CGCOFAIL, wszMessage,
+                sizeof(wszMessage)/sizeof(wszMessage[0]));
+        LoadStringW(globals.hMainInst, IDS_ABOUT, wszTitle,
+                sizeof(wszTitle)/sizeof(wszTitle[0]));
 
 #define CASE_ERR(i) case i: \
     MultiByteToWideChar(CP_ACP, 0, #i, -1, wszFlagName, MAX_LOAD_STRING); \
@@ -128,7 +130,7 @@ void CreateInst(HTREEITEM item, WCHAR *wszMachineName)
             CASE_ERR(CO_E_APPDIDNTREG);
             CASE_ERR(CLASS_E_CLASSNOTAVAILABLE);
             default:
-                LoadStringW(globals.hMainInst, IDS_ERROR_UNKN, wszFlagName, ARRAY_SIZE(wszFlagName));
+                LoadStringW(globals.hMainInst, IDS_ERROR_UNKN, wszFlagName, sizeof(wszFlagName)/sizeof(wszFlagName[0]));
         }
 
         wsprintfW(&wszMessage[lstrlenW(wszMessage)], wszFormat,
@@ -271,7 +273,7 @@ static void AddCOMandAll(void)
     {
         i++;
 
-        if(RegEnumKeyW(hKey, i, valName, ARRAY_SIZE(valName)) != ERROR_SUCCESS) break;
+        if(RegEnumKeyW(hKey, i, valName, sizeof(valName)/sizeof(valName[0])) != ERROR_SUCCESS) break;
 
         if(RegOpenKeyW(hKey, valName, &hCurKey) != ERROR_SUCCESS) continue;
 
@@ -300,7 +302,7 @@ static void AddCOMandAll(void)
 
         if(RegOpenKeyW(hCurKey, wszImplementedCategories, &hInfo) == ERROR_SUCCESS)
         {
-            if(RegEnumKeyW(hInfo, 0, wszComp, ARRAY_SIZE(wszComp)) != ERROR_SUCCESS) break;
+            if(RegEnumKeyW(hInfo, 0, wszComp, sizeof(wszComp)/sizeof(wszComp[0])) != ERROR_SUCCESS) break;
 
             RegCloseKey(hInfo);
 
@@ -358,7 +360,7 @@ static void AddApplicationID(void)
     {
         i++;
 
-        if(RegEnumKeyW(hKey, i, valName, ARRAY_SIZE(valName)) != ERROR_SUCCESS) break;
+        if(RegEnumKeyW(hKey, i, valName, sizeof(valName)/sizeof(valName[0])) != ERROR_SUCCESS) break;
 
         if(RegOpenKeyW(hKey, valName, &hCurKey) != ERROR_SUCCESS) continue;
 
@@ -403,7 +405,7 @@ static void AddTypeLib(void)
     {
         i++;
 
-        if(RegEnumKeyW(hKey, i, valParent, ARRAY_SIZE(valParent)) != ERROR_SUCCESS) break;
+        if(RegEnumKeyW(hKey, i, valParent, sizeof(valParent)/sizeof(valParent[0])) != ERROR_SUCCESS) break;
 
         if(RegOpenKeyW(hKey, valParent, &hCurKey) != ERROR_SUCCESS) continue;
 
@@ -412,7 +414,7 @@ static void AddTypeLib(void)
         {
             j++;
 
-            if(RegEnumKeyW(hCurKey, j, valName, ARRAY_SIZE(valName)) != ERROR_SUCCESS) break;
+            if(RegEnumKeyW(hCurKey, j, valName, sizeof(valName)/sizeof(valName[0])) != ERROR_SUCCESS) break;
 
             if(RegOpenKeyW(hCurKey, valName, &hInfoKey) != ERROR_SUCCESS) continue;
 
@@ -421,7 +423,8 @@ static void AddTypeLib(void)
             if(RegQueryValueW(hInfoKey, NULL, buffer, &lenBuffer) == ERROR_SUCCESS
                     && *buffer)
             {
-                LoadStringW(globals.hMainInst, IDS_TL_VER, wszVer, ARRAY_SIZE(wszVer));
+                LoadStringW(globals.hMainInst, IDS_TL_VER, wszVer,
+                        sizeof(wszVer)/sizeof(wszVer[0]));
 
                 wsprintfW(&buffer[lstrlenW(buffer)], wszFormat, wszVer, valName);
                 U(tvis).item.pszText = buffer;
@@ -468,7 +471,7 @@ static void AddInterfaces(void)
     {
         i++;
 
-        if(RegEnumKeyW(hKey, i, valName, ARRAY_SIZE(valName)) != ERROR_SUCCESS) break;
+        if(RegEnumKeyW(hKey, i, valName, sizeof(valName)/sizeof(valName[0])) != ERROR_SUCCESS) break;
 
         if(RegOpenKeyW(hKey, valName, &hCurKey) != ERROR_SUCCESS) continue;
 
@@ -515,7 +518,7 @@ static void AddComponentCategories(void)
     {
         i++;
 
-        if(RegEnumKeyW(hKey, i, keyName, ARRAY_SIZE(keyName)) != ERROR_SUCCESS) break;
+        if(RegEnumKeyW(hKey, i, keyName, sizeof(keyName)/sizeof(keyName[0])) != ERROR_SUCCESS) break;
 
         if(RegOpenKeyW(hKey, keyName, &hCurKey) != ERROR_SUCCESS) continue;
 

@@ -740,7 +740,8 @@ static void WINPOS_ShowIconTitle( HWND hwnd, BOOL bShow )
  *
  * Get the minimized and maximized information for a window.
  */
-MINMAXINFO WINPOS_GetMinMaxInfo( HWND hwnd )
+void WINPOS_GetMinMaxInfo( HWND hwnd, POINT *maxSize, POINT *maxPos,
+			   POINT *minTrack, POINT *maxTrack )
 {
     MINMAXINFO MinMax;
     HMONITOR monitor;
@@ -836,7 +837,10 @@ MINMAXINFO WINPOS_GetMinMaxInfo( HWND hwnd )
     MinMax.ptMaxTrackSize.y = max( MinMax.ptMaxTrackSize.y,
                                    MinMax.ptMinTrackSize.y );
 
-    return MinMax;
+    if (maxSize) *maxSize = MinMax.ptMaxSize;
+    if (maxPos) *maxPos = MinMax.ptMaxPosition;
+    if (minTrack) *minTrack = MinMax.ptMinTrackSize;
+    if (maxTrack) *maxTrack = MinMax.ptMaxTrackSize;
 }
 
 
@@ -939,8 +943,8 @@ static POINT WINPOS_FindIconPos( HWND hwnd, POINT pt )
 UINT WINPOS_MinMaximize( HWND hwnd, UINT cmd, LPRECT rect )
 {
     UINT swpFlags = 0;
+    POINT size;
     LONG old_style;
-    MINMAXINFO minmax;
     WINDOWPLACEMENT wpl;
 
     TRACE("%p %u\n", hwnd, cmd );
@@ -1002,7 +1006,7 @@ UINT WINPOS_MinMaximize( HWND hwnd, UINT cmd, LPRECT rect )
         old_style = GetWindowLongW( hwnd, GWL_STYLE );
         if ((old_style & WS_MAXIMIZE) && (old_style & WS_VISIBLE)) return SWP_NOSIZE | SWP_NOMOVE;
 
-        minmax = WINPOS_GetMinMaxInfo( hwnd );
+        WINPOS_GetMinMaxInfo( hwnd, &size, &wpl.ptMaxPosition, NULL, NULL );
 
         old_style = WIN_SetStyle( hwnd, WS_MAXIMIZE, WS_MINIMIZE );
         if (old_style & WS_MINIMIZE)
@@ -1012,8 +1016,8 @@ UINT WINPOS_MinMaximize( HWND hwnd, UINT cmd, LPRECT rect )
         }
 
         if (!(old_style & WS_MAXIMIZE)) swpFlags |= SWP_STATECHANGED;
-        SetRect( rect, minmax.ptMaxPosition.x, minmax.ptMaxPosition.y,
-                 minmax.ptMaxPosition.x + minmax.ptMaxSize.x, minmax.ptMaxPosition.y + minmax.ptMaxSize.y );
+        SetRect( rect, wpl.ptMaxPosition.x, wpl.ptMaxPosition.y,
+                 wpl.ptMaxPosition.x +  size.x, wpl.ptMaxPosition.y + size.y );
         break;
 
     case SW_SHOWNOACTIVATE:
@@ -1029,11 +1033,11 @@ UINT WINPOS_MinMaximize( HWND hwnd, UINT cmd, LPRECT rect )
             if (win_get_flags( hwnd ) & WIN_RESTORE_MAX)
             {
                 /* Restore to maximized position */
-                minmax = WINPOS_GetMinMaxInfo( hwnd );
+                WINPOS_GetMinMaxInfo( hwnd, &size, &wpl.ptMaxPosition, NULL, NULL);
                 WIN_SetStyle( hwnd, WS_MAXIMIZE, 0 );
                 swpFlags |= SWP_STATECHANGED;
-                SetRect( rect, minmax.ptMaxPosition.x, minmax.ptMaxPosition.y,
-                         minmax.ptMaxPosition.x + minmax.ptMaxSize.x, minmax.ptMaxPosition.y + minmax.ptMaxSize.y );
+                SetRect( rect, wpl.ptMaxPosition.x, wpl.ptMaxPosition.y,
+                         wpl.ptMaxPosition.x + size.x, wpl.ptMaxPosition.y + size.y );
                 break;
             }
         }
@@ -1247,9 +1251,6 @@ BOOL WINAPI ShowWindow( HWND hwnd, INT cmd )
 
     if ((cmd == SW_HIDE) && !(GetWindowLongW( hwnd, GWL_STYLE ) & WS_VISIBLE))
         return FALSE;
-
-    if ((cmd == SW_SHOW) && (GetWindowLongW( hwnd, GWL_STYLE ) & WS_VISIBLE))
-        return TRUE;
 
     return SendMessageW( hwnd, WM_WINE_SHOWWINDOW, cmd, 0 );
 }
@@ -1596,18 +1597,19 @@ void WINPOS_ActivateOtherWindow(HWND hwnd)
  */
 LONG WINPOS_HandleWindowPosChanging( HWND hwnd, WINDOWPOS *winpos )
 {
+    POINT minTrack, maxTrack;
     LONG style = GetWindowLongW( hwnd, GWL_STYLE );
 
     if (winpos->flags & SWP_NOSIZE) return 0;
     if ((style & WS_THICKFRAME) || ((style & (WS_POPUP | WS_CHILD)) == 0))
     {
-	MINMAXINFO info = WINPOS_GetMinMaxInfo( hwnd );
-        winpos->cx = min( winpos->cx, info.ptMaxTrackSize.x );
-        winpos->cy = min( winpos->cy, info.ptMaxTrackSize.y );
+	WINPOS_GetMinMaxInfo( hwnd, NULL, NULL, &minTrack, &maxTrack );
+	if (winpos->cx > maxTrack.x) winpos->cx = maxTrack.x;
+	if (winpos->cy > maxTrack.y) winpos->cy = maxTrack.y;
 	if (!(style & WS_MINIMIZE))
 	{
-            winpos->cx = max( winpos->cx, info.ptMinTrackSize.x );
-            winpos->cy = max( winpos->cy, info.ptMinTrackSize.y );
+	    if (winpos->cx < minTrack.x ) winpos->cx = minTrack.x;
+	    if (winpos->cy < minTrack.y ) winpos->cy = minTrack.y;
 	}
     }
     return 0;
@@ -2065,7 +2067,7 @@ BOOL set_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
     WND *win;
     HWND surface_win = 0, parent = GetAncestor( hwnd, GA_PARENT );
     BOOL ret, needs_update = FALSE;
-    RECT visible_rect, old_visible_rect, old_window_rect, old_client_rect, extra_rects[3];
+    RECT visible_rect, old_visible_rect, old_window_rect, old_client_rect;
     struct window_surface *old_surface, *new_surface = NULL;
 
     if (!parent || parent == GetDesktopWindow())
@@ -2089,12 +2091,6 @@ BOOL set_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
     old_client_rect = win->client_rect;
     old_surface = win->surface;
     if (old_surface != new_surface) swp_flags |= SWP_FRAMECHANGED;  /* force refreshing non-client area */
-    if (new_surface == &dummy_surface) swp_flags |= SWP_NOREDRAW;
-    else if (old_surface == &dummy_surface)
-    {
-        swp_flags |= SWP_NOCOPYBITS;
-        valid_rects = NULL;
-    }
 
     SERVER_START_REQ( set_window_pos )
     {
@@ -2109,17 +2105,10 @@ BOOL set_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags,
         req->client.top    = client_rect->top;
         req->client.right  = client_rect->right;
         req->client.bottom = client_rect->bottom;
-        if (!EqualRect( window_rect, &visible_rect ) || new_surface || valid_rects)
+        if (!EqualRect( window_rect, &visible_rect ) || valid_rects)
         {
-            extra_rects[0] = extra_rects[1] = visible_rect;
-            if (new_surface)
-            {
-                extra_rects[1] = new_surface->rect;
-                OffsetRect( &extra_rects[1], visible_rect.left, visible_rect.top );
-            }
-            if (valid_rects) extra_rects[2] = valid_rects[0];
-            else SetRectEmpty( &extra_rects[2] );
-            wine_server_add_data( req, extra_rects, sizeof(extra_rects) );
+            wine_server_add_data( req, &visible_rect, sizeof(visible_rect) );
+            if (valid_rects) wine_server_add_data( req, valid_rects, sizeof(*valid_rects) );
         }
         if (new_surface) req->paint_flags |= SET_WINPOS_PAINT_SURFACE;
         if (win->pixel_format) req->paint_flags |= SET_WINPOS_PIXEL_FORMAT;
@@ -2725,7 +2714,7 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
     LONG hittest = (LONG)(wParam & 0x0f);
     WPARAM syscommand = wParam & 0xfff0;
     HCURSOR hDragCursor = 0, hOldCursor = 0;
-    MINMAXINFO minmax;
+    POINT minTrack, maxTrack;
     POINT capturePoint, pt;
     LONG style = GetWindowLongW( hwnd, GWL_STYLE );
     BOOL    thickframe = HAS_THICKFRAME( style );
@@ -2768,7 +2757,7 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
 
       /* Get min/max info */
 
-    minmax = WINPOS_GetMinMaxInfo( hwnd );
+    WINPOS_GetMinMaxInfo( hwnd, NULL, NULL, &minTrack, &maxTrack );
     WIN_GetRectangles( hwnd, COORDS_PARENT, &sizingRect, NULL );
     origRect = sizingRect;
     if (style & WS_CHILD)
@@ -2787,23 +2776,23 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
 
     if (ON_LEFT_BORDER(hittest))
     {
-        mouseRect.left  = max( mouseRect.left, sizingRect.right-minmax.ptMaxTrackSize.x+capturePoint.x-sizingRect.left );
-        mouseRect.right = min( mouseRect.right, sizingRect.right-minmax.ptMinTrackSize.x+capturePoint.x-sizingRect.left );
+        mouseRect.left  = max( mouseRect.left, sizingRect.right-maxTrack.x+capturePoint.x-sizingRect.left );
+        mouseRect.right = min( mouseRect.right, sizingRect.right-minTrack.x+capturePoint.x-sizingRect.left );
     }
     else if (ON_RIGHT_BORDER(hittest))
     {
-        mouseRect.left  = max( mouseRect.left, sizingRect.left+minmax.ptMinTrackSize.x+capturePoint.x-sizingRect.right );
-        mouseRect.right = min( mouseRect.right, sizingRect.left+minmax.ptMaxTrackSize.x+capturePoint.x-sizingRect.right );
+        mouseRect.left  = max( mouseRect.left, sizingRect.left+minTrack.x+capturePoint.x-sizingRect.right );
+        mouseRect.right = min( mouseRect.right, sizingRect.left+maxTrack.x+capturePoint.x-sizingRect.right );
     }
     if (ON_TOP_BORDER(hittest))
     {
-        mouseRect.top    = max( mouseRect.top, sizingRect.bottom-minmax.ptMaxTrackSize.y+capturePoint.y-sizingRect.top );
-        mouseRect.bottom = min( mouseRect.bottom,sizingRect.bottom-minmax.ptMinTrackSize.y+capturePoint.y-sizingRect.top);
+        mouseRect.top    = max( mouseRect.top, sizingRect.bottom-maxTrack.y+capturePoint.y-sizingRect.top );
+        mouseRect.bottom = min( mouseRect.bottom,sizingRect.bottom-minTrack.y+capturePoint.y-sizingRect.top);
     }
     else if (ON_BOTTOM_BORDER(hittest))
     {
-        mouseRect.top    = max( mouseRect.top, sizingRect.top+minmax.ptMinTrackSize.y+capturePoint.y-sizingRect.bottom );
-        mouseRect.bottom = min( mouseRect.bottom, sizingRect.top+minmax.ptMaxTrackSize.y+capturePoint.y-sizingRect.bottom );
+        mouseRect.top    = max( mouseRect.top, sizingRect.top+minTrack.y+capturePoint.y-sizingRect.bottom );
+        mouseRect.bottom = min( mouseRect.bottom, sizingRect.top+maxTrack.y+capturePoint.y-sizingRect.bottom );
     }
 
     /* Retrieve a default cache DC (without using the window style) */
@@ -2996,4 +2985,28 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
         }
         else WINPOS_ShowIconTitle( hwnd, TRUE );
     }
+}
+
+/***********************************************************************
+ *		LogicalToPhysicalPoint (USER32.@)
+ */
+BOOL WINAPI LogicalToPhysicalPoint(HWND hwnd, POINT *point)
+{
+    static int once;
+
+    if (!once++)
+        FIXME("(%p %p) stub\n", hwnd, point);
+    return TRUE;
+}
+
+/***********************************************************************
+ *		PhysicalToLogicalPoint (USER32.@)
+ */
+BOOL WINAPI PhysicalToLogicalPoint(HWND hwnd, POINT *point)
+{
+    static int once;
+
+    if (!once++)
+        FIXME("(%p %p) stub\n", hwnd, point);
+    return TRUE;
 }

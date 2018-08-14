@@ -306,21 +306,6 @@ ULONG WINAPI RtlRemoveVectoredExceptionHandler( PVOID handler )
 }
 
 
-/*********************************************************************
- *         NtContinue   (NTDLL.@)
- */
-NTSTATUS WINAPI NtContinue( CONTEXT *context, BOOLEAN alert )
-{
-    TRACE( "(%p, %d) stub!\n", context, alert );
-
-    /* NtSetContextThread will not have the intended behavior for a partial context. */
-    if ((context->ContextFlags & CONTEXT_FULL) != CONTEXT_FULL)
-        return STATUS_NOT_IMPLEMENTED;
-
-    return NtSetContextThread( GetCurrentThread(), context );
-}
-
-
 /*************************************************************
  *            __wine_spec_unimplemented_stub
  *
@@ -339,9 +324,4 @@ void __wine_spec_unimplemented_stub( const char *module, const char *function )
     record.ExceptionInformation[0] = (ULONG_PTR)module;
     record.ExceptionInformation[1] = (ULONG_PTR)function;
     for (;;) RtlRaiseException( &record );
-}
-
-void WINAPI RtlSetUnhandledExceptionFilter( void *handler )
-{
-    FIXME( "(%p) stub!\n", handler );
 }

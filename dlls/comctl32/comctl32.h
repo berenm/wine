@@ -38,6 +38,8 @@
 extern HMODULE COMCTL32_hModule DECLSPEC_HIDDEN;
 extern HBRUSH  COMCTL32_hPattern55AABrush DECLSPEC_HIDDEN;
 
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+
 /* Property sheet / Wizard */
 #define IDD_PROPSHEET 1006
 #define IDD_WIZARD    1020
@@ -106,10 +108,6 @@ extern HBRUSH  COMCTL32_hPattern55AABrush DECLSPEC_HIDDEN;
 #define IDS_BUTTON_OK     3003
 #define IDS_BUTTON_CANCEL 3004
 #define IDS_BUTTON_CLOSE  3005
-
-/* Task dialog expando control default text */
-#define IDS_TD_EXPANDED   3020
-#define IDS_TD_COLLAPSED  3021
 
 #define WM_SYSTIMER     0x0118
 

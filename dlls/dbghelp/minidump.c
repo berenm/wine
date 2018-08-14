@@ -215,9 +215,9 @@ static BOOL add_module(struct dump_context* dc, const WCHAR* name,
     if (is_elf ||
         !GetModuleFileNameExW(dc->hProcess, (HMODULE)(DWORD_PTR)base,
                               dc->modules[dc->num_modules].name,
-                              ARRAY_SIZE(dc->modules[dc->num_modules].name)))
+                              sizeof(dc->modules[dc->num_modules].name) / sizeof(WCHAR)))
         lstrcpynW(dc->modules[dc->num_modules].name, name,
-                  ARRAY_SIZE(dc->modules[dc->num_modules].name));
+                  sizeof(dc->modules[dc->num_modules].name) / sizeof(WCHAR));
     dc->modules[dc->num_modules].base = base;
     dc->modules[dc->num_modules].size = size;
     dc->modules[dc->num_modules].timestamp = timestamp;

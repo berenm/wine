@@ -29,7 +29,6 @@
 #include "windef.h"
 #include "winbase.h"
 #include "winternl.h"
-#include "winuser.h"
 #include "wine/test.h"
 #include "delayloadhandler.h"
 
@@ -194,7 +193,7 @@ static DWORD create_test_dll( const IMAGE_DOS_HEADER *dos_header, UINT dos_size,
     {
         SetLastError(0xdeadbeef);
         ret = WriteFile(hfile, &nt_header->OptionalHeader,
-                        sizeof(IMAGE_OPTIONAL_HEADER),
+                        min(nt_header->FileHeader.SizeOfOptionalHeader, sizeof(IMAGE_OPTIONAL_HEADER)),
                         &dummy, NULL);
         ok(ret, "WriteFile error %d\n", GetLastError());
         if (nt_header->FileHeader.SizeOfOptionalHeader > sizeof(IMAGE_OPTIONAL_HEADER))
@@ -210,8 +209,6 @@ static DWORD create_test_dll( const IMAGE_DOS_HEADER *dos_header, UINT dos_size,
     assert(nt_header->FileHeader.NumberOfSections <= 1);
     if (nt_header->FileHeader.NumberOfSections)
     {
-        SetFilePointer(hfile, dos_size + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt_header->FileHeader.SizeOfOptionalHeader, NULL, FILE_BEGIN);
-
         section.SizeOfRawData = 10;
 
         if (nt_header->OptionalHeader.SectionAlignment >= page_size)
@@ -236,17 +233,6 @@ static DWORD create_test_dll( const IMAGE_DOS_HEADER *dos_header, UINT dos_size,
         ret = WriteFile(hfile, section_data, sizeof(section_data), &dummy, NULL);
         ok(ret, "WriteFile error %d\n", GetLastError());
     }
-
-    /* Minimal PE image that Windows7+ is able to load: 268 bytes */
-    size = GetFileSize(hfile, NULL);
-    if (size < 268)
-    {
-        file_align = 268 - size;
-        SetLastError(0xdeadbeef);
-        ret = WriteFile(hfile, filler, file_align, &dummy, NULL);
-        ok(ret, "WriteFile error %d\n", GetLastError());
-    }
-
     size = GetFileSize(hfile, NULL);
     CloseHandle(hfile);
     return size;
@@ -396,8 +382,7 @@ static BOOL query_image_section( int id, const char *dll_name, const IMAGE_NT_HE
     ok( image.LoaderFlags == (cor_header != NULL), "%u: LoaderFlags wrong %08x\n", id, image.LoaderFlags );
     ok( image.ImageFileSize == file_size || broken(!image.ImageFileSize), /* winxpsp1 */
         "%u: ImageFileSize wrong %08x / %08x\n", id, image.ImageFileSize, file_size );
-    ok( image.CheckSum == nt_header->OptionalHeader.CheckSum || broken(truncated),
-        "%u: CheckSum wrong %08x / %08x\n", id,
+    ok( image.CheckSum == nt_header->OptionalHeader.CheckSum, "%u: CheckSum wrong %08x / %08x\n", id,
         image.CheckSum, nt_header->OptionalHeader.CheckSum );
 
     if (nt_header->OptionalHeader.SizeOfCode || nt_header->OptionalHeader.AddressOfEntryPoint)
@@ -620,7 +605,6 @@ static void test_Loader(void)
         /* Mandatory are all fields up to SizeOfHeaders, everything else
          * is really optional (at least that's true for XP).
          */
-#if 0 /* 32-bit Windows 8 crashes inside of LoadLibrary */
         { sizeof(dos_header),
           1, FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, CheckSum), 0x200, 0x200,
           sizeof(dos_header) + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, CheckSum) + sizeof(IMAGE_SECTION_HEADER) + 0x10,
@@ -628,7 +612,6 @@ static void test_Loader(void)
           { ERROR_SUCCESS, ERROR_BAD_EXE_FORMAT, ERROR_INVALID_ADDRESS,
             ERROR_NOACCESS }
         },
-#endif
         { sizeof(dos_header),
           0, FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, CheckSum), 0x200, 0x200,
           0xd0, /* beyond of the end of file */
@@ -697,14 +680,6 @@ static void test_Loader(void)
           0x40, /* minimal image size that Windows7 accepts */
           0,
           { ERROR_SUCCESS }
-        },
-        /* the following data mimics the PE image which 8k demos have */
-        { 0x04,
-          0, 0x08,
-          0x04 /* also serves as e_lfanew in the truncated MZ header */, 0x04,
-          0x200000,
-          0x40,
-          { ERROR_SUCCESS }
         }
     };
     int i;
@@ -722,7 +697,7 @@ static void test_Loader(void)
     /* prevent displaying of the "Unable to load this DLL" message box */
     SetErrorMode(SEM_FAILCRITICALERRORS);
 
-    for (i = 0; i < ARRAY_SIZE(td); i++)
+    for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
     {
         nt_header = nt_header_template;
         nt_header.FileHeader.NumberOfSections = td[i].number_of_sections;
@@ -938,18 +913,6 @@ static void test_Loader(void)
                 ok(ret, "FreeLibrary error %d\n", GetLastError());
             }
 
-            SetLastError(0xdeadbeef);
-            ret = DeleteFileA(dll_name);
-            ok(ret, "DeleteFile error %d\n", GetLastError());
-
-            nt_header.OptionalHeader.AddressOfEntryPoint = 0x12345678;
-            file_size = create_test_dll( &dos_header, td[i].size_of_dos_header, &nt_header, dll_name );
-            if (!file_size)
-            {
-                ok(0, "could not create %s\n", dll_name);
-                break;
-            }
-
             query_image_section( i, dll_name, &nt_header, NULL );
         }
         else
@@ -959,7 +922,7 @@ static void test_Loader(void)
 
             error_match = FALSE;
             for (error_index = 0;
-                 ! error_match && error_index < ARRAY_SIZE(td[i].errors);
+                 ! error_match && error_index < sizeof(td[i].errors) / sizeof(DWORD);
                  error_index++)
             {
                 error_match = td[i].errors[error_index] == GetLastError();
@@ -1395,100 +1358,6 @@ static void test_filenames(void)
     DeleteFileA( long_path );
 }
 
-static void test_FakeDLL(void)
-{
-#if defined(__i386__) || defined(__x86_64__)
-    NTSTATUS (WINAPI *pNtSetEvent)(HANDLE, ULONG *) = NULL;
-    IMAGE_EXPORT_DIRECTORY *dir;
-    HMODULE module = GetModuleHandleA("ntdll.dll");
-    HANDLE file, map, event;
-    WCHAR path[MAX_PATH];
-    DWORD *names, *funcs;
-    WORD *ordinals;
-    ULONG size;
-    void *ptr;
-    int i;
-
-    GetModuleFileNameW(module, path, MAX_PATH);
-
-    file = CreateFileW(path, GENERIC_READ | GENERIC_EXECUTE, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, 0);
-    ok(file != INVALID_HANDLE_VALUE, "Failed to open %s (error %u)\n", wine_dbgstr_w(path), GetLastError());
-
-    map = CreateFileMappingW(file, NULL, PAGE_EXECUTE_READ | SEC_IMAGE, 0, 0, NULL);
-    ok(map != NULL, "CreateFileMapping failed with error %u\n", GetLastError());
-    ptr = MapViewOfFile(map, FILE_MAP_READ | FILE_MAP_EXECUTE, 0, 0, 0);
-    ok(ptr != NULL, "MapViewOfFile failed with error %u\n", GetLastError());
-
-    dir = RtlImageDirectoryEntryToData(ptr, TRUE, IMAGE_DIRECTORY_ENTRY_EXPORT, &size);
-    ok(dir != NULL, "RtlImageDirectoryEntryToData failed\n");
-
-    names    = RVAToAddr(dir->AddressOfNames, ptr);
-    ordinals = RVAToAddr(dir->AddressOfNameOrdinals, ptr);
-    funcs    = RVAToAddr(dir->AddressOfFunctions, ptr);
-    ok(dir->NumberOfNames > 0, "Could not find any exported functions\n");
-
-    for (i = 0; i < dir->NumberOfNames; i++)
-    {
-        DWORD map_rva, dll_rva, map_offset, dll_offset;
-        char *func_name = RVAToAddr(names[i], ptr);
-        BYTE *dll_func, *map_func;
-
-        /* check only Nt functions for now */
-        if (strncmp(func_name, "Zw", 2) && strncmp(func_name, "Nt", 2))
-            continue;
-
-        dll_func = (BYTE *)GetProcAddress(module, func_name);
-        ok(dll_func != NULL, "%s: GetProcAddress returned NULL\n", func_name);
-#if defined(__i386__)
-        if (dll_func[0] == 0x90 && dll_func[1] == 0x90 &&
-            dll_func[2] == 0x90 && dll_func[3] == 0x90)
-#elif defined(__x86_64__)
-        if (dll_func[0] == 0x48 && dll_func[1] == 0x83 &&
-            dll_func[2] == 0xec && dll_func[3] == 0x08)
-#endif
-        {
-            todo_wine ok(0, "%s: Export is a stub-function, skipping\n", func_name);
-            continue;
-        }
-
-        /* check position in memory */
-        dll_rva = (DWORD_PTR)dll_func - (DWORD_PTR)module;
-        map_rva = funcs[ordinals[i]];
-        ok(map_rva == dll_rva, "%s: Rva of mapped function (0x%x) does not match dll (0x%x)\n",
-           func_name, dll_rva, map_rva);
-
-        /* check position in file */
-        map_offset = (DWORD_PTR)RtlImageRvaToVa(RtlImageNtHeader(ptr),    ptr,    map_rva, NULL) - (DWORD_PTR)ptr;
-        dll_offset = (DWORD_PTR)RtlImageRvaToVa(RtlImageNtHeader(module), module, dll_rva, NULL) - (DWORD_PTR)module;
-        ok(map_offset == dll_offset, "%s: File offset of mapped function (0x%x) does not match dll (0x%x)\n",
-           func_name, map_offset, dll_offset);
-
-        /* check function content */
-        map_func = RVAToAddr(map_rva, ptr);
-        ok(!memcmp(map_func, dll_func, 0x20), "%s: Function content does not match!\n", func_name);
-
-        if (!strcmp(func_name, "NtSetEvent"))
-            pNtSetEvent = (void *)map_func;
-    }
-
-    ok(pNtSetEvent != NULL, "Could not find NtSetEvent export\n");
-    if (pNtSetEvent)
-    {
-        event = CreateEventA(NULL, TRUE, FALSE, NULL);
-        ok(event != NULL, "CreateEvent failed with error %u\n", GetLastError());
-        pNtSetEvent(event, 0);
-        ok(WaitForSingleObject(event, 0) == WAIT_OBJECT_0, "Event was not signaled\n");
-        pNtSetEvent(event, 0);
-        ok(WaitForSingleObject(event, 0) == WAIT_OBJECT_0, "Event was not signaled\n");
-        CloseHandle(event);
-    }
-
-    UnmapViewOfFile(ptr);
-    CloseHandle(map);
-    CloseHandle(file);
-#endif
-}
-
 /* Verify linking style of import descriptors */
 static void test_ImportDescriptors(void)
 {
@@ -1712,7 +1581,7 @@ static void test_VirtualProtect(void *base, void *section)
 
     orig_prot = old_prot;
 
-    for (i = 0; i < ARRAY_SIZE(td); i++)
+    for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
     {
         SetLastError(0xdeadbeef);
         ret = VirtualQuery(section, &info, sizeof(info));
@@ -1843,7 +1712,7 @@ static void test_section_access(void)
 
     GetTempPathA(MAX_PATH, temp_path);
 
-    for (i = 0; i < ARRAY_SIZE(td); i++)
+    for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
     {
         IMAGE_NT_HEADERS nt_header;
 
@@ -2159,7 +2028,7 @@ static DWORD WINAPI mutex_thread_proc(void *param)
     trace("%04x: mutex_thread_proc: starting\n", GetCurrentThreadId());
     while (1)
     {
-        ret = WaitForMultipleObjects(ARRAY_SIZE(wait_list), wait_list, FALSE, 50);
+        ret = WaitForMultipleObjects(sizeof(wait_list)/sizeof(wait_list[0]), wait_list, FALSE, 50);
         if (ret == WAIT_OBJECT_0) break;
         else if (ret == WAIT_OBJECT_0 + 1)
         {
@@ -3495,7 +3364,7 @@ static void test_ResolveDelayLoadedAPI(void)
 
     section.PointerToRawData = 0x2000;
     section.VirtualAddress = 0x2000;
-    i = ARRAY_SIZE(td);
+    i = sizeof(td)/sizeof(td[0]);
     section.Misc.VirtualSize = sizeof(test_dll) + sizeof(hint) + sizeof(test_func) + sizeof(HMODULE) +
                                2 * (i + 1) * sizeof(IMAGE_THUNK_DATA);
     ok(section.Misc.VirtualSize <= 0x1000, "Too much tests, add a new section!\n");
@@ -3544,7 +3413,7 @@ static void test_ResolveDelayLoadedAPI(void)
 
     SetFilePointer( hfile, idd.ImportAddressTableRVA, NULL, SEEK_SET );
 
-    for (i = 0; i < ARRAY_SIZE(td); i++)
+    for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
     {
         /* 0x1a00 is an empty space between delay data and extended delay data, real thunks are not necessary */
         itd32.u1.Function = nt_header.OptionalHeader.ImageBase + 0x1a00 + i * 0x20;
@@ -3558,7 +3427,7 @@ static void test_ResolveDelayLoadedAPI(void)
     ret = WriteFile(hfile, &itd32, sizeof(itd32), &dummy, NULL);
     ok(ret, "WriteFile error %d\n", GetLastError());
 
-    for (i = 0; i < ARRAY_SIZE(td); i++)
+    for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
     {
         if (td[i].func)
             itd32.u1.AddressOfData = idd.DllNameRVA + sizeof(test_dll);
@@ -3611,7 +3480,7 @@ static void test_ResolveDelayLoadedAPI(void)
         itda = RVAToAddr(delaydir->ImportAddressTableRVA, hlib);
         htarget = LoadLibraryA(RVAToAddr(delaydir->DllNameRVA, hlib));
 
-        for (i = 0; i < ARRAY_SIZE(td); i++)
+        for (i = 0; i < sizeof(td)/sizeof(td[0]); i++)
         {
             void *ret, *load;
 
@@ -3666,79 +3535,6 @@ static void test_InMemoryOrderModuleList(void)
     }
     ok(entry1 == mark1, "expected entry1 == mark1, got %p and %p\n", entry1, mark1);
     ok(entry2 == mark2, "expected entry2 == mark2, got %p and %p\n", entry2, mark2);
-}
-
-static inline WCHAR toupperW(WCHAR c)
-{
-    WCHAR tmp = c;
-    CharUpperBuffW(&tmp, 1);
-    return tmp;
-}
-
-static ULONG hash_basename(const WCHAR *basename)
-{
-    WORD version = MAKEWORD(NtCurrentTeb()->Peb->OSMinorVersion,
-                            NtCurrentTeb()->Peb->OSMajorVersion);
-    ULONG hash = 0;
-
-    if (version >= 0x0602)
-    {
-        for (; *basename; basename++)
-            hash = hash * 65599 + toupperW(*basename);
-    }
-    else if (version == 0x0601)
-    {
-        for (; *basename; basename++)
-            hash = hash + 65599 * toupperW(*basename);
-    }
-    else
-        hash = toupperW(basename[0]) - 'A';
-
-    return hash & 31;
-}
-
-static void test_HashLinks(void)
-{
-    static WCHAR ntdllW[] = {'n','t','d','l','l','.','d','l','l',0};
-    static WCHAR kernel32W[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};
-
-    LIST_ENTRY *hash_map, *entry, *mark;
-    LDR_MODULE *module;
-    BOOL found;
-
-    entry = &NtCurrentTeb()->Peb->LdrData->InLoadOrderModuleList;
-    entry = entry->Flink;
-
-    module = CONTAINING_RECORD(entry, LDR_MODULE, InLoadOrderModuleList);
-    entry = module->HashLinks.Blink;
-
-    hash_map = entry - hash_basename(module->BaseDllName.Buffer);
-
-    mark = &hash_map[hash_basename(ntdllW)];
-    found = FALSE;
-    for (entry = mark->Flink; entry != mark; entry = entry->Flink)
-    {
-        module = CONTAINING_RECORD(entry, LDR_MODULE, HashLinks);
-        if (!lstrcmpiW(module->BaseDllName.Buffer, ntdllW))
-        {
-            found = TRUE;
-            break;
-        }
-    }
-    ok(found, "Could not find ntdll\n");
-
-    mark = &hash_map[hash_basename(kernel32W)];
-    found = FALSE;
-    for (entry = mark->Flink; entry != mark; entry = entry->Flink)
-    {
-        module = CONTAINING_RECORD(entry, LDR_MODULE, HashLinks);
-        if (!lstrcmpiW(module->BaseDllName.Buffer, kernel32W))
-        {
-            found = TRUE;
-            break;
-        }
-    }
-    ok(found, "Could not find kernel32\n");
 }
 
 START_TEST(loader)
@@ -3798,7 +3594,6 @@ START_TEST(loader)
     }
 
     test_Loader();
-    test_FakeDLL();
     test_filenames();
     test_ResolveDelayLoadedAPI();
     test_ImportDescriptors();
@@ -3806,5 +3601,4 @@ START_TEST(loader)
     test_import_resolution();
     test_ExitProcess();
     test_InMemoryOrderModuleList();
-    test_HashLinks();
 }

@@ -382,7 +382,7 @@
 @ stub IoGetBootDiskInformation
 @ stdcall IoGetConfigurationInformation()
 @ stdcall IoGetCurrentProcess()
-@ stdcall IoGetDeviceAttachmentBaseRef(ptr)
+@ stub IoGetDeviceAttachmentBaseRef
 @ stub IoGetDeviceInterfaceAlias
 @ stdcall IoGetDeviceInterfaces(ptr ptr long ptr)
 @ stdcall IoGetDeviceObjectPointer(ptr long ptr ptr)
@@ -436,7 +436,7 @@
 @ stdcall IoRegisterPlugPlayNotification(long long ptr ptr ptr ptr ptr)
 @ stdcall IoRegisterShutdownNotification(ptr)
 @ stdcall IoReleaseCancelSpinLock(long)
-@ stdcall IoReleaseRemoveLockAndWaitEx(ptr ptr long)
+@ stub IoReleaseRemoveLockAndWaitEx
 @ stub IoReleaseRemoveLockEx
 @ stub IoReleaseVpbSpinLock
 @ stub IoRemoveShareAccess
@@ -472,7 +472,7 @@
 @ stub IoThreadToProcess
 @ stdcall IoUnregisterFileSystem(ptr)
 @ stub IoUnregisterFsRegistrationChange
-@ stdcall IoUnregisterPlugPlayNotification(ptr)
+@ stub IoUnregisterPlugPlayNotification
 @ stdcall IoUnregisterShutdownNotification(ptr)
 @ stub IoUpdateShareAccess
 @ stub IoValidateDeviceIoControlAccess
@@ -532,7 +532,7 @@
 @ stub KeFindConfigurationEntry
 @ stub KeFindConfigurationNextEntry
 @ stub KeFlushEntireTb
-@ stdcall KeFlushQueuedDpcs()
+@ stub KeFlushQueuedDpcs
 @ stdcall KeGetCurrentThread()
 @ stub KeGetPreviousMode
 @ stub KeGetRecommendedSharedDataAlignment
@@ -694,7 +694,7 @@
 @ stub MmLockPagableImageSection
 @ stdcall MmLockPagableSectionByHandle(ptr)
 @ stdcall MmMapIoSpace(int64 long long)
-@ stdcall MmMapLockedPages(ptr long)
+@ stub MmMapLockedPages
 @ stdcall MmMapLockedPagesSpecifyCache(ptr long long ptr long long)
 @ stub MmMapLockedPagesWithReservedMapping
 @ stub MmMapMemoryDumpMdl
@@ -724,7 +724,7 @@
 @ stdcall MmUnlockPagableImageSection(ptr)
 @ stdcall MmUnlockPages(ptr)
 @ stdcall MmUnmapIoSpace(ptr long)
-@ stdcall MmUnmapLockedPages(ptr ptr)
+@ stub MmUnmapLockedPages
 @ stub MmUnmapReservedMapping
 @ stub MmUnmapVideoDisplay
 @ stub MmUnmapViewInSessionSpace
@@ -743,7 +743,7 @@
 @ stdcall NtAllocateLocallyUniqueId(ptr)
 @ stdcall NtAllocateUuids(ptr ptr ptr ptr)
 @ stdcall NtAllocateVirtualMemory(long ptr long ptr long long)
-@ extern NtBuildNumber
+@ stub NtBuildNumber
 @ stdcall NtClose(long)
 @ stdcall NtConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr)
 @ stdcall NtCreateEvent(ptr long ptr long long)

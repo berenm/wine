@@ -37,8 +37,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(explorer);
 
-extern HANDLE CDECL __wine_make_process_system(void);
-
 #define DESKTOP_CLASS_ATOM ((LPCWSTR)MAKEINTATOM(32769))
 #define DESKTOP_ALL_ACCESS 0x01ff
 
@@ -601,8 +599,6 @@ static BOOL start_screensaver( void )
     return FALSE;
 }
 
-static WNDPROC desktop_orig_wndproc;
-
 /* window procedure for the desktop window */
 static LRESULT WINAPI desktop_wnd_proc( HWND hwnd, UINT message, WPARAM wp, LPARAM lp )
 {
@@ -664,9 +660,10 @@ static LRESULT WINAPI desktop_wnd_proc( HWND hwnd, UINT message, WPARAM wp, LPAR
             EndPaint( hwnd, &ps );
         }
         return 0;
-    }
 
-    return desktop_orig_wndproc( hwnd, message, wp, lp );
+    default:
+        return DefWindowProcW( hwnd, message, wp, lp );
+    }
 }
 
 /* create the desktop and the associated driver window, and make it the current desktop */
@@ -779,11 +776,6 @@ static BOOL get_default_enable_shell( const WCHAR *name )
 
 static HMODULE load_graphics_driver( const WCHAR *driver, const GUID *guid )
 {
-    static const WCHAR video_keyW[] = {
-        'S','y','s','t','e','m','\\',
-        'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
-        'C','o','n','t','r','o','l','\\',
-        'V','i','d','e','o',0};
     static const WCHAR device_keyW[] = {
         'S','y','s','t','e','m','\\',
         'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
@@ -846,10 +838,6 @@ static HMODULE load_graphics_driver( const WCHAR *driver, const GUID *guid )
         GetModuleFileNameW( module, buffer, MAX_PATH );
         TRACE( "display %s driver %s\n", debugstr_guid(guid), debugstr_w(buffer) );
     }
-
-    /* create video key first without REG_OPTION_VOLATILE attribute */
-    if (!RegCreateKeyExW( HKEY_LOCAL_MACHINE, video_keyW, 0, NULL, 0, KEY_SET_VALUE, NULL, &hkey, NULL ))
-        RegCloseKey( hkey );
 
     sprintfW( key, device_keyW, guid->Data1, guid->Data2, guid->Data3,
               guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
@@ -990,8 +978,7 @@ void manage_desktop( WCHAR *arg )
         CreateWindowExW( 0, messageW, NULL, WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
                          0, 0, 100, 100, 0, 0, 0, NULL );
 
-        desktop_orig_wndproc = (WNDPROC)SetWindowLongPtrW( hwnd, GWLP_WNDPROC,
-            (LONG_PTR)desktop_wnd_proc );
+        SetWindowLongPtrW( hwnd, GWLP_WNDPROC, (LONG_PTR)desktop_wnd_proc );
         using_root = !desktop || !create_desktop( graphics_driver, name, width, height );
         SendMessageW( hwnd, WM_SETICON, ICON_BIG, (LPARAM)LoadIconW( 0, MAKEINTRESOURCEW(OIC_WINLOGO)));
         if (name) set_desktop_window_title( hwnd, name );
@@ -1043,22 +1030,8 @@ void manage_desktop( WCHAR *arg )
     /* run the desktop message loop */
     if (hwnd)
     {
-        HANDLE exit_event = __wine_make_process_system();
         WINE_TRACE( "desktop message loop starting on hwnd %p\n", hwnd );
-        while (exit_event != NULL && MsgWaitForMultipleObjectsEx( 1,
-               &exit_event, INFINITE, QS_ALLINPUT, 0 ) == WAIT_OBJECT_0 + 1)
-        {
-            while (PeekMessageW( &msg, NULL, 0, 0, PM_REMOVE ))
-            {
-                if (msg.message == WM_QUIT)
-                {
-                    exit_event = NULL;
-                    break;
-                }
-                TranslateMessage( &msg );
-                DispatchMessageW( &msg );
-            }
-        }
+        while (GetMessageW( &msg, 0, 0, 0 )) DispatchMessageW( &msg );
         WINE_TRACE( "desktop message loop exiting for hwnd %p\n", hwnd );
     }
 

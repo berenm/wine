@@ -267,13 +267,6 @@ static int           proximity_out_type;
 static HWND          hwndTabletDefault;
 static WTPACKET      gMsgPacket;
 static DWORD         gSerial;
-static DWORD         lastX = 0xffff;
-static DWORD         lastY = 0xffff;
-static UINT          lastNormalPressure = 0xffff, lastTangentPressure = 0xffff;
-static DWORD         lastButtons = 0xffff;
-static UINT          lastCursor = 0xffff;
-static ORIENTATION   lastOrientation = {.orAzimuth = 0xffff, .orAltitude = 0xffff, .orTwist = 0xffff };
-static ROTATION      lastRotation = {.roPitch = 0xffff, .roRoll = 0xffff, .roYaw = 0xffff };
 
 /* Reference: http://www.wacomeng.com/devsupport/ibmpc/gddevpc.html
  *
@@ -846,55 +839,6 @@ static int cursor_from_device(DWORD deviceid, LPWTI_CURSORS_INFO *cursorp)
     return -1;
 }
 
-static DWORD get_changed_state( WTPACKET *pkt)
-{
-    DWORD change = 0;
-    if (pkt->pkX != lastX)
-    {
-        change |= PK_X;
-        lastX = pkt->pkX;
-    }
-    if (pkt->pkY != lastY)
-    {
-        change |= PK_Y;
-        lastY = pkt->pkY;
-    }
-    if (pkt->pkNormalPressure != lastNormalPressure)
-    {
-        change |= PK_NORMAL_PRESSURE;
-        lastNormalPressure = pkt->pkNormalPressure;
-    }
-    if (pkt->pkTangentPressure != lastTangentPressure)
-    {
-        change |= PK_TANGENT_PRESSURE;
-        lastTangentPressure = pkt->pkTangentPressure;
-    }
-    if (pkt->pkCursor != lastCursor)
-    {
-        change |= PK_CURSOR;
-        lastCursor = pkt->pkCursor;
-    }
-    if (pkt->pkButtons != lastButtons)
-    {
-        change |= PK_BUTTONS;
-        lastButtons = pkt->pkButtons;
-    }
-    if (pkt->pkOrientation.orAzimuth != lastOrientation.orAzimuth || pkt->pkOrientation.orAltitude != lastOrientation.orAltitude ||
-        pkt->pkOrientation.orTwist != lastOrientation.orTwist)
-    {
-        change |= PK_ORIENTATION;
-        lastOrientation = pkt->pkOrientation;
-    }
-    if (pkt->pkRotation.roPitch != lastRotation.roPitch || pkt->pkRotation.roRoll != lastRotation.roRoll ||
-        pkt->pkRotation.roYaw != lastRotation.roYaw)
-    {
-        change |= PK_ROTATION;
-        lastRotation = pkt->pkRotation;
-    }
-
-    return change;
-}
-
 static BOOL motion_event( HWND hwnd, XEvent *event )
 {
     XDeviceMotionEvent *motion = (XDeviceMotionEvent *)event;
@@ -919,15 +863,8 @@ static BOOL motion_event( HWND hwnd, XEvent *event )
                                             (abs(motion->axis_data[3]),
                                              abs(motion->axis_data[4])))
                                            * (gMsgPacket.pkStatus & TPS_INVERT?-1:1));
-
-    if (gMsgPacket.pkOrientation.orAltitude < 0)
-    {
-        FIXME("Negative orAltitude detected\n");
-        return FALSE;
-    }
     gMsgPacket.pkNormalPressure = motion->axis_data[2];
     gMsgPacket.pkButtons = get_button_state(curnum);
-    gMsgPacket.pkChanged = get_changed_state(&gMsgPacket);
     SendMessageW(hwndTabletDefault,WT_PACKET,gMsgPacket.pkSerialNumber,(LPARAM)hwnd);
     return TRUE;
 }
@@ -956,15 +893,8 @@ static BOOL button_event( HWND hwnd, XEvent *event )
     gMsgPacket.pkOrientation.orAltitude = ((1000 - 15 * max(abs(button->axis_data[3]),
                                                             abs(button->axis_data[4])))
                                            * (gMsgPacket.pkStatus & TPS_INVERT?-1:1));
-    if (gMsgPacket.pkOrientation.orAltitude < 0)
-    {
-        FIXME("Negative orAltitude detected\n");
-        return FALSE;
-    }
-
     gMsgPacket.pkNormalPressure = button->axis_data[2];
     gMsgPacket.pkButtons = get_button_state(curnum);
-    gMsgPacket.pkChanged = get_changed_state(&gMsgPacket);
     SendMessageW(hwndTabletDefault,WT_PACKET,gMsgPacket.pkSerialNumber,(LPARAM)hwnd);
     return TRUE;
 }
@@ -1004,11 +934,6 @@ static BOOL proximity_event( HWND hwnd, XEvent *event )
     gMsgPacket.pkOrientation.orAltitude = ((1000 - 15 * max(abs(proximity->axis_data[3]),
                                                             abs(proximity->axis_data[4])))
                                            * (gMsgPacket.pkStatus & TPS_INVERT?-1:1));
-    if (gMsgPacket.pkOrientation.orAltitude < 0)
-    {
-        FIXME("Negative orAltitude detected\n");
-        return FALSE;
-    }
     gMsgPacket.pkNormalPressure = proximity->axis_data[2];
     gMsgPacket.pkButtons = get_button_state(curnum);
 
@@ -1156,17 +1081,6 @@ UINT CDECL X11DRV_WTInfoW(UINT wCategory, UINT nIndex, LPVOID lpOutput)
 
     if (!xinput_handle) return 0;
 
-    if(wCategory >= WTI_DSCTXS)
-    {
-        nIndex = wCategory - WTI_DSCTXS;
-        wCategory = WTI_DSCTXS;
-    }
-    else if(wCategory >= WTI_DDCTXS)
-    {
-        nIndex = wCategory - WTI_DDCTXS;
-        wCategory = WTI_DDCTXS;
-    }
-
     switch(wCategory)
     {
         case 0:
@@ -1207,62 +1121,6 @@ UINT CDECL X11DRV_WTInfoW(UINT wCategory, UINT nIndex, LPVOID lpOutput)
                     break;
                 default:
                     FIXME("WTI_INTERFACE unhandled index %i\n",nIndex);
-                    rc = 0;
-            }
-            break;
-        case WTI_STATUS:
-            switch (nIndex)
-            {
-                case STA_CONTEXTS:
-                {
-                    FIXME("STA_CONTEXTS unhandled\n");
-                    rc = 1;
-                    break;
-                }
-                case STA_SYSCTXS:
-                {
-                    FIXME("STA_SYSCTXS unhandled\n");
-                    rc = 1;
-                    break;
-                }
-                case STA_PKTRATE:
-                {
-                    FIXME("STA_PKTRATE unhandled\n");
-                    rc = 0;
-                    break;
-                }
-                case STA_PKTDATA:
-                {
-                    FIXME("STA_PKTDATA unhandled\n");
-                    rc = 0;
-                    break;
-                }
-                case STA_MANAGERS:
-                {
-                    FIXME("STA_MANAGERS unhandled\n");
-                    rc = 1;
-                    break;
-                }
-                case STA_SYSTEM:
-                {
-                    FIXME("STA_SYSTEM unhandled\n");
-                    rc = TRUE;
-                    break;
-                }
-                case STA_BUTTONUSE:
-                {
-                    FIXME("STA_BUTTONUSE unhandled\n");
-                    rc = 0;
-                    break;
-                }
-                case STA_SYSBTNUSE:
-                {
-                    FIXME("STA_SYSBTNUSE unhandled\n");
-                    rc = 0;
-                    break;
-                }
-                default:
-                    FIXME("WTI_STATUS unhandled index %i\n",nIndex);
                     rc = 0;
             }
             break;

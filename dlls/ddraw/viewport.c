@@ -71,10 +71,6 @@ void viewport_activate(struct d3d_viewport *This, BOOL ignore_lights)
     /* And copy the values in the structure used by the device */
     if (This->use_vp2)
     {
-        if (!This->viewports.vp2.dvMinZ && !This->viewports.vp2.dvMaxZ
-                && !This->viewports.vp2.dvClipWidth && !This->viewports.vp2.dvClipHeight)
-            return;
-
         vp.dwX = This->viewports.vp2.dwX;
         vp.dwY = This->viewports.vp2.dwY;
         vp.dwHeight = This->viewports.vp2.dwHeight;
@@ -1153,7 +1149,7 @@ struct d3d_viewport *unsafe_impl_from_IDirect3DViewport2(IDirect3DViewport2 *ifa
     /* IDirect3DViewport and IDirect3DViewport3 use the same iface. */
     if (!iface) return NULL;
     assert(iface->lpVtbl == (IDirect3DViewport2Vtbl *)&d3d_viewport_vtbl);
-    return CONTAINING_RECORD((IDirect3DViewport3 *)iface, struct d3d_viewport, IDirect3DViewport3_iface);
+    return CONTAINING_RECORD(iface, struct d3d_viewport, IDirect3DViewport3_iface);
 }
 
 struct d3d_viewport *unsafe_impl_from_IDirect3DViewport(IDirect3DViewport *iface)
@@ -1161,7 +1157,7 @@ struct d3d_viewport *unsafe_impl_from_IDirect3DViewport(IDirect3DViewport *iface
     /* IDirect3DViewport and IDirect3DViewport3 use the same iface. */
     if (!iface) return NULL;
     assert(iface->lpVtbl == (IDirect3DViewportVtbl *)&d3d_viewport_vtbl);
-    return CONTAINING_RECORD((IDirect3DViewport3 *)iface, struct d3d_viewport, IDirect3DViewport3_iface);
+    return CONTAINING_RECORD(iface, struct d3d_viewport, IDirect3DViewport3_iface);
 }
 
 void d3d_viewport_init(struct d3d_viewport *viewport, struct ddraw *ddraw)

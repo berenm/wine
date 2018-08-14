@@ -236,7 +236,7 @@ static HRESULT invoke_builtin(vbdisp_t *This, const builtin_prop_t *prop, WORD f
         return E_FAIL;
     }
 
-    assert(argn < ARRAY_SIZE(args));
+    assert(argn < sizeof(args)/sizeof(*args));
 
     for(i=0; i < argn; i++) {
         if(V_VT(dp->rgvarg+dp->cArgs-i-1) == (VT_BYREF|VT_VARIANT))
@@ -555,7 +555,7 @@ static IDispatchExVtbl DispatchExVtbl = {
 static inline vbdisp_t *unsafe_impl_from_IDispatch(IDispatch *iface)
 {
     return iface->lpVtbl == (IDispatchVtbl*)&DispatchExVtbl
-        ? CONTAINING_RECORD((IDispatchEx *)iface, vbdisp_t, IDispatchEx_iface)
+        ? CONTAINING_RECORD(iface, vbdisp_t, IDispatchEx_iface)
         : NULL;
 }
 
@@ -647,7 +647,7 @@ HRESULT create_procedure_disp(script_ctx_t *ctx, vbscode_t *code, IDispatch **re
         return E_OUTOFMEMORY;
 
     desc->ctx = ctx;
-    desc->builtin_prop_cnt = ARRAY_SIZE(procedure_props);
+    desc->builtin_prop_cnt = sizeof(procedure_props)/sizeof(*procedure_props);
     desc->builtin_props = procedure_props;
     desc->value_func = &code->main_code;
 

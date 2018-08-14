@@ -218,7 +218,7 @@ static IStreamVtbl iclvt =
 static HMODULE SHLWAPI_hshlwapi = 0;
 
 static VOID    (WINAPI *pSHLWAPI_19)(LPSHLWAPI_CLIST);
-static BOOL    (WINAPI *pSHLWAPI_20)(LPSHLWAPI_CLIST*,LPCSHLWAPI_CLIST);
+static HRESULT (WINAPI *pSHLWAPI_20)(LPSHLWAPI_CLIST*,LPCSHLWAPI_CLIST);
 static BOOL    (WINAPI *pSHLWAPI_21)(LPSHLWAPI_CLIST*,ULONG);
 static LPSHLWAPI_CLIST (WINAPI *pSHLWAPI_22)(LPSHLWAPI_CLIST,ULONG);
 static HRESULT (WINAPI *pSHLWAPI_17)(IStream*, SHLWAPI_CLIST*);
@@ -292,7 +292,6 @@ static void test_CList(void)
   struct dummystream streamobj;
   LPSHLWAPI_CLIST list = NULL;
   LPCSHLWAPI_CLIST item = SHLWAPI_CLIST_items;
-  BOOL bRet;
   HRESULT hRet;
   LPSHLWAPI_CLIST inserted;
   BYTE buff[64];
@@ -313,10 +312,10 @@ static void test_CList(void)
       buff[sizeof(SHLWAPI_CLIST)+i] = i*2;
 
     /* Add it */
-    bRet = pSHLWAPI_20(&list, inserted);
-    ok(bRet == TRUE, "failed list add\n");
+    hRet = pSHLWAPI_20(&list, inserted);
+    ok(hRet > S_OK, "failed list add\n");
 
-    if (bRet == TRUE)
+    if (hRet > S_OK)
     {
       ok(list && list->ulSize, "item not added\n");
 
@@ -363,7 +362,8 @@ static void test_CList(void)
   if (hRet == S_OK)
   {
     /* 1 call for each element, + 1 for OK (use our null element for this) */
-    ok(streamobj.writecalls == ARRAY_SIZE(SHLWAPI_CLIST_items), "wrong call count\n");
+    ok(streamobj.writecalls == sizeof(SHLWAPI_CLIST_items)/sizeof(SHLWAPI_CLIST),
+       "wrong call count\n");
     ok(streamobj.readcalls == 0,"called Read() in write\n");
     ok(streamobj.seekcalls == 0,"called Seek() in write\n");
   }
@@ -390,8 +390,11 @@ static void test_CList(void)
   inserted = (LPSHLWAPI_CLIST)buff;
   inserted->ulSize = sizeof(SHLWAPI_CLIST) -1;
   inserted->ulId = 33;
-  bRet = pSHLWAPI_20(&list, inserted);
-  ok(bRet == FALSE, "Expected failure\n");
+
+  /* The call succeeds but the item is not inserted, except on some early
+   * versions which return failure. Wine behaves like later versions.
+   */
+  pSHLWAPI_20(&list, inserted);
 
   inserted = pSHLWAPI_22(list, 33);
   ok(inserted == NULL, "inserted bad element size\n");
@@ -399,8 +402,9 @@ static void test_CList(void)
   inserted = (LPSHLWAPI_CLIST)buff;
   inserted->ulSize = 44;
   inserted->ulId = ~0U;
-  bRet = pSHLWAPI_20(&list, inserted);
-  ok(bRet == FALSE, "Expected failure\n");
+
+  /* See comment above, some early versions fail this call */
+  pSHLWAPI_20(&list, inserted);
 
   item = SHLWAPI_CLIST_items;
 
@@ -429,7 +433,8 @@ static void test_CList(void)
   {
     ok(streamobj.readbeyondend == FALSE, "read beyond end\n");
     /* 2 calls per item, but only 1 for the terminator */
-    ok(streamobj.readcalls == ARRAY_SIZE(SHLWAPI_CLIST_items) * 2 - 1, "wrong call count\n");
+    ok(streamobj.readcalls == sizeof(SHLWAPI_CLIST_items)/sizeof(SHLWAPI_CLIST)*2-1,
+       "wrong call count\n");
     ok(streamobj.writecalls == 0, "called Write() from create\n");
     ok(streamobj.seekcalls == 0,"called Seek() from create\n");
 

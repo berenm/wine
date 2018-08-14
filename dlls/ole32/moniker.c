@@ -1152,7 +1152,7 @@ HRESULT WINAPI MkParseDisplayName(LPBC pbc, LPCOLESTR szDisplayName,
     *pchEaten = 0;
     *ppmk = NULL;
 
-    if (!strncmpiW(szDisplayName, wszClsidColon, ARRAY_SIZE(wszClsidColon)))
+    if (!strncmpiW(szDisplayName, wszClsidColon, sizeof(wszClsidColon)/sizeof(wszClsidColon[0])))
     {
         hr = ClassMoniker_CreateFromDisplayName(pbc, szDisplayName, &chEaten, &moniker);
         if (FAILED(hr) && (hr != MK_E_SYNTAX))

@@ -475,18 +475,11 @@ static void test_parsedescriptor(void)
             wine_dbgstr_guid(&desc.guidClass));
     IStream_Release(stream);
 
-    /* NULL pointers */
-    memset(&desc, 0, sizeof(desc));
-    hr = IDirectMusicObject_ParseDescriptor(dmo, NULL, &desc);
-    ok(hr == E_POINTER, "ParseDescriptor failed: %08x, expected E_POINTER\n", hr);
-    hr = IDirectMusicObject_ParseDescriptor(dmo, stream, NULL);
-    ok(hr == E_POINTER, "ParseDescriptor failed: %08x, expected E_POINTER\n", hr);
-
     /* Wrong form */
     empty[1] = DMUS_FOURCC_CONTAINER_FORM;
     stream = gen_riff_stream(empty);
     hr = IDirectMusicObject_ParseDescriptor(dmo, stream, &desc);
-    ok(hr == DMUS_E_CHUNKNOTFOUND,
+    todo_wine ok(hr == DMUS_E_CHUNKNOTFOUND,
             "ParseDescriptor failed: %08x, expected DMUS_E_CHUNKNOTFOUND\n", hr);
 
     /* All desc chunks, DMUS_OBJ_CATEGORY not supported */
@@ -495,7 +488,8 @@ static void test_parsedescriptor(void)
     hr = IDirectMusicObject_ParseDescriptor(dmo, stream, &desc);
     ok(hr == S_OK, "ParseDescriptor failed: %08x, expected S_OK\n", hr);
     valid = DMUS_OBJ_OBJECT|DMUS_OBJ_CLASS|DMUS_OBJ_NAME|DMUS_OBJ_VERSION;
-    ok(desc.dwValidData == valid, "Got valid data %#x, expected %#x\n", desc.dwValidData, valid);
+    todo_wine ok(desc.dwValidData == valid, "Got valid data %#x, expected %#x\n",
+            desc.dwValidData, valid);
     ok(IsEqualGUID(&desc.guidClass, &CLSID_DirectMusicStyle),
             "Got class guid %s, expected CLSID_DirectMusicStyle\n",
             wine_dbgstr_guid(&desc.guidClass));
@@ -533,7 +527,8 @@ static void test_parsedescriptor(void)
     hr = IDirectMusicObject_ParseDescriptor(dmo, stream, &desc);
     ok(hr == S_OK, "ParseDescriptor failed: %08x, expected S_OK\n", hr);
     valid = DMUS_OBJ_OBJECT|DMUS_OBJ_CLASS|DMUS_OBJ_NAME|DMUS_OBJ_VERSION;
-    ok(desc.dwValidData == valid, "Got valid data %#x, expected %#x\n", desc.dwValidData, valid);
+    todo_wine ok(desc.dwValidData == valid, "Got valid data %#x, expected %#x\n",
+            desc.dwValidData, valid);
     ok(!memcmp(desc.wszName, s_inam, sizeof(s_inam)), "Got name '%s', expected 'INAM'\n",
             wine_dbgstr_w(desc.wszName));
     IStream_Release(stream);

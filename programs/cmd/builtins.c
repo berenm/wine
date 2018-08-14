@@ -1571,12 +1571,10 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
       /* execute all appropriate commands */
       curPosition = *cmdList;
 
-      WINE_TRACE("Processing cmdList(%p) - delim(%d) bd(%d / %d) processThese(%d)\n",
+      WINE_TRACE("Processing cmdList(%p) - delim(%d) bd(%d / %d)\n",
                  *cmdList,
                  (*cmdList)->prevDelim,
-                 (*cmdList)->bracketDepth,
-                 myDepth,
-                 processThese);
+                 (*cmdList)->bracketDepth, myDepth);
 
       /* Execute any statements appended to the line */
       /* FIXME: Only if previous call worked for && or failed for || */
@@ -1615,18 +1613,6 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
             if (*cmd) {
               WCMD_execute (cmd, (*cmdList)->redirects, cmdList, FALSE);
             }
-          } else {
-              /* Loop skipping all commands until we get back to the current
-                 depth, including skipping commands and their subsequent
-                 pipes (eg cmd | prog)                                       */
-              do {
-                *cmdList = (*cmdList)->nextcommand;
-              } while (*cmdList &&
-                      ((*cmdList)->bracketDepth > myDepth ||
-                      (*cmdList)->prevDelim));
-
-              /* After the else is complete, we need to now process subsequent commands */
-              processThese = TRUE;
           }
           if (curPosition == *cmdList) *cmdList = (*cmdList)->nextcommand;
         } else if (!processThese) {
@@ -1845,14 +1831,6 @@ static int WCMD_for_nexttoken(int lasttoken, WCHAR *tokenstr,
     int nextnumber1, nextnumber2 = -1;
     WCHAR *nextchar;
 
-    /* It is valid syntax tokens=* which just means get whole line */
-    if (*pos == '*') {
-      if (doall) *doall = TRUE;
-      if (totalfound) (*totalfound)++;
-      nexttoken = 0;
-      break;
-    }
-
     /* Get the next number */
     nextnumber1 = strtoulW(pos, &nextchar, 10);
 
@@ -1981,22 +1959,22 @@ static void WCMD_parse_line(CMD_LIST    *cmdStart,
    */
   lasttoken = -1;
   nexttoken = WCMD_for_nexttoken(lasttoken, forf_tokens, &totalfound,
-                                 &starfound, &thisduplicate);
+                                 NULL, &thisduplicate);
   varidx = FOR_VAR_IDX(variable);
 
   /* Empty out variables */
   for (varoffset=0;
-       varidx >= 0 && varoffset<totalfound && (((varidx%26) + varoffset) < 26);
+       varidx >= 0 && varoffset<totalfound && ((varidx+varoffset)%26);
        varoffset++) {
     forloopcontext.variable[varidx + varoffset] = (WCHAR *)nullW;
+    /* Stop if we walk beyond z or Z */
+    if (((varidx+varoffset) % 26) == 0) break;
   }
 
-  /* Loop extracting the tokens
-     Note: nexttoken of 0 means there were no tokens requested, to handle
-           the special case of tokens=*                                   */
+  /* Loop extracting the tokens */
   varoffset = 0;
   WINE_TRACE("Parsing buffer into tokens: '%s'\n", wine_dbgstr_w(buffer));
-  while (varidx >= 0 && (nexttoken > 0 && (nexttoken > lasttoken))) {
+  while (varidx >= 0 && (nexttoken > lasttoken)) {
     anyduplicates |= thisduplicate;
 
     /* Extract the token number requested and set into the next variable context */
@@ -2004,9 +1982,9 @@ static void WCMD_parse_line(CMD_LIST    *cmdStart,
     WINE_TRACE("Parsed token %d(%d) as parameter %s\n", nexttoken,
                varidx + varoffset, wine_dbgstr_w(parm));
     if (varidx >=0) {
-      if (parm) forloopcontext.variable[varidx + varoffset] = heap_strdupW(parm);
+      forloopcontext.variable[varidx + varoffset] = heap_strdupW(parm);
       varoffset++;
-      if (((varidx%26)+varoffset) >= 26) break;
+      if (((varidx + varoffset) %26) == 0) break;
     }
 
     /* Find the next token */
@@ -2017,12 +1995,12 @@ static void WCMD_parse_line(CMD_LIST    *cmdStart,
 
   /* If all the rest of the tokens were requested, and there is still space in
      the variable range, write them now                                        */
-  if (!anyduplicates && starfound && varidx >= 0 && (((varidx%26) + varoffset) < 26)) {
+  if (!anyduplicates && starfound && varidx >= 0 && ((varidx+varoffset) % 26)) {
     nexttoken++;
     WCMD_parameter_with_delims(buffer, (nexttoken-1), &parm, FALSE, FALSE, forf_delims);
     WINE_TRACE("Parsed allremaining tokens (%d) as parameter %s\n",
                varidx + varoffset, wine_dbgstr_w(parm));
-    if (parm) forloopcontext.variable[varidx + varoffset] = heap_strdupW(parm);
+    forloopcontext.variable[varidx + varoffset] = heap_strdupW(parm);
   }
 
   /* Execute the body of the foor loop with these values */
@@ -2283,25 +2261,19 @@ void WCMD_for (WCHAR *p, CMD_LIST **cmdList) {
            thisSet->bracketDepth >= thisDepth) {
 
       /* Loop through all entries on the same line */
-      WCHAR *staticitem;
+      WCHAR *item;
       WCHAR *itemStart;
       WCHAR buffer[MAXSTRING];
 
       WINE_TRACE("Processing for set %p\n", thisSet);
       i = 0;
-      while (*(staticitem = WCMD_parameter (thisSet->command, i, &itemStart, TRUE, FALSE))) {
+      while (*(item = WCMD_parameter (thisSet->command, i, &itemStart, TRUE, FALSE))) {
 
         /*
          * If the parameter within the set has a wildcard then search for matching files
          * otherwise do a literal substitution.
          */
         static const WCHAR wildcards[] = {'*','?','\0'};
-
-        /* Take a copy of the item returned from WCMD_parameter as it is held in a
-           static buffer which can be overwritten during parsing of the for body   */
-        WCHAR item[MAXSTRING];
-        strcpyW(item, staticitem);
-
         thisCmdStart = cmdStart;
 
         itemNum++;
@@ -2604,61 +2576,30 @@ void WCMD_goto (CMD_LIST **cmdList) {
     if (labelend) *labelend = 0x00;
     WINE_TRACE("goto label: '%s'\n", wine_dbgstr_w(paramStart));
 
-    /* Loop through potentially twice - once from current file position
-       through to the end, and second time from start to current file
-       position                                                         */
-    if (*paramStart) {
-        int loop;
-        LARGE_INTEGER startli;
-        for (loop=0; loop<2; loop++) {
-            if (loop==0) {
-              /* On first loop, save the file size */
-              startli.QuadPart = 0;
-              startli.u.LowPart = SetFilePointer(context -> h, startli.u.LowPart,
-                                                 &startli.u.HighPart, FILE_CURRENT);
-            } else {
-              /* On second loop, start at the beginning of the file */
-              WINE_TRACE("Label not found, trying from beginning of file\n");
-              if (loop==1) SetFilePointer (context -> h, 0, NULL, FILE_BEGIN);
-            }
+    SetFilePointer (context -> h, 0, NULL, FILE_BEGIN);
+    while (*paramStart &&
+           WCMD_fgets (string, sizeof(string)/sizeof(WCHAR), context -> h)) {
+      str = string;
 
-            while (WCMD_fgets (string, sizeof(string)/sizeof(WCHAR), context -> h)) {
-              str = string;
+      /* Ignore leading whitespace or no-echo character */
+      while (*str=='@' || isspaceW (*str)) str++;
 
-              /* Ignore leading whitespace or no-echo character */
-              while (*str=='@' || isspaceW (*str)) str++;
+      /* If the first real character is a : then this is a label */
+      if (*str == ':') {
+        str++;
 
-              /* If the first real character is a : then this is a label */
-              if (*str == ':') {
-                str++;
+        /* Skip spaces between : and label */
+        while (isspaceW (*str)) str++;
+        WINE_TRACE("str before brk %s\n", wine_dbgstr_w(str));
 
-                /* Skip spaces between : and label */
-                while (isspaceW (*str)) str++;
-                WINE_TRACE("str before brk %s\n", wine_dbgstr_w(str));
+        /* Label ends at whitespace or redirection characters */
+        labelend = strpbrkW(str, labelEndsW);
+        if (labelend) *labelend = 0x00;
+        WINE_TRACE("comparing found label %s\n", wine_dbgstr_w(str));
 
-                /* Label ends at whitespace or redirection characters */
-                labelend = strpbrkW(str, labelEndsW);
-                if (labelend) *labelend = 0x00;
-                WINE_TRACE("comparing found label %s\n", wine_dbgstr_w(str));
-
-                if (lstrcmpiW (str, paramStart) == 0) return;
-              }
-
-              /* See if we have gone beyond the end point if second time through */
-              if (loop==1) {
-                LARGE_INTEGER curli;
-                curli.QuadPart = 0;
-                curli.u.LowPart = SetFilePointer(context -> h, curli.u.LowPart,
-                                                &curli.u.HighPart, FILE_CURRENT);
-                if (curli.QuadPart > startli.QuadPart) {
-                  WINE_TRACE("Reached wrap point, label not found\n");
-                  break;
-                }
-              }
-            }
-        }
+        if (lstrcmpiW (str, paramStart) == 0) return;
+      }
     }
-
     WCMD_output_stderr(WCMD_LoadMessage(WCMD_NOTARGET));
     context -> skip_rest = TRUE;
   }
@@ -2863,11 +2804,8 @@ void WCMD_if (WCHAR *p, CMD_LIST **cmdList)
     WCMD_parameter(p, 2+negate, &command, FALSE, FALSE);
   }
   else if (!lstrcmpiW (condition, existW)) {
-    WIN32_FIND_DATAW fd;
-    HANDLE hff = FindFirstFileW(WCMD_parameter(p, 1+negate, NULL, FALSE, FALSE), &fd);
-    test = (hff != INVALID_HANDLE_VALUE );
-    if (test) FindClose(hff);
-
+    test = (GetFileAttributesW(WCMD_parameter(p, 1+negate, NULL, FALSE, FALSE))
+             != INVALID_FILE_ATTRIBUTES);
     WCMD_parameter(p, 2+negate, &command, FALSE, FALSE);
   }
   else if (!lstrcmpiW (condition, defdW)) {
@@ -4945,7 +4883,7 @@ void WCMD_assoc (const WCHAR *args, BOOL assoc) {
               LoadStringW(hinst, WCMD_NOFTYPE, msgbuffer,
                           sizeof(msgbuffer)/sizeof(WCHAR));
             }
-            WCMD_output_stderr(msgbuffer, args);
+            WCMD_output_stderr(msgbuffer, keyValue);
             errorlevel = 2;
           }
 

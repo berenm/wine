@@ -87,6 +87,10 @@ static const Format ULaw_Formats[] =
     {1,  8, 22050}, {2,	8, 22050},  {1,  8, 44100}, {2,	 8, 44100},
 };
 
+#define	NUM_PCM_FORMATS		(sizeof(PCM_Formats) / sizeof(PCM_Formats[0]))
+#define	NUM_ALAW_FORMATS	(sizeof(ALaw_Formats) / sizeof(ALaw_Formats[0]))
+#define	NUM_ULAW_FORMATS	(sizeof(ULaw_Formats) / sizeof(ULaw_Formats[0]))
+
 /***********************************************************************
  *           G711_GetFormatIndex
  */
@@ -98,15 +102,15 @@ static	DWORD	G711_GetFormatIndex(const WAVEFORMATEX *wfx)
     switch (wfx->wFormatTag)
     {
     case WAVE_FORMAT_PCM:
-	hi = ARRAY_SIZE(PCM_Formats);
+	hi = NUM_PCM_FORMATS;
 	fmts = PCM_Formats;
 	break;
     case WAVE_FORMAT_ALAW:
-	hi = ARRAY_SIZE(ALaw_Formats);
+	hi = NUM_ALAW_FORMATS;
 	fmts = ALaw_Formats;
 	break;
     case WAVE_FORMAT_MULAW:
-	hi = ARRAY_SIZE(ULaw_Formats);
+	hi = NUM_ULAW_FORMATS;
 	fmts = ULaw_Formats;
 	break;
     default:
@@ -712,19 +716,19 @@ static	LRESULT	G711_FormatTagDetails(PACMFORMATTAGDETAILSW aftd, DWORD dwQuery)
     case 0:
 	aftd->dwFormatTag = WAVE_FORMAT_PCM;
 	aftd->cbFormatSize = sizeof(PCMWAVEFORMAT);
-	aftd->cStandardFormats = ARRAY_SIZE(PCM_Formats);
+	aftd->cStandardFormats = NUM_PCM_FORMATS;
         lstrcpyW(aftd->szFormatTag, szPcm);
         break;
     case 1:
 	aftd->dwFormatTag = WAVE_FORMAT_ALAW;
 	aftd->cbFormatSize = sizeof(WAVEFORMATEX);
-	aftd->cStandardFormats = ARRAY_SIZE(ALaw_Formats);
+	aftd->cStandardFormats = NUM_ALAW_FORMATS;
         lstrcpyW(aftd->szFormatTag, szALaw);
 	break;
     case 2:
 	aftd->dwFormatTag = WAVE_FORMAT_MULAW;
 	aftd->cbFormatSize = sizeof(WAVEFORMATEX);
-	aftd->cStandardFormats = ARRAY_SIZE(ULaw_Formats);
+	aftd->cStandardFormats = NUM_ULAW_FORMATS;
         lstrcpyW(aftd->szFormatTag, szULaw);
 	break;
     }
@@ -747,7 +751,7 @@ static	LRESULT	G711_FormatDetails(PACMFORMATDETAILSW afd, DWORD dwQuery)
 	switch (afd->dwFormatTag)
         {
 	case WAVE_FORMAT_PCM:
-	    if (afd->dwFormatIndex >= ARRAY_SIZE(PCM_Formats)) return ACMERR_NOTPOSSIBLE;
+	    if (afd->dwFormatIndex >= NUM_PCM_FORMATS) return ACMERR_NOTPOSSIBLE;
 	    afd->pwfx->nChannels = PCM_Formats[afd->dwFormatIndex].nChannels;
 	    afd->pwfx->nSamplesPerSec = PCM_Formats[afd->dwFormatIndex].rate;
 	    afd->pwfx->wBitsPerSample = PCM_Formats[afd->dwFormatIndex].nBits;
@@ -755,7 +759,7 @@ static	LRESULT	G711_FormatDetails(PACMFORMATDETAILSW afd, DWORD dwQuery)
 	    afd->pwfx->nAvgBytesPerSec = afd->pwfx->nSamplesPerSec * afd->pwfx->nBlockAlign;
 	    break;
 	case WAVE_FORMAT_ALAW:
-	    if (afd->dwFormatIndex >= ARRAY_SIZE(ALaw_Formats)) return ACMERR_NOTPOSSIBLE;
+	    if (afd->dwFormatIndex >= NUM_ALAW_FORMATS) return ACMERR_NOTPOSSIBLE;
 	    afd->pwfx->nChannels = ALaw_Formats[afd->dwFormatIndex].nChannels;
 	    afd->pwfx->nSamplesPerSec = ALaw_Formats[afd->dwFormatIndex].rate;
 	    afd->pwfx->wBitsPerSample = ALaw_Formats[afd->dwFormatIndex].nBits;
@@ -764,7 +768,7 @@ static	LRESULT	G711_FormatDetails(PACMFORMATDETAILSW afd, DWORD dwQuery)
             afd->pwfx->cbSize = 0;
 	    break;
 	case WAVE_FORMAT_MULAW:
-	    if (afd->dwFormatIndex >= ARRAY_SIZE(ULaw_Formats)) return ACMERR_NOTPOSSIBLE;
+	    if (afd->dwFormatIndex >= NUM_ULAW_FORMATS) return ACMERR_NOTPOSSIBLE;
 	    afd->pwfx->nChannels = ULaw_Formats[afd->dwFormatIndex].nChannels;
 	    afd->pwfx->nSamplesPerSec = ULaw_Formats[afd->dwFormatIndex].rate;
 	    afd->pwfx->wBitsPerSample = ULaw_Formats[afd->dwFormatIndex].nBits;

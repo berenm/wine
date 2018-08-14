@@ -89,12 +89,12 @@ static void test_enumdisplaydevices(void)
     }
 
     dd.cb = sizeof(dd);
-    for (num = 0;; num++)
+    while(1)
     {
+        BOOL ret;
         HDC dc;
         ret = pEnumDisplayDevicesA(NULL, num, &dd, 0);
         if(!ret) break;
-
         if(dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)
         {
             strcpy(primary_device_name, dd.DeviceName);
@@ -107,6 +107,7 @@ static void test_enumdisplaydevices(void)
             ok(dc != NULL, "Failed to CreateDC(\"%s\") err=%d\n", dd.DeviceName, GetLastError());
             DeleteDC(dc);
         }
+        num++;
     }
 
     if (primary_num == -1 || !pEnumDisplayMonitors || !pGetMonitorInfoA)
@@ -121,17 +122,6 @@ static void test_enumdisplaydevices(void)
     ok(!strcmp(primary_monitor_device_name, primary_device_name),
        "monitor device name %s, device name %s\n", primary_monitor_device_name,
        primary_device_name);
-
-    dd.cb = sizeof(dd);
-    for (num = 0;; num++)
-    {
-        ret = pEnumDisplayDevicesA(primary_device_name, num, &dd, 0);
-        if (!ret) break;
-
-        dd.DeviceID[63] = 0;
-        ok(!strcasecmp(dd.DeviceID, "Monitor\\Default_Monitor\\{4D36E96E-E325-11CE-BFC1-08002BE10318}\\"),
-           "DeviceID \"%s\" does not start with \"Monitor\\Default_Monitor\\...\" prefix\n", dd.DeviceID);
-    }
 }
 
 struct vid_mode
@@ -160,6 +150,7 @@ static const struct vid_mode vid_modes_test[] = {
     {0, 0, 0, 0, DM_DISPLAYFREQUENCY, 0}
     */
 };
+#define vid_modes_cnt (sizeof(vid_modes_test) / sizeof(vid_modes_test[0]))
 
 static void test_ChangeDisplaySettingsEx(void)
 {
@@ -246,7 +237,7 @@ static void test_ChangeDisplaySettingsEx(void)
     memset(&dm, 0, sizeof(dm));
     dm.dmSize = sizeof(dm);
 
-    for (i = 0; i < ARRAY_SIZE(vid_modes_test); i++)
+    for (i = 0; i < vid_modes_cnt; i++)
     {
         dm.dmPelsWidth        = vid_modes_test[i].w;
         dm.dmPelsHeight       = vid_modes_test[i].h;
@@ -408,7 +399,7 @@ static void test_monitors(void)
 
     /* tests for cbSize in MONITORINFO */
     monitor = pMonitorFromWindow( 0, MONITOR_DEFAULTTOPRIMARY );
-    for (i = 0; i < ARRAY_SIZE(testdatami); i++)
+    for (i = 0; i < (sizeof(testdatami) / sizeof(testdatami[0])); i++)
     {
         memset( &mi, 0, sizeof(mi) );
         mi.cbSize = testdatami[i].cbSize;
@@ -430,7 +421,7 @@ static void test_monitors(void)
     }
 
     /* tests for cbSize in MONITORINFOEXA */
-    for (i = 0; i < ARRAY_SIZE(testdatamiexa); i++)
+    for (i = 0; i < (sizeof(testdatamiexa) / sizeof(testdatamiexa[0])); i++)
     {
         memset( &miexa, 0, sizeof(miexa) );
         miexa.cbSize = testdatamiexa[i].cbSize;
@@ -443,7 +434,7 @@ static void test_monitors(void)
     }
 
     /* tests for cbSize in MONITORINFOEXW */
-    for (i = 0; i < ARRAY_SIZE(testdatamiexw); i++)
+    for (i = 0; i < (sizeof(testdatamiexw) / sizeof(testdatamiexw[0])); i++)
     {
         memset( &miexw, 0, sizeof(miexw) );
         miexw.cbSize = testdatamiexw[i].cbSize;

@@ -282,7 +282,7 @@ HRESULT GetClassMediaFile(IAsyncReader * pReader, LPCOLESTR pszFileName, GUID * 
         {
             HKEY hkeyMajor;
             WCHAR wszMajorKeyName[CHARS_IN_GUID];
-            DWORD dwKeyNameLength = ARRAY_SIZE(wszMajorKeyName);
+            DWORD dwKeyNameLength = sizeof(wszMajorKeyName) / sizeof(wszMajorKeyName[0]);
             static const WCHAR wszExtensions[] = {'E','x','t','e','n','s','i','o','n','s',0};
 
             if (RegEnumKeyExW(hkeyMediaType, indexMajor, wszMajorKeyName, &dwKeyNameLength, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
@@ -304,7 +304,7 @@ HRESULT GetClassMediaFile(IAsyncReader * pReader, LPCOLESTR pszFileName, GUID * 
                 {
                     HKEY hkeyMinor;
                     WCHAR wszMinorKeyName[CHARS_IN_GUID];
-                    DWORD dwMinorKeyNameLen = ARRAY_SIZE(wszMinorKeyName);
+                    DWORD dwMinorKeyNameLen = sizeof(wszMinorKeyName) / sizeof(wszMinorKeyName[0]);
                     WCHAR wszSourceFilterKeyName[CHARS_IN_GUID];
                     DWORD dwSourceFilterKeyNameLen = sizeof(wszSourceFilterKeyName);
                     DWORD maxValueLen;
@@ -326,7 +326,7 @@ HRESULT GetClassMediaFile(IAsyncReader * pReader, LPCOLESTR pszFileName, GUID * 
                         DWORD dwType;
                         WCHAR wszValueName[14]; /* longest name we should encounter will be "Source Filter" */
                         LPWSTR wszPatternString = HeapAlloc(GetProcessHeap(), 0, maxValueLen);
-                        DWORD dwValueNameLen = ARRAY_SIZE(wszValueName);
+                        DWORD dwValueNameLen = sizeof(wszValueName) / sizeof(wszValueName[0]); /* remember this is in chars */
                         DWORD dwDataLen = maxValueLen; /* remember this is in bytes */
 
                         if (RegEnumValueW(hkeyMinor, indexValue, wszValueName, &dwValueNameLen, NULL, &dwType, (LPBYTE)wszPatternString, &dwDataLen) != ERROR_SUCCESS)
@@ -547,6 +547,27 @@ static HRESULT WINAPI AsyncReader_Run(IBaseFilter * iface, REFERENCE_TIME tStart
     return S_OK;
 }
 
+/** IBaseFilter methods **/
+
+static HRESULT WINAPI AsyncReader_FindPin(IBaseFilter * iface, LPCWSTR Id, IPin **ppPin)
+{
+    AsyncReader *This = impl_from_IBaseFilter(iface);
+    TRACE("%p->(%s, %p)\n", This, debugstr_w(Id), ppPin);
+
+    if (!Id || !ppPin)
+        return E_POINTER;
+
+    if (strcmpW(Id, wszOutputPinName))
+    {
+        *ppPin = NULL;
+        return VFW_E_NOT_FOUND;
+    }
+
+    *ppPin = This->pOutputPin;
+    IPin_AddRef(*ppPin);
+    return S_OK;
+}
+
 static const IBaseFilterVtbl AsyncReader_Vtbl =
 {
     AsyncReader_QueryInterface,
@@ -560,7 +581,7 @@ static const IBaseFilterVtbl AsyncReader_Vtbl =
     BaseFilterImpl_SetSyncSource,
     BaseFilterImpl_GetSyncSource,
     BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
+    AsyncReader_FindPin,
     BaseFilterImpl_QueryFilterInfo,
     BaseFilterImpl_JoinFilterGraph,
     BaseFilterImpl_QueryVendorInfo

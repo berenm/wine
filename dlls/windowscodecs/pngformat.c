@@ -622,7 +622,7 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
         ppng_destroy_read_struct(&This->png_ptr, &This->info_ptr, &This->end_info);
         HeapFree(GetProcessHeap(), 0, row_pointers);
         This->png_ptr = NULL;
-        hr = WINCODEC_ERR_UNKNOWNIMAGEFORMAT;
+        hr = E_FAIL;
         goto end;
     }
     ppng_set_error_fn(This->png_ptr, jmpbuf, user_error_fn, user_warning_fn);
@@ -842,14 +842,10 @@ static HRESULT WINAPI PngDecoder_CopyPalette(IWICBitmapDecoder *iface,
 }
 
 static HRESULT WINAPI PngDecoder_GetMetadataQueryReader(IWICBitmapDecoder *iface,
-    IWICMetadataQueryReader **reader)
+    IWICMetadataQueryReader **ppIMetadataQueryReader)
 {
-    FIXME("(%p,%p): stub\n", iface, reader);
-
-    if (!reader) return E_INVALIDARG;
-
-    *reader = NULL;
-    return WINCODEC_ERR_UNSUPPORTEDOPERATION;
+    FIXME("(%p,%p): stub\n", iface, ppIMetadataQueryReader);
+    return E_NOTIMPL;
 }
 
 static HRESULT WINAPI PngDecoder_GetPreview(IWICBitmapDecoder *iface,
@@ -1445,7 +1441,7 @@ static HRESULT WINAPI PngFrameEncode_Initialize(IWICBitmapFrameEncode *iface,
 
     if (pIEncoderOptions)
     {
-        hr = IPropertyBag2_Read(pIEncoderOptions, ARRAY_SIZE(opts), opts, NULL, opt_values, opt_hres);
+        hr = IPropertyBag2_Read(pIEncoderOptions, sizeof(opts)/sizeof(opts[0]), opts, NULL, opt_values, opt_hres);
 
         if (FAILED(hr))
             return hr;
@@ -1979,22 +1975,11 @@ static HRESULT WINAPI PngEncoder_GetContainerFormat(IWICBitmapEncoder *iface,
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI PngEncoder_GetEncoderInfo(IWICBitmapEncoder *iface, IWICBitmapEncoderInfo **info)
+static HRESULT WINAPI PngEncoder_GetEncoderInfo(IWICBitmapEncoder *iface,
+    IWICBitmapEncoderInfo **ppIEncoderInfo)
 {
-    IWICComponentInfo *comp_info;
-    HRESULT hr;
-
-    TRACE("%p,%p\n", iface, info);
-
-    if (!info) return E_INVALIDARG;
-
-    hr = CreateComponentInfo(&CLSID_WICPngEncoder, &comp_info);
-    if (hr == S_OK)
-    {
-        hr = IWICComponentInfo_QueryInterface(comp_info, &IID_IWICBitmapEncoderInfo, (void **)info);
-        IWICComponentInfo_Release(comp_info);
-    }
-    return hr;
+    FIXME("(%p,%p): stub\n", iface, ppIEncoderInfo);
+    return E_NOTIMPL;
 }
 
 static HRESULT WINAPI PngEncoder_SetColorContexts(IWICBitmapEncoder *iface,
@@ -2061,7 +2046,7 @@ static HRESULT WINAPI PngEncoder_CreateNewFrame(IWICBitmapEncoder *iface,
 
     if (ppIEncoderOptions)
     {
-        hr = CreatePropertyBag2(opts, ARRAY_SIZE(opts), ppIEncoderOptions);
+        hr = CreatePropertyBag2(opts, sizeof(opts)/sizeof(opts[0]), ppIEncoderOptions);
         if (FAILED(hr))
         {
             LeaveCriticalSection(&This->lock);

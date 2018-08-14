@@ -402,7 +402,7 @@ static BOOL delete_header( request_t *request, DWORD index )
     return TRUE;
 }
 
-BOOL process_header( request_t *request, LPCWSTR field, LPCWSTR value, DWORD flags, BOOL request_only )
+static BOOL process_header( request_t *request, LPCWSTR field, LPCWSTR value, DWORD flags, BOOL request_only )
 {
     int index;
     header_t hdr;
@@ -851,6 +851,8 @@ BOOL WINAPI WinHttpQueryHeaders( HINTERNET hrequest, DWORD level, LPCWSTR name, 
 }
 
 
+#define ARRAYSIZE(array) (sizeof(array) / sizeof((array)[0]))
+
 static const WCHAR basicW[]     = {'B','a','s','i','c',0};
 static const WCHAR ntlmW[]      = {'N','T','L','M',0};
 static const WCHAR passportW[]  = {'P','a','s','s','p','o','r','t',0};
@@ -865,11 +867,11 @@ static const struct
 }
 auth_schemes[] =
 {
-    { basicW,     ARRAY_SIZE(basicW) - 1,     WINHTTP_AUTH_SCHEME_BASIC },
-    { ntlmW,      ARRAY_SIZE(ntlmW) - 1,      WINHTTP_AUTH_SCHEME_NTLM },
-    { passportW,  ARRAY_SIZE(passportW) - 1,  WINHTTP_AUTH_SCHEME_PASSPORT },
-    { digestW,    ARRAY_SIZE(digestW) - 1,    WINHTTP_AUTH_SCHEME_DIGEST },
-    { negotiateW, ARRAY_SIZE(negotiateW) - 1, WINHTTP_AUTH_SCHEME_NEGOTIATE }
+    { basicW,     ARRAYSIZE(basicW) - 1,     WINHTTP_AUTH_SCHEME_BASIC },
+    { ntlmW,      ARRAYSIZE(ntlmW) - 1,      WINHTTP_AUTH_SCHEME_NTLM },
+    { passportW,  ARRAYSIZE(passportW) - 1,  WINHTTP_AUTH_SCHEME_PASSPORT },
+    { digestW,    ARRAYSIZE(digestW) - 1,    WINHTTP_AUTH_SCHEME_DIGEST },
+    { negotiateW, ARRAYSIZE(negotiateW) - 1, WINHTTP_AUTH_SCHEME_NEGOTIATE }
 };
 static const unsigned int num_auth_schemes = sizeof(auth_schemes)/sizeof(auth_schemes[0]);
 
@@ -2080,11 +2082,16 @@ static BOOL send_request( request_t *request, LPCWSTR headers, DWORD headers_len
     WCHAR *req = NULL;
     char *req_ascii;
     int bytes_sent;
-    DWORD len;
+    DWORD len, i, flags;
 
     clear_response_headers( request );
     drain_content( request );
 
+    flags = WINHTTP_ADDREQ_FLAG_ADD|WINHTTP_ADDREQ_FLAG_COALESCE_WITH_COMMA;
+    for (i = 0; i < request->num_accept_types; i++)
+    {
+        process_header( request, attr_accept, request->accept_types[i], flags, TRUE );
+    }
     if (session->agent)
         process_header( request, attr_user_agent, session->agent, WINHTTP_ADDREQ_FLAG_ADD_IF_NEW, TRUE );
 

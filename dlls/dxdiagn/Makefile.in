@@ -1,5 +1,5 @@
 MODULE    = dxdiagn.dll
-IMPORTS   = strmiids dxguid uuid d3d9 ddraw version ole32 oleaut32 user32 advapi32 dsound psapi
+IMPORTS   = strmiids dxguid uuid d3d9 ddraw version ole32 oleaut32 user32 advapi32
 
 C_SRCS = \
 	container.c \
@@ -9,4 +9,5 @@ C_SRCS = \
 RC_SRCS = dxdiagn.rc
 
 IDL_SRCS = \
-	dxdiagn.idl
+	dxdiagn.idl \
+	fil_data.idl

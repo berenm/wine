@@ -1727,7 +1727,13 @@ void wined3d_texture_prepare_texture(struct wined3d_texture *texture, struct win
     if (texture->flags & alloc_flag)
         return;
 
-    if (format->conv_byte_count)
+    if (texture->resource.format_flags & WINED3DFMT_FLAG_DECOMPRESS)
+    {
+        TRACE("WINED3DFMT_FLAG_DECOMPRESS set.\n");
+        texture->flags |= WINED3D_TEXTURE_CONVERTED;
+        format = wined3d_resource_get_decompress_format(&texture->resource, context);
+    }
+    else if (format->conv_byte_count)
     {
         texture->flags |= WINED3D_TEXTURE_CONVERTED;
     }
@@ -1874,7 +1880,7 @@ HRESULT CDECL wined3d_texture_add_dirty_region(struct wined3d_texture *texture,
     }
 
     if (dirty_region)
-        WARN("Ignoring dirty_region %s.\n", debug_box(dirty_region));
+        FIXME("Ignoring dirty_region %s.\n", debug_box(dirty_region));
 
     wined3d_cs_emit_add_dirty_texture_region(texture->resource.device->cs, texture, layer);
 
@@ -1897,6 +1903,7 @@ void wined3d_texture_upload_data(struct wined3d_texture *texture, unsigned int s
     void *converted_mem = NULL;
     struct wined3d_format f;
     unsigned int level;
+    BOOL decompress;
     GLenum target;
 
     TRACE("texture %p, sub_resource_idx %u, context %p, format %s, src_box %s, data {%#x:%p}, "
@@ -1948,17 +1955,26 @@ void wined3d_texture_upload_data(struct wined3d_texture *texture, unsigned int s
         bo.addr += src_box->left * format->byte_count;
     }
 
-    if (format->upload)
+    decompress = texture->resource.format_flags & WINED3DFMT_FLAG_DECOMPRESS;
+    if (format->upload || decompress)
     {
+        const struct wined3d_format *compressed_format = format;
         unsigned int dst_row_pitch, dst_slice_pitch;
         void *src_mem;
 
-        if (texture->resource.format_flags & WINED3DFMT_FLAG_BLOCKS)
-            ERR("Converting a block-based format.\n");
+        if (decompress)
+        {
+            format = wined3d_resource_get_decompress_format(&texture->resource, context);
+        }
+        else
+        {
+            if (texture->resource.format_flags & WINED3DFMT_FLAG_BLOCKS)
+                ERR("Converting a block-based format.\n");
 
-        f = *format;
-        f.byte_count = format->conv_byte_count;
-        format = &f;
+            f = *format;
+            f.byte_count = format->conv_byte_count;
+            format = &f;
+        }
 
         wined3d_format_calculate_pitch(format, 1, update_w, update_h, &dst_row_pitch, &dst_slice_pitch);
 
@@ -1970,8 +1986,12 @@ void wined3d_texture_upload_data(struct wined3d_texture *texture, unsigned int s
 
         src_mem = context_map_bo_address(context, &bo, src_slice_pitch,
                 GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ);
-        format->upload(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
-                dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
+        if (decompress)
+            compressed_format->decompress(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
+                    dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
+        else
+            format->upload(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
+                    dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
         context_unmap_bo_address(context, &bo, GL_PIXEL_UNPACK_BUFFER);
 
         bo.buffer_object = 0;
@@ -2222,12 +2242,6 @@ static void wined3d_texture_unload(struct wined3d_resource *resource)
 static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags)
 {
-    return E_NOTIMPL;
-}
-
-static HRESULT texture_resource_sub_resource_map_cs(struct wined3d_resource *resource, unsigned int sub_resource_idx,
-        struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags)
-{
     const struct wined3d_format *format = resource->format;
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
@@ -2356,42 +2370,7 @@ static HRESULT texture_resource_sub_resource_map_cs(struct wined3d_resource *res
     return WINED3D_OK;
 }
 
-static HRESULT texture_resource_sub_resource_map_info(struct wined3d_resource *resource, unsigned int sub_resource_idx,
-        struct wined3d_map_info *info, DWORD flags)
-{
-    const struct wined3d_format *format = resource->format;
-    struct wined3d_texture_sub_resource *sub_resource;
-    unsigned int fmt_flags = resource->format_flags;
-    struct wined3d_texture *texture;
-    unsigned int texture_level;
-
-    texture = texture_from_resource(resource);
-    if (!(sub_resource = wined3d_texture_get_sub_resource(texture, sub_resource_idx)))
-        return E_INVALIDARG;
-
-    texture_level = sub_resource_idx % texture->level_count;
-
-    if (fmt_flags & WINED3DFMT_FLAG_BROKEN_PITCH)
-    {
-        info->row_pitch = wined3d_texture_get_level_width(texture, texture_level) * format->byte_count;
-        info->slice_pitch = wined3d_texture_get_level_height(texture, texture_level) * info->row_pitch;
-    }
-    else
-    {
-        wined3d_texture_get_pitch(texture, texture_level, &info->row_pitch, &info->slice_pitch);
-    }
-
-    info->size = info->slice_pitch * wined3d_texture_get_level_depth(texture, texture_level);
-
-    return WINED3D_OK;
-}
-
 static HRESULT texture_resource_sub_resource_unmap(struct wined3d_resource *resource, unsigned int sub_resource_idx)
-{
-    return E_NOTIMPL;
-}
-
-static HRESULT texture_resource_sub_resource_unmap_cs(struct wined3d_resource *resource, unsigned int sub_resource_idx)
 {
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
@@ -2442,10 +2421,7 @@ static const struct wined3d_resource_ops texture_resource_ops =
     texture_resource_preload,
     wined3d_texture_unload,
     texture_resource_sub_resource_map,
-    texture_resource_sub_resource_map_info,
     texture_resource_sub_resource_unmap,
-    texture_resource_sub_resource_map_cs,
-    texture_resource_sub_resource_unmap_cs,
 };
 
 /* Context activation is done by the caller. */
@@ -3138,12 +3114,6 @@ HRESULT CDECL wined3d_texture_blt(struct wined3d_texture *dst_texture, unsigned 
             != (dst_format_flags & (WINED3DFMT_FLAG_DEPTH | WINED3DFMT_FLAG_STENCIL)))
     {
         WARN("Rejecting depth/stencil blit between incompatible formats.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-
-    if (dst_texture->resource.device != src_texture->resource.device)
-    {
-        ERR("Rejecting blit.\n");
         return WINED3DERR_INVALIDCALL;
     }
 

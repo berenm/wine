@@ -37,9 +37,11 @@
 #include "mmddk.h"
 
 #include "initguid.h"
-#include "wine/fil_data.h"
+#include "fil_data.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(devenum);
+
+extern HINSTANCE DEVENUM_hInstance;
 
 static const WCHAR wszFilterKeyName[] = {'F','i','l','t','e','r',0};
 static const WCHAR wszMeritName[] = {'M','e','r','i','t',0};
@@ -422,7 +424,6 @@ static void register_legacy_filters(void)
             TRACE("Registering %s\n", debugstr_w(wszFilterSubkeyName));
 
             strcpyW(wszRegKey, clsidW);
-            strcatW(wszRegKey, backslashW);
             strcatW(wszRegKey, wszFilterSubkeyName);
 
             if (RegOpenKeyExW(HKEY_CLASSES_ROOT, wszRegKey, 0, KEY_READ, &classkey) != ERROR_SUCCESS)
@@ -459,7 +460,7 @@ static void register_legacy_filters(void)
             V_VT(&var) = VT_BSTR;
             if (!(V_BSTR(&var) = SysAllocString(wszFilterSubkeyName)))
                 goto cleanup;
-            hr = IPropertyBag_Write(prop_bag, clsidW, &var);
+            hr = IPropertyBag_Write(prop_bag, clsid_keyname, &var);
             if (FAILED(hr)) goto cleanup;
             VariantClear(&var);
 
@@ -536,7 +537,7 @@ static BOOL CALLBACK register_dsound_devices(GUID *guid, const WCHAR *desc, cons
     StringFromGUID2(&CLSID_DSoundRender, clsid, CHARS_IN_GUID);
     if (!(V_BSTR(&var) = SysAllocString(clsid)))
         goto cleanup;
-    hr = IPropertyBag_Write(prop_bag, clsidW, &var);
+    hr = IPropertyBag_Write(prop_bag, clsid_keyname, &var);
     if (FAILED(hr)) goto cleanup;
     VariantClear(&var);
 
@@ -619,7 +620,7 @@ static void register_waveout_devices(void)
         StringFromGUID2(&CLSID_AudioRender, clsid, CHARS_IN_GUID);
         if (!(V_BSTR(&var) = SysAllocString(clsid)))
             goto cleanup;
-        hr = IPropertyBag_Write(prop_bag, clsidW, &var);
+        hr = IPropertyBag_Write(prop_bag, clsid_keyname, &var);
         if (FAILED(hr)) goto cleanup;
         VariantClear(&var);
 
@@ -692,7 +693,7 @@ static void register_wavein_devices(void)
         StringFromGUID2(&CLSID_AudioRecord, clsid, CHARS_IN_GUID);
         if (!(V_BSTR(&var) = SysAllocString(clsid)))
             goto cleanup;
-        hr = IPropertyBag_Write(prop_bag, clsidW, &var);
+        hr = IPropertyBag_Write(prop_bag, clsid_keyname, &var);
         if (FAILED(hr)) goto cleanup;
         VariantClear(&var);
 
@@ -764,7 +765,7 @@ static void register_midiout_devices(void)
         StringFromGUID2(&CLSID_AVIMIDIRender, clsid, CHARS_IN_GUID);
         if (!(V_BSTR(&var) = SysAllocString(clsid)))
             goto cleanup;
-        hr = IPropertyBag_Write(prop_bag, clsidW, &var);
+        hr = IPropertyBag_Write(prop_bag, clsid_keyname, &var);
         if (FAILED(hr)) goto cleanup;
         VariantClear(&var);
 
@@ -853,7 +854,7 @@ static void register_vfw_codecs(void)
         StringFromGUID2(&CLSID_AVICo, clsid, CHARS_IN_GUID);
         if (!(V_BSTR(&var) = SysAllocString(clsid)))
             goto cleanup;
-        hr = IPropertyBag_Write(prop_bag, clsidW, &var);
+        hr = IPropertyBag_Write(prop_bag, clsid_keyname, &var);
         if (FAILED(hr)) goto cleanup;
         VariantClear(&var);
 

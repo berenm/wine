@@ -1208,7 +1208,7 @@ BITMAPINFO *copy_packed_dib( const BITMAPINFO *src_info, UINT usage )
  *    Success: Number of scan lines copied from bitmap
  *    Failure: 0
  */
-INT WINAPI DECLSPEC_HOTPATCH GetDIBits(
+INT WINAPI GetDIBits(
     HDC hdc,         /* [in]  Handle to device context */
     HBITMAP hbitmap, /* [in]  Handle to bitmap */
     UINT startscan,  /* [in]  First scan line to set in dest bitmap */

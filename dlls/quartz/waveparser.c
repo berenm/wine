@@ -254,8 +254,8 @@ static HRESULT WAVEParser_InputPin_PreConnect(IPin * iface, IPin * pConnectPin, 
 
     piOutput.dir = PINDIR_OUTPUT;
     piOutput.pFilter = &pWAVEParser->Parser.filter.IBaseFilter_iface;
-    lstrcpynW(piOutput.achName, wcsOutputPinName, ARRAY_SIZE(piOutput.achName));
-
+    lstrcpynW(piOutput.achName, wcsOutputPinName, sizeof(piOutput.achName) / sizeof(piOutput.achName[0]));
+    
     hr = IAsyncReader_SyncRead(This->pReader, pos, sizeof(list), (BYTE *)&list);
     pos += sizeof(list);
 
@@ -410,7 +410,7 @@ static const IBaseFilterVtbl WAVEParser_Vtbl =
     Parser_SetSyncSource,
     Parser_GetSyncSource,
     Parser_EnumPins,
-    BaseFilterImpl_FindPin,
+    Parser_FindPin,
     Parser_QueryFilterInfo,
     Parser_JoinFilterGraph,
     Parser_QueryVendorInfo

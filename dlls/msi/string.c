@@ -233,7 +233,7 @@ static void set_st_entry( string_table *st, UINT n, WCHAR *str, int len, USHORT 
 
 static UINT string2id( const string_table *st, const char *buffer, UINT *id )
 {
-    int sz;
+    DWORD sz;
     UINT r = ERROR_INVALID_PARAMETER;
     LPWSTR str;
 
@@ -245,7 +245,8 @@ static UINT string2id( const string_table *st, const char *buffer, UINT *id )
         return ERROR_SUCCESS;
     }
 
-    if (!(sz = MultiByteToWideChar( st->codepage, 0, buffer, -1, NULL, 0 )))
+    sz = MultiByteToWideChar( st->codepage, 0, buffer, -1, NULL, 0 );
+    if( sz <= 0 )
         return r;
     str = msi_alloc( sz*sizeof(WCHAR) );
     if( !str )

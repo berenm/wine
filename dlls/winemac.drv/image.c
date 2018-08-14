@@ -85,7 +85,7 @@ CGImageRef create_cgimage_from_icon_bitmaps(HDC hdc, HANDLE icon, HBITMAP hbmCol
     else
         alpha_format = kCGImageAlphaNoneSkipFirst;
 
-    colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    colorspace = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
     if (!colorspace)
     {
         WARN("failed to create colorspace\n");

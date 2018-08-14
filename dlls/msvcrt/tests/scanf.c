@@ -282,17 +282,10 @@ static void test_sscanf_s(void)
     ok(ret == 0, "Wrong number of arguments read: %d\n", ret);
     ok(buf[0]=='\0', "buf = %s\n", buf);
 
-    memset(buf, 'a', sizeof(buf));
+    buf[0] = 'a';
     ret = psscanf_s("123", "%3c", buf, 2);
     ok(ret == 0, "Wrong number of arguments read: %d\n", ret);
     ok(buf[0]=='\0', "buf = %s\n", buf);
-    ok(buf[1]=='2', "buf[1] = %d\n", buf[1]);
-    ok(buf[2]=='a', "buf[2] = %d\n", buf[2]);
-
-    buf[3] = 'a';
-    buf[4] = 0;
-    ret = psscanf_s("123", "%3c", buf, 3);
-    ok(!strcmp("123a", buf), "buf = %s\n", buf);
 
     i = 1;
     ret = psscanf_s("123 123", "%s %d", buf, 2, &i);

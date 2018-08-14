@@ -768,7 +768,7 @@ static DWORD CALLBACK device_report_thread(void *args)
         else if (size == 0)
             TRACE_(hid_report)("Failed to read report\n");
         else
-            process_hid_report(device, report_buffer, size, TRUE);
+            process_hid_report(device, report_buffer, size);
     }
     return 0;
 }
@@ -979,7 +979,7 @@ static DWORD CALLBACK lnxev_device_report_thread(void *args)
         else if (size == 0)
             TRACE_(hid_report)("Failed to read report\n");
         else if (set_report_from_event(private, &ie))
-            process_hid_report(device, private->current_report_buffer, private->buffer_length, TRUE);
+            process_hid_report(device, private->current_report_buffer, private->buffer_length);
     }
     return 0;
 }

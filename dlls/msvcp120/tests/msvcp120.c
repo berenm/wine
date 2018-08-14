@@ -124,8 +124,6 @@ static void * (WINAPI *call_thiscall_func5)( void *func, void *this, const void 
         const void *b, const void *c, const void *d );
 static void * (WINAPI *call_thiscall_func6)( void *func, void *this, const void *a,
         const void *b, const void *c, const void *d, const void *e );
-static void * (WINAPI *call_thiscall_func7)( void *func, void *this, const void *a,
-        const void *b, const void *c, const void *d, const void *e, const void *f );
 
 static void init_thiscall_thunk(void)
 {
@@ -142,7 +140,6 @@ static void init_thiscall_thunk(void)
     call_thiscall_func4 = (void *)thunk;
     call_thiscall_func5 = (void *)thunk;
     call_thiscall_func6 = (void *)thunk;
-    call_thiscall_func7 = (void *)thunk;
 }
 
 #define call_func1(func,_this) call_thiscall_func1(func,_this)
@@ -155,8 +152,6 @@ static void init_thiscall_thunk(void)
         (const void*)(b),(const void*)(c),(const void*)(d))
 #define call_func6(func,_this,a,b,c,d,e) call_thiscall_func6(func,_this,(const void*)(a),\
         (const void*)(b),(const void*)(c),(const void*)(d),(const void*)(e))
-#define call_func7(func,_this,a,b,c,d,e,f) call_thiscall_func7(func,_this,(const void*)(a),\
-        (const void*)(b),(const void*)(c),(const void*)(d),(const void*)(e),(const void*)(f))
 #else
 
 #define init_thiscall_thunk()
@@ -166,7 +161,6 @@ static void init_thiscall_thunk(void)
 #define call_func4(func,_this,a,b,c) func(_this,a,b,c)
 #define call_func5(func,_this,a,b,c,d) func(_this,a,b,c,d)
 #define call_func6(func,_this,a,b,c,d,e) func(_this,a,b,c,d,e)
-#define call_func7(func,_this,a,b,c,d,e,f) func(_this,a,b,c,d,e,f)
 #endif /* __i386__ */
 
 static inline float __port_infinity(void)
@@ -424,15 +418,6 @@ static void (__thiscall *p_vector_base_v4__Internal_swap)(
 static void* (__thiscall *p_vector_base_v4__Internal_compact)(
         vector_base_v4*, size_t, void*, void (__cdecl*)(void*, size_t),
         void (__cdecl*)(void*, const void*, size_t));
-static size_t (__thiscall *p_vector_base_v4__Internal_grow_by)(
-        vector_base_v4*, size_t, size_t, void (__cdecl*)(void*, const void*, size_t), const void *);
-static size_t (__thiscall *p_vector_base_v4__Internal_grow_to_at_least_with_result)(
-        vector_base_v4*, size_t, size_t, void (__cdecl*)(void*, const void*, size_t), const void *);
-static void (__thiscall *p_vector_base_v4__Internal_reserve)(
-        vector_base_v4*, size_t, size_t, size_t);
-static void (__thiscall *p_vector_base_v4__Internal_resize)(
-        vector_base_v4*, size_t, size_t, size_t, void (__cdecl*)(void*, size_t),
-        void (__cdecl *copy)(void*, const void*, size_t), const void*);
 
 static HMODULE msvcp;
 #define SETNOFAIL(x,y) x = (void*)GetProcAddress(msvcp,y)
@@ -583,14 +568,6 @@ static BOOL init(void)
                 "?_Internal_swap@_Concurrent_vector_base_v4@details@Concurrency@@IEAAXAEAV123@@Z");
         SET(p_vector_base_v4__Internal_compact,
                 "?_Internal_compact@_Concurrent_vector_base_v4@details@Concurrency@@IEAAPEAX_KPEAXP6AX10@ZP6AX1PEBX0@Z@Z");
-        SET(p_vector_base_v4__Internal_grow_by,
-                "?_Internal_grow_by@_Concurrent_vector_base_v4@details@Concurrency@@IEAA_K_K0P6AXPEAXPEBX0@Z2@Z");
-        SET(p_vector_base_v4__Internal_grow_to_at_least_with_result,
-                "?_Internal_grow_to_at_least_with_result@_Concurrent_vector_base_v4@details@Concurrency@@IEAA_K_K0P6AXPEAXPEBX0@Z2@Z");
-        SET(p_vector_base_v4__Internal_reserve,
-                "?_Internal_reserve@_Concurrent_vector_base_v4@details@Concurrency@@IEAAX_K00@Z");
-        SET(p_vector_base_v4__Internal_resize,
-                "?_Internal_resize@_Concurrent_vector_base_v4@details@Concurrency@@IEAAX_K00P6AXPEAX0@ZP6AX1PEBX0@Z3@Z");
     } else {
         SET(p_tr2_sys__File_size,
                 "?_File_size@sys@tr2@std@@YA_KPBD@Z");
@@ -710,14 +687,6 @@ static BOOL init(void)
                 "?_Internal_swap@_Concurrent_vector_base_v4@details@Concurrency@@IAEXAAV123@@Z");
         SET(p_vector_base_v4__Internal_compact,
                 "?_Internal_compact@_Concurrent_vector_base_v4@details@Concurrency@@IAEPAXIPAXP6AX0I@ZP6AX0PBXI@Z@Z");
-        SET(p_vector_base_v4__Internal_grow_by,
-                "?_Internal_grow_by@_Concurrent_vector_base_v4@details@Concurrency@@IAEIIIP6AXPAXPBXI@Z1@Z");
-        SET(p_vector_base_v4__Internal_grow_to_at_least_with_result,
-                "?_Internal_grow_to_at_least_with_result@_Concurrent_vector_base_v4@details@Concurrency@@IAEIIIP6AXPAXPBXI@Z1@Z");
-        SET(p_vector_base_v4__Internal_reserve,
-                "?_Internal_reserve@_Concurrent_vector_base_v4@details@Concurrency@@IAEXIII@Z");
-        SET(p_vector_base_v4__Internal_resize,
-                "?_Internal_resize@_Concurrent_vector_base_v4@details@Concurrency@@IAEXIIIP6AXPAXI@ZP6AX0PBXI@Z2@Z");
 #else
         SET(p__Thrd_current,
                 "_Thrd_current");
@@ -765,14 +734,7 @@ static BOOL init(void)
                 "?_Internal_swap@_Concurrent_vector_base_v4@details@Concurrency@@IAAXAAV123@@Z");
         SET(p_vector_base_v4__Internal_compact,
                 "?_Internal_compact@_Concurrent_vector_base_v4@details@Concurrency@@IAAPAXIPAXP6AX0I@ZP6AX0PBXI@Z@Z");
-        SET(p_vector_base_v4__Internal_grow_by,
-                "?_Internal_grow_by@_Concurrent_vector_base_v4@details@Concurrency@@IAAIIIP6AXPAXPBXI@Z1@Z");
-        SET(p_vector_base_v4__Internal_grow_to_at_least_with_result,
-                "?_Internal_grow_to_at_least_with_result@_Concurrent_vector_base_v4@details@Concurrency@@IAAIIIP6AXPAXPBXI@Z1@Z");
-        SET(p_vector_base_v4__Internal_reserve,
-                "?_Internal_reserve@_Concurrent_vector_base_v4@details@Concurrency@@IAAXIII@Z");
-        SET(p_vector_base_v4__Internal_resize,
-                "?_Internal_resize@_Concurrent_vector_base_v4@details@Concurrency@@IAEXIIIP6AXPAXI@ZP6AX0PBXI@Z2@Z");
+
 #endif
     }
     SET(p__Thrd_equal,
@@ -1474,8 +1436,9 @@ static void test_tr2_sys__Rename(void)
     BY_HANDLE_FILE_INFORMATION info1, info2;
     char temp_path[MAX_PATH], current_path[MAX_PATH];
     LARGE_INTEGER file_size;
-    static const WCHAR testW[] = {'t','r','2','_','t','e','s','t','_','d','i','r','/','f','1',0};
-    static const struct {
+    WCHAR testW[] = {'t','r','2','_','t','e','s','t','_','d','i','r','/','f','1',0};
+    WCHAR testW2[] = {'t','r','2','_','t','e','s','t','_','d','i','r','/','f','w',0};
+    struct {
         char const *old_path;
         char const *new_path;
         int val;
@@ -1486,29 +1449,6 @@ static void test_tr2_sys__Rename(void)
         { NULL, "tr2_test_dir\\NULL_rename", ERROR_INVALID_PARAMETER },
         { "tr2_test_dir\\f1_rename", "tr2_test_dir\\??invalid_name>>", ERROR_INVALID_NAME },
         { "tr2_test_dir\\not_exist_file", "tr2_test_dir\\not_exist_rename", ERROR_FILE_NOT_FOUND }
-    };
-    static const WCHAR f1_renameW[] =
-            {'t','r','2','_','t','e','s','t','_','d','i','r','\\','f','1','_','r','e','n','a','m','e',0};
-    static const WCHAR f1_rename2W[] =
-            {'t','r','2','_','t','e','s','t','_','d','i','r','\\','f','1','_','r','e','n','a','m','e','2',0};
-    static const WCHAR not_existW[] =
-            {'t','r','2','_','t','e','s','t','_','d','i','r','\\','n','o','t','_','e','x','i','s','t',0};
-    static const WCHAR not_exist2W[] =
-            {'t','r','2','_','t','e','s','t','_','d','i','r','\\','n','o','t','_','e','x','i','s','t','2',0};
-    static const WCHAR invalidW[] =
-            {'t','r','2','_','t','e','s','t','_','d','i','r','\\','?','?','i','n','v','a','l','i','d','>',0};
-    static const struct {
-        const WCHAR *old_path;
-        const WCHAR *new_path;
-        int val;
-    } testsW[] = {
-        { testW, f1_renameW, ERROR_SUCCESS },
-        { testW, NULL, ERROR_FILE_NOT_FOUND }, /* Differs from the A version */
-        { testW, f1_renameW, ERROR_FILE_NOT_FOUND },
-        { NULL, f1_rename2W, ERROR_PATH_NOT_FOUND }, /* Differs from the A version */
-        { f1_renameW, invalidW, ERROR_INVALID_NAME },
-        { not_existW, not_exist2W, ERROR_FILE_NOT_FOUND },
-        { not_existW, invalidW, ERROR_FILE_NOT_FOUND }
     };
 
     memset(current_path, 0, MAX_PATH);
@@ -1524,7 +1464,7 @@ static void test_tr2_sys__Rename(void)
     CloseHandle(file);
 
     ret = p_tr2_sys__Rename("tr2_test_dir\\f1", "tr2_test_dir\\f1");
-    ok(ERROR_SUCCESS == ret, "test_tr2_sys__Rename(): expect: ERROR_SUCCESS, got %d\n", ret);
+    todo_wine ok(ERROR_SUCCESS == ret, "test_tr2_sys__Rename(): expect: ERROR_SUCCESS, got %d\n", ret);
     for(i=0; i<ARRAY_SIZE(tests); i++) {
         errno = 0xdeadbeef;
         if(tests[i].val == ERROR_SUCCESS) {
@@ -1560,34 +1500,10 @@ static void test_tr2_sys__Rename(void)
     ok(ret == ERROR_ALREADY_EXISTS, "test_tr2_sys__Rename(): expect: ERROR_ALREADY_EXISTS, got %d\n", ret);
     ok(p_tr2_sys__File_size("tr2_test_dir\\f1") == 7, "test_tr2_sys__Rename(): expect: 7, got %s\n", wine_dbgstr_longlong(p_tr2_sys__File_size("tr2_test_dir\\f1")));
     ok(p_tr2_sys__File_size("tr2_test_dir\\f1_rename") == 0, "test_tr2_sys__Rename(): expect: 0, got %s\n",wine_dbgstr_longlong(p_tr2_sys__File_size("tr2_test_dir\\f1_rename")));
+    ret = p_tr2_sys__Rename_wchar(testW, testW2);
+    ok(ret == ERROR_SUCCESS, "tr2_sys__Rename_wchar(): expect: ERROR_SUCCESS, got %d\n",  ret);
 
-    ok(DeleteFileA("tr2_test_dir\\f1_rename"), "expect f1_rename to exist\n");
-
-    for(i=0; i<ARRAY_SIZE(testsW); i++) {
-        errno = 0xdeadbeef;
-        if(testsW[i].val == ERROR_SUCCESS) {
-            h1 = CreateFileW(testsW[i].old_path, 0, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_EXISTING, 0, 0);
-            ok(h1 != INVALID_HANDLE_VALUE, "create file failed: INVALID_HANDLE_VALUE\n");
-            ok(GetFileInformationByHandle(h1, &info1), "GetFileInformationByHandle failed\n");
-            CloseHandle(h1);
-        }
-        SetLastError(0xdeadbeef);
-        ret = p_tr2_sys__Rename_wchar(testsW[i].old_path, testsW[i].new_path);
-        ok(ret == testsW[i].val, "test_tr2_sys__Rename_wchar(): test %d expect: %d, got %d\n", i+1, testsW[i].val, ret);
-        ok(errno == 0xdeadbeef, "test_tr2_sys__Rename_wchar(): test %d errno expect 0xdeadbeef, got %d\n", i+1, errno);
-        if(ret == ERROR_SUCCESS) {
-            h2 = CreateFileW(testsW[i].new_path, 0, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_EXISTING, 0, 0);
-            ok(h2 != INVALID_HANDLE_VALUE, "create file failed: INVALID_HANDLE_VALUE\n");
-            ok(GetFileInformationByHandle(h2, &info2), "GetFileInformationByHandle failed\n");
-            CloseHandle(h2);
-            ok(info1.nFileIndexHigh == info2.nFileIndexHigh
-                    && info1.nFileIndexLow == info2.nFileIndexLow,
-                    "test_tr2_sys__Rename_wchar(): test %d expect two files equivalent\n", i+1);
-        }
-    }
-
+    ok(DeleteFileW(testW2), "expect fw to exist\n");
     ok(DeleteFileA("tr2_test_dir\\f1_rename"), "expect f1_rename to exist\n");
     ret = p_tr2_sys__Remove_dir("tr2_test_dir");
     ok(ret == 1, "test_tr2_sys__Remove_dir(): expect %d got %d\n", 1, ret);
@@ -2622,14 +2538,10 @@ static void concurrent_vector_int_dtor(vector_base_v4 *this)
 
     blocks = (size_t)call_func2(p_vector_base_v4__Internal_clear,
             this, concurrent_vector_int_destroy);
-    for(blocks--; blocks >= this->first_block; blocks--) {
+    while(this->first_block && blocks >= this->first_block) {
         vector_alloc_count--;
-        free(this->segment[blocks]);
-    }
-
-    if(this->first_block) {
-        vector_alloc_count--;
-        free(this->segment[0]);
+        free(this->segment[blocks - this->first_block]);
+        blocks--;
     }
 
     call_func1(p_vector_base_v4_dtor, this);
@@ -2934,7 +2846,6 @@ static void test_vector_base_v4(void)
     size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
             &v2, concurrent_vector_int_destroy);
     CHECK_CALLED(concurrent_vector_int_destroy);
-    ok(size == 3, "_Internal_clear returned %ld expected 3\n", (long)size);
     concurrent_vector_int_dtor(&v2);
 
     concurrent_vector_int_ctor(&v2);
@@ -2968,7 +2879,6 @@ static void test_vector_base_v4(void)
     size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
             &v2, concurrent_vector_int_destroy);
     CHECK_CALLED(concurrent_vector_int_destroy);
-    ok(size == 3, "_Internal_clear returned %ld expected 3\n", (long)size);
     concurrent_vector_int_dtor(&v2);
 
     concurrent_vector_int_ctor(&v2);
@@ -3002,7 +2912,6 @@ static void test_vector_base_v4(void)
     size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
             &v2, concurrent_vector_int_destroy);
     CHECK_CALLED(concurrent_vector_int_destroy);
-    ok(size == 2, "_Internal_clear returned %ld expected 2\n", (long)size);
     concurrent_vector_int_dtor(&v2);
 
     /* test for _Internal_compact */
@@ -3080,149 +2989,6 @@ static void test_vector_base_v4(void)
     SET_EXPECT(concurrent_vector_int_destroy);
     size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
             &v2, concurrent_vector_int_destroy);
-    CHECK_CALLED(concurrent_vector_int_destroy);
-    ok(size == 4, "_Internal_clear returned %ld expected 4\n", (long)size);
-    concurrent_vector_int_dtor(&v2);
-
-    /* test for Internal_grow_by */
-    concurrent_vector_int_ctor(&v2);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    vector_elem_count += 2;
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 2, "v2.early_size got %ld expected 2\n", (long)v2.early_size);
-    i = 0;
-    SET_EXPECT(concurrent_vector_int_alloc);
-    SET_EXPECT(concurrent_vector_int_copy);
-    idx = (size_t)call_func5(p_vector_base_v4__Internal_grow_by,
-            &v2, 1, sizeof(int), concurrent_vector_int_copy, &i);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    CHECK_CALLED(concurrent_vector_int_copy);
-    ok(idx == 2, "_Internal_grow_by returned %ld expected 2\n", (long)idx);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 3, "v2.early_size got %ld expected 3\n", (long)v2.early_size);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    SET_EXPECT(concurrent_vector_int_copy);
-    idx = (size_t)call_func5(p_vector_base_v4__Internal_grow_by,
-            &v2, 2, sizeof(int), concurrent_vector_int_copy, &i);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    CHECK_CALLED(concurrent_vector_int_copy);
-    ok(idx == 3, "_Internal_grow_by returned %ld expected 3\n", (long)idx);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 5, "v2.early_size got %ld expected 5\n", (long)v2.early_size);
-    SET_EXPECT(concurrent_vector_int_destroy);
-    size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
-            &v2, concurrent_vector_int_destroy);
-    ok(size == 3, "_Internal_clear returned %ld expected 3\n", (long)size);
-    CHECK_CALLED(concurrent_vector_int_destroy);
-    concurrent_vector_int_dtor(&v2);
-
-    /* test for Internal_grow_to_at_least_with_result */
-    concurrent_vector_int_ctor(&v2);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    vector_elem_count += 2;
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 2, "v2.early_size got %ld expected 2\n", (long)v2.early_size);
-    i = 0;
-    SET_EXPECT(concurrent_vector_int_alloc);
-    SET_EXPECT(concurrent_vector_int_copy);
-    idx = (size_t)call_func5(p_vector_base_v4__Internal_grow_to_at_least_with_result,
-            &v2, 3, sizeof(int), concurrent_vector_int_copy, &i);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    CHECK_CALLED(concurrent_vector_int_copy);
-    ok(idx == 2, "_Internal_grow_to_at_least_with_result returned %ld expected 2\n", (long)idx);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 3, "v2.early_size got %ld expected 3\n", (long)v2.early_size);
-    i = 0;
-    SET_EXPECT(concurrent_vector_int_alloc);
-    SET_EXPECT(concurrent_vector_int_copy);
-    idx = (size_t)call_func5(p_vector_base_v4__Internal_grow_to_at_least_with_result,
-            &v2, 5, sizeof(int), concurrent_vector_int_copy, &i);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    CHECK_CALLED(concurrent_vector_int_copy);
-    ok(idx == 3, "_Internal_grow_to_at_least_with_result returned %ld expected 3\n", (long)idx);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 5, "v2.early_size got %ld expected 5\n", (long)v2.early_size);
-    SET_EXPECT(concurrent_vector_int_destroy);
-    size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
-            &v2, concurrent_vector_int_destroy);
-    ok(size == 3, "_Internal_clear returned %ld expected 3\n", (long)size);
-    CHECK_CALLED(concurrent_vector_int_destroy);
-    concurrent_vector_int_dtor(&v2);
-
-    /* test for _Internal_reserve */
-    concurrent_vector_int_ctor(&v2);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    vector_elem_count += 2;
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 2, "v2.early_size got %ld expected 2\n", (long)v2.early_size);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    call_func4(p_vector_base_v4__Internal_reserve,
-            &v2, 3, sizeof(int), 4);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 2, "v2.early_size got %ld expected 2\n", (long)v2.early_size);
-    size = (size_t)call_func1(p_vector_base_v4__Internal_capacity, &v2);
-    ok(size == 4, "size of vector got %ld expected 4\n", (long)size);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    call_func4(p_vector_base_v4__Internal_reserve,
-            &v2, 5, sizeof(int), 8);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 2, "v2.early_size got %ld expected 2\n", (long)v2.early_size);
-    size = (size_t)call_func1(p_vector_base_v4__Internal_capacity, &v2);
-    ok(size == 8, "size of vector got %ld expected 8\n", (long)size);
-    SET_EXPECT(concurrent_vector_int_destroy);
-    size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
-            &v2, concurrent_vector_int_destroy);
-    ok(size == 3, "_Internal_clear returned %ld expected 3\n", (long)size);
-    CHECK_CALLED(concurrent_vector_int_destroy);
-    concurrent_vector_int_dtor(&v2);
-
-    /* test for _Internal_resize */
-    concurrent_vector_int_ctor(&v2);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    data = call_func3(p_vector_base_v4__Internal_push_back, &v2, sizeof(int), &idx);
-    ok(data != NULL, "_Internal_push_back returned NULL\n");
-    vector_elem_count += 2;
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 2, "v2.early_size got %ld expected 2\n", (long)v2.early_size);
-    i = 0;
-    SET_EXPECT(concurrent_vector_int_destroy);
-    call_func7(p_vector_base_v4__Internal_resize,
-            &v2, 1, sizeof(int), 4, concurrent_vector_int_destroy, concurrent_vector_int_copy, &i);
-    CHECK_CALLED(concurrent_vector_int_destroy);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 1, "v2.early_size got %ld expected 1\n", (long)v2.early_size);
-    SET_EXPECT(concurrent_vector_int_alloc);
-    SET_EXPECT(concurrent_vector_int_copy);
-    call_func7(p_vector_base_v4__Internal_resize,
-            &v2, 3, sizeof(int), 4, concurrent_vector_int_destroy, concurrent_vector_int_copy, &i);
-    CHECK_CALLED(concurrent_vector_int_alloc);
-    CHECK_CALLED(concurrent_vector_int_copy);
-    ok(v2.first_block == 1, "v2.first_block got %ld expected 1\n", (long)v2.first_block);
-    ok(v2.early_size == 3, "v2.early_size got %ld expected 3\n", (long)v2.early_size);
-    SET_EXPECT(concurrent_vector_int_destroy);
-    size = (size_t)call_func2(p_vector_base_v4__Internal_clear,
-            &v2, concurrent_vector_int_destroy);
-    ok(size == 2, "_Internal_clear returned %ld expected 2\n", (long)size);
     CHECK_CALLED(concurrent_vector_int_destroy);
     concurrent_vector_int_dtor(&v2);
 

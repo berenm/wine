@@ -73,18 +73,22 @@ static void add_cert_columns(HWND hwnd)
 
     SendMessageW(lv, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
     GetWindowRect(lv, &rc);
-    LoadStringW(hInstance, IDS_SUBJECT_COLUMN, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_SUBJECT_COLUMN, buf,
+     sizeof(buf) / sizeof(buf[0]));
     column.mask = LVCF_WIDTH | LVCF_TEXT;
     column.cx = (rc.right - rc.left) * 29 / 100 - 2;
     column.pszText = buf;
     SendMessageW(lv, LVM_INSERTCOLUMNW, 0, (LPARAM)&column);
-    LoadStringW(hInstance, IDS_ISSUER_COLUMN, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_ISSUER_COLUMN, buf,
+     sizeof(buf) / sizeof(buf[0]));
     SendMessageW(lv, LVM_INSERTCOLUMNW, 1, (LPARAM)&column);
     column.cx = (rc.right - rc.left) * 16 / 100 - 2;
-    LoadStringW(hInstance, IDS_EXPIRATION_COLUMN, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_EXPIRATION_COLUMN, buf,
+     sizeof(buf) / sizeof(buf[0]));
     SendMessageW(lv, LVM_INSERTCOLUMNW, 2, (LPARAM)&column);
     column.cx = (rc.right - rc.left) * 23 / 100 - 1;
-    LoadStringW(hInstance, IDS_FRIENDLY_NAME_COLUMN, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_FRIENDLY_NAME_COLUMN, buf,
+     sizeof(buf) / sizeof(buf[0]));
     SendMessageW(lv, LVM_INSERTCOLUMNW, 3, (LPARAM)&column);
 }
 
@@ -139,9 +143,11 @@ static void add_cert_to_view(HWND lv, PCCERT_CONTEXT cert, DWORD *allocatedLen,
         SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
     }
 
-    GetLocaleInfoW(LOCALE_SYSTEM_DEFAULT, LOCALE_SSHORTDATE, dateFmt, ARRAY_SIZE(dateFmt));
+    GetLocaleInfoW(LOCALE_SYSTEM_DEFAULT, LOCALE_SSHORTDATE, dateFmt,
+     sizeof(dateFmt) / sizeof(dateFmt[0]));
     FileTimeToSystemTime(&cert->pCertInfo->NotAfter, &sysTime);
-    GetDateFormatW(LOCALE_SYSTEM_DEFAULT, 0, &sysTime, dateFmt, date, ARRAY_SIZE(date));
+    GetDateFormatW(LOCALE_SYSTEM_DEFAULT, 0, &sysTime, dateFmt, date,
+     sizeof(date) / sizeof(date[0]));
     item.pszText = date;
     item.iSubItem = 2;
     SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
@@ -216,10 +222,12 @@ static void initialize_purpose_selection(HWND hwnd)
     LPSTR usages;
     int index;
 
-    LoadStringW(hInstance, IDS_PURPOSE_ALL, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_PURPOSE_ALL, buf,
+     sizeof(buf) / sizeof(buf[0]));
     index = SendMessageW(cb, CB_INSERTSTRING, -1, (LPARAM)buf);
     SendMessageW(cb, CB_SETITEMDATA, index, (LPARAM)PurposeFilterShowAll);
-    LoadStringW(hInstance, IDS_PURPOSE_ADVANCED, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_PURPOSE_ADVANCED, buf,
+     sizeof(buf) / sizeof(buf[0]));
     index = SendMessageW(cb, CB_INSERTSTRING, -1, (LPARAM)buf);
     SendMessageW(cb, CB_SETITEMDATA, index, (LPARAM)PurposeFilterShowAdvanced);
     SendMessageW(cb, CB_SETCURSEL, 0, 0);
@@ -492,12 +500,12 @@ static void show_cert_stores(HWND hwnd, DWORD dwFlags, struct CertMgrData *data)
     if (dwFlags & CRYPTUI_CERT_MGR_PUBLISHER_TAB)
     {
         storeList = publisherStoreList;
-        cStores = ARRAY_SIZE(publisherStoreList);
+        cStores = sizeof(publisherStoreList) / sizeof(publisherStoreList[0]);
     }
     else
     {
         storeList = defaultStoreList;
-        cStores = ARRAY_SIZE(defaultStoreList);
+        cStores = sizeof(defaultStoreList) / sizeof(defaultStoreList[0]);
     }
     if (dwFlags & CRYPTUI_CERT_MGR_SINGLE_TAB_FLAG)
         cStores = 1;
@@ -934,7 +942,8 @@ static void cert_mgr_show_cert_usages(HWND hwnd, int index)
         {
             WCHAR buf[MAX_STRING_LEN];
 
-            LoadStringW(hInstance, IDS_ALLOWED_PURPOSE_NONE, buf, ARRAY_SIZE(buf));
+            LoadStringW(hInstance, IDS_ALLOWED_PURPOSE_NONE, buf,
+             sizeof(buf) / sizeof(buf[0]));
             SendMessageW(text, WM_SETTEXT, 0, (LPARAM)buf);
         }
     }
@@ -942,7 +951,8 @@ static void cert_mgr_show_cert_usages(HWND hwnd, int index)
     {
         WCHAR buf[MAX_STRING_LEN];
 
-        LoadStringW(hInstance, IDS_ALLOWED_PURPOSE_ALL, buf, ARRAY_SIZE(buf));
+        LoadStringW(hInstance, IDS_ALLOWED_PURPOSE_ALL, buf,
+         sizeof(buf) / sizeof(buf[0]));
         SendMessageW(text, WM_SETTEXT, 0, (LPARAM)buf);
     }
 }
@@ -969,10 +979,12 @@ static void cert_mgr_do_remove(HWND hwnd)
             pTitle = data->title;
         else
         {
-            LoadStringW(hInstance, IDS_CERT_MGR, title, ARRAY_SIZE(title));
+            LoadStringW(hInstance, IDS_CERT_MGR, title,
+             sizeof(title) / sizeof(title[0]));
             pTitle = title;
         }
-        LoadStringW(hInstance, warningID, warning, ARRAY_SIZE(warning));
+        LoadStringW(hInstance, warningID, warning,
+         sizeof(warning) / sizeof(warning[0]));
         if (MessageBoxW(hwnd, warning, pTitle, MB_YESNO) == IDYES)
         {
             int selection = -1;
@@ -1060,7 +1072,7 @@ static int cert_mgr_sort_by_text(HWND lv, int col, int index1, int index2)
     WCHAR buf1[MAX_STRING_LEN];
     WCHAR buf2[MAX_STRING_LEN];
 
-    item.cchTextMax = ARRAY_SIZE(buf1);
+    item.cchTextMax = sizeof(buf1) / sizeof(buf1[0]);
     item.mask = LVIF_TEXT;
     item.pszText = buf1;
     item.iItem = index1;
@@ -1478,7 +1490,7 @@ static HCERTSTORE selected_item_to_store(HWND tree, HTREEITEM hItem)
     memset(&item, 0, sizeof(item));
     item.mask = TVIF_HANDLE | TVIF_PARAM | TVIF_TEXT;
     item.hItem = hItem;
-    item.cchTextMax = ARRAY_SIZE(buf);
+    item.cchTextMax = sizeof(buf) / sizeof(buf[0]);
     item.pszText = buf;
     SendMessageW(tree, TVM_GETITEMW, 0, (LPARAM)&item);
     if (item.lParam)
@@ -1546,10 +1558,12 @@ static LRESULT CALLBACK select_store_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
                     pTitle = selectInfo->info->pwszTitle;
                 else
                 {
-                    LoadStringW(hInstance, IDS_SELECT_STORE_TITLE, title, ARRAY_SIZE(title));
+                    LoadStringW(hInstance, IDS_SELECT_STORE_TITLE, title,
+                     sizeof(title) / sizeof(title[0]));
                     pTitle = title;
                 }
-                LoadStringW(hInstance, IDS_SELECT_STORE, error, ARRAY_SIZE(error));
+                LoadStringW(hInstance, IDS_SELECT_STORE, error,
+                 sizeof(error) / sizeof(error[0]));
                 MessageBoxW(hwnd, error, pTitle, MB_ICONEXCLAMATION | MB_OK);
             }
             else
@@ -1944,7 +1958,7 @@ static struct OIDToString oidMap[] = {
 
 static struct OIDToString *findSupportedOID(LPCSTR oid)
 {
-    int indexHigh = ARRAY_SIZE(oidMap) - 1, indexLow = 0;
+    int indexHigh = sizeof(oidMap) / sizeof(oidMap[0]) - 1, indexLow = 0;
 
     while (indexLow <= indexHigh)
     {
@@ -2383,9 +2397,11 @@ static void add_date_string_to_control(HWND hwnd, const FILETIME *fileTime)
     WCHAR date[80];
     SYSTEMTIME sysTime;
 
-    GetLocaleInfoW(LOCALE_SYSTEM_DEFAULT, LOCALE_SSHORTDATE, dateFmt, ARRAY_SIZE(dateFmt));
+    GetLocaleInfoW(LOCALE_SYSTEM_DEFAULT, LOCALE_SSHORTDATE, dateFmt,
+     sizeof(dateFmt) / sizeof(dateFmt[0]));
     FileTimeToSystemTime(fileTime, &sysTime);
-    GetDateFormatW(LOCALE_SYSTEM_DEFAULT, 0, &sysTime, dateFmt, date, ARRAY_SIZE(date));
+    GetDateFormatW(LOCALE_SYSTEM_DEFAULT, 0, &sysTime, dateFmt, date,
+     sizeof(date) / sizeof(date[0]));
     add_unformatted_text_to_control(hwnd, date, lstrlenW(date));
 }
 
@@ -2642,7 +2658,8 @@ static WCHAR *format_long_date(const FILETIME *fileTime)
     SYSTEMTIME sysTime;
 
     /* FIXME: format isn't quite right, want time too */
-    GetLocaleInfoW(LOCALE_SYSTEM_DEFAULT, LOCALE_SLONGDATE, dateFmt, ARRAY_SIZE(dateFmt));
+    GetLocaleInfoW(LOCALE_SYSTEM_DEFAULT, LOCALE_SLONGDATE, dateFmt,
+     sizeof(dateFmt) / sizeof(dateFmt[0]));
     FileTimeToSystemTime(fileTime, &sysTime);
     len = GetDateFormatW(LOCALE_SYSTEM_DEFAULT, 0, &sysTime, dateFmt, NULL, 0);
     if (len)
@@ -2676,7 +2693,8 @@ static WCHAR *field_format_public_key(PCCERT_CONTEXT cert)
     {
         WCHAR fmt[MAX_STRING_LEN];
 
-        if (LoadStringW(hInstance, IDS_FIELD_PUBLIC_KEY_FORMAT, fmt, ARRAY_SIZE(fmt)))
+        if (LoadStringW(hInstance, IDS_FIELD_PUBLIC_KEY_FORMAT, fmt,
+         sizeof(fmt) / sizeof(fmt[0])))
         {
             DWORD len;
 
@@ -2777,7 +2795,7 @@ static void add_string_id_and_value_to_list(HWND hwnd, struct detail_data *data,
 {
     WCHAR buf[MAX_STRING_LEN];
 
-    LoadStringW(hInstance, id, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, id, buf, sizeof(buf) / sizeof(buf[0]));
     add_field_and_value_to_list(hwnd, data, buf, value, create, param);
 }
 
@@ -2820,7 +2838,7 @@ static void add_v1_fields(HWND hwnd, struct detail_data *data)
     /* The last item in v1_fields is the public key, which is not in the loop
      * because it's a special case.
      */
-    for (i = 0; i < ARRAY_SIZE(v1_fields) - 1; i++)
+    for (i = 0; i < sizeof(v1_fields) / sizeof(v1_fields[0]) - 1; i++)
         add_v1_field(hwnd, data, &v1_fields[i]);
     if (cert->pCertInfo->SubjectPublicKeyInfo.PublicKey.cbData)
         add_v1_field(hwnd, data, &v1_fields[i]);
@@ -2887,7 +2905,7 @@ static WCHAR *field_format_extension_hex_with_ascii(const CERT_EXTENSION *ext)
                 {
                     static const WCHAR pad[] = { ' ',' ',' ' };
 
-                    for (; j % 8; j++, ptr += ARRAY_SIZE(pad))
+                    for (; j % 8; j++, ptr += sizeof(pad) / sizeof(pad[0]))
                         memcpy(ptr, pad, sizeof(pad));
                 }
                 /* The last sprintfW included a space, so just insert one
@@ -3008,7 +3026,7 @@ static void add_properties(HWND hwnd, struct detail_data *data)
     DWORD i;
     PCCERT_CONTEXT cert = data->pCertViewInfo->pCertContext;
 
-    for (i = 0; i < ARRAY_SIZE(prop_id_map); i++)
+    for (i = 0; i < sizeof(prop_id_map) / sizeof(prop_id_map[0]); i++)
     {
         DWORD cb;
 
@@ -3071,11 +3089,12 @@ static void create_show_list(HWND hwnd, struct detail_data *data)
     WCHAR buf[MAX_STRING_LEN];
     int i;
 
-    for (i = 0; i < ARRAY_SIZE(listItems); i++)
+    for (i = 0; i < sizeof(listItems) / sizeof(listItems[0]); i++)
     {
         int index;
 
-        LoadStringW(hInstance, listItems[i].id, buf, ARRAY_SIZE(buf));
+        LoadStringW(hInstance, listItems[i].id, buf,
+         sizeof(buf) / sizeof(buf[0]));
         index = SendMessageW(cb, CB_INSERTSTRING, -1, (LPARAM)buf);
         SendMessageW(cb, CB_SETITEMDATA, index, (LPARAM)data);
     }
@@ -3091,12 +3110,12 @@ static void create_listview_columns(HWND hwnd)
 
     SendMessageW(lv, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
     GetWindowRect(lv, &rc);
-    LoadStringW(hInstance, IDS_FIELD, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_FIELD, buf, sizeof(buf) / sizeof(buf[0]));
     column.mask = LVCF_WIDTH | LVCF_TEXT;
     column.cx = (rc.right - rc.left) / 2 - 2;
     column.pszText = buf;
     SendMessageW(lv, LVM_INSERTCOLUMNW, 0, (LPARAM)&column);
-    LoadStringW(hInstance, IDS_VALUE, buf, ARRAY_SIZE(buf));
+    LoadStringW(hInstance, IDS_VALUE, buf, sizeof(buf) / sizeof(buf[0]));
     SendMessageW(lv, LVM_INSERTCOLUMNW, 1, (LPARAM)&column);
 }
 
@@ -3104,7 +3123,7 @@ static void set_fields_selection(HWND hwnd, struct detail_data *data, int sel)
 {
     HWND list = GetDlgItem(hwnd, IDC_DETAIL_LIST);
 
-    if (sel >= 0 && sel < ARRAY_SIZE(listItems))
+    if (sel >= 0 && sel < sizeof(listItems) / sizeof(listItems[0]))
     {
         SendMessageW(list, LVM_DELETEALLITEMS, 0, 0);
         listItems[sel].add(list, data);
@@ -3228,8 +3247,8 @@ static LRESULT CALLBACK add_purpose_dlg_proc(HWND hwnd, UINT msg,
             switch (LOWORD(wp))
             {
             case IDOK:
-                SendMessageA(GetDlgItem(hwnd, IDC_NEW_PURPOSE), WM_GETTEXT, ARRAY_SIZE(buf),
-                 (LPARAM)buf);
+                SendMessageA(GetDlgItem(hwnd, IDC_NEW_PURPOSE), WM_GETTEXT,
+                 sizeof(buf) / sizeof(buf[0]), (LPARAM)buf);
                 if (!buf[0])
                 {
                     /* An empty purpose is the same as cancelling */
@@ -3240,8 +3259,10 @@ static LRESULT CALLBACK add_purpose_dlg_proc(HWND hwnd, UINT msg,
                 {
                     WCHAR title[MAX_STRING_LEN], error[MAX_STRING_LEN];
 
-                    LoadStringW(hInstance, IDS_CERTIFICATE_PURPOSE_ERROR, error, ARRAY_SIZE(error));
-                    LoadStringW(hInstance, IDS_CERTIFICATE_PROPERTIES, title, ARRAY_SIZE(title));
+                    LoadStringW(hInstance, IDS_CERTIFICATE_PURPOSE_ERROR, error,
+                     sizeof(error) / sizeof(error[0]));
+                    LoadStringW(hInstance, IDS_CERTIFICATE_PROPERTIES, title,
+                     sizeof(title) / sizeof(title[0]));
                     MessageBoxW(hwnd, error, title, MB_ICONERROR | MB_OK);
                 }
                 else if (is_oid_in_list(
@@ -3249,9 +3270,10 @@ static LRESULT CALLBACK add_purpose_dlg_proc(HWND hwnd, UINT msg,
                 {
                     WCHAR title[MAX_STRING_LEN], error[MAX_STRING_LEN];
 
-                    LoadStringW(hInstance, IDS_CERTIFICATE_PURPOSE_EXISTS, error,
-                     ARRAY_SIZE(error));
-                    LoadStringW(hInstance, IDS_CERTIFICATE_PROPERTIES, title, ARRAY_SIZE(title));
+                    LoadStringW(hInstance, IDS_CERTIFICATE_PURPOSE_EXISTS,
+                     error, sizeof(error) / sizeof(error[0]));
+                    LoadStringW(hInstance, IDS_CERTIFICATE_PROPERTIES, title,
+                     sizeof(title) / sizeof(title[0]));
                     MessageBoxW(hwnd, error, title, MB_ICONEXCLAMATION | MB_OK);
                 }
                 else
@@ -3510,9 +3532,11 @@ static void apply_general_changes(HWND hwnd)
     struct edit_cert_data *data =
      (struct edit_cert_data *)GetWindowLongPtrW(hwnd, DWLP_USER);
 
-    SendMessageW(GetDlgItem(hwnd, IDC_FRIENDLY_NAME), WM_GETTEXT, ARRAY_SIZE(buf), (LPARAM)buf);
+    SendMessageW(GetDlgItem(hwnd, IDC_FRIENDLY_NAME), WM_GETTEXT,
+     sizeof(buf) / sizeof(buf[0]), (LPARAM)buf);
     set_cert_string_property(data->cert, CERT_FRIENDLY_NAME_PROP_ID, buf);
-    SendMessageW(GetDlgItem(hwnd, IDC_DESCRIPTION), WM_GETTEXT, ARRAY_SIZE(buf), (LPARAM)buf);
+    SendMessageW(GetDlgItem(hwnd, IDC_DESCRIPTION), WM_GETTEXT,
+     sizeof(buf) / sizeof(buf[0]), (LPARAM)buf);
     set_cert_string_property(data->cert, CERT_DESCRIPTION_PROP_ID, buf);
     if (IsDlgButtonChecked(hwnd, IDC_ENABLE_ALL_PURPOSES))
     {
@@ -3805,7 +3829,7 @@ static LRESULT CALLBACK detail_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
                     LVITEMW item;
                     int res;
 
-                    item.cchTextMax = ARRAY_SIZE(buf);
+                    item.cchTextMax = sizeof(buf) / sizeof(buf[0]);
                     item.mask = LVIF_TEXT;
                     item.pszText = buf;
                     item.iItem = nm->iItem;
@@ -4671,10 +4695,12 @@ static void import_warning(DWORD dwFlags, HWND hwnd, LPCWSTR szTitle,
             pTitle = szTitle;
         else
         {
-            LoadStringW(hInstance, IDS_IMPORT_WIZARD, title, ARRAY_SIZE(title));
+            LoadStringW(hInstance, IDS_IMPORT_WIZARD, title,
+             sizeof(title) / sizeof(title[0]));
             pTitle = title;
         }
-        LoadStringW(hInstance, warningID, error, ARRAY_SIZE(error));
+        LoadStringW(hInstance, warningID, error,
+         sizeof(error) / sizeof(error[0]));
         MessageBoxW(hwnd, error, pTitle, MB_ICONERROR | MB_OK);
     }
 }
@@ -4849,7 +4875,8 @@ static LRESULT CALLBACK import_welcome_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
         int height;
 
         data = (struct ImportWizData *)page->lParam;
-        LoadStringW(hInstance, IDS_WIZARD_TITLE_FONT, fontFace, ARRAY_SIZE(fontFace));
+        LoadStringW(hInstance, IDS_WIZARD_TITLE_FONT, fontFace,
+         sizeof(fontFace) / sizeof(fontFace[0]));
         height = -MulDiv(12, GetDeviceCaps(hDC, LOGPIXELSY), 72);
         data->titleFont = CreateFontW(height, 0, 0, 0, FW_BOLD, 0, 0, 0,
          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -4908,7 +4935,7 @@ static WCHAR *make_import_file_filter(DWORD dwFlags)
     int len, totalLen = 2;
     LPWSTR filter = NULL, str;
 
-    for (i = 0; i < ARRAY_SIZE(import_filters); i++)
+    for (i = 0; i < sizeof(import_filters) / sizeof(import_filters[0]); i++)
     {
         if (!import_filters[i].allowFlags || !dwFlags ||
          (dwFlags & import_filters[i].allowFlags))
@@ -4923,7 +4950,7 @@ static WCHAR *make_import_file_filter(DWORD dwFlags)
         LPWSTR ptr;
 
         ptr = filter;
-        for (i = 0; i < ARRAY_SIZE(import_filters); i++)
+        for (i = 0; i < sizeof(import_filters) / sizeof(import_filters[0]); i++)
         {
             if (!import_filters[i].allowFlags || !dwFlags ||
              (dwFlags & import_filters[i].allowFlags))
@@ -4985,10 +5012,12 @@ static BOOL import_validate_filename(HWND hwnd, struct ImportWizData *data,
             pTitle = data->pwszWizardTitle;
         else
         {
-            LoadStringW(hInstance, IDS_IMPORT_WIZARD, title, ARRAY_SIZE(title));
+            LoadStringW(hInstance, IDS_IMPORT_WIZARD, title,
+             sizeof(title) / sizeof(title[0]));
             pTitle = title;
         }
-        LoadStringW(hInstance, IDS_IMPORT_OPEN_FAILED, error, ARRAY_SIZE(error));
+        LoadStringW(hInstance, IDS_IMPORT_OPEN_FAILED, error,
+         sizeof(error) / sizeof(error[0]));
         FormatMessageW(
          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
          GetLastError(), 0, (LPWSTR) &msgBuf, 0, NULL);
@@ -5098,7 +5127,7 @@ static LRESULT CALLBACK import_file_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
             ofn.hwndOwner = hwnd;
             ofn.lpstrFilter = make_import_file_filter(data->dwFlags);
             ofn.lpstrFile = fileBuf;
-            ofn.nMaxFile = ARRAY_SIZE(fileBuf);
+            ofn.nMaxFile = sizeof(fileBuf) / sizeof(fileBuf[0]);
             fileBuf[0] = 0;
             if (GetOpenFileNameW(&ofn))
                 SendMessageW(GetDlgItem(hwnd, IDC_IMPORT_FILENAME), WM_SETTEXT,
@@ -5144,7 +5173,8 @@ static LRESULT CALLBACK import_store_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
             EnableWindow(GetDlgItem(hwnd, IDC_IMPORT_BROWSE_STORE), TRUE);
             EnableWindow(GetDlgItem(hwnd, IDC_IMPORT_SPECIFY_STORE),
              !(data->dwFlags & CRYPTUI_WIZ_IMPORT_NO_CHANGE_DEST_STORE));
-            LoadStringW(hInstance, IDS_IMPORT_DEST_DETERMINED, storeTitle, ARRAY_SIZE(storeTitle));
+            LoadStringW(hInstance, IDS_IMPORT_DEST_DETERMINED,
+             storeTitle, sizeof(storeTitle) / sizeof(storeTitle[0]));
             SendMessageW(GetDlgItem(hwnd, IDC_IMPORT_STORE), WM_SETTEXT,
              0, (LPARAM)storeTitle);
         }
@@ -5212,8 +5242,8 @@ static LRESULT CALLBACK import_store_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
             {
                 WCHAR storeTitle[MAX_STRING_LEN];
 
-                LoadStringW(hInstance, IDS_IMPORT_DEST_DETERMINED, storeTitle,
-                 ARRAY_SIZE(storeTitle));
+                LoadStringW(hInstance, IDS_IMPORT_DEST_DETERMINED,
+                 storeTitle, sizeof(storeTitle) / sizeof(storeTitle[0]));
                 SendMessageW(GetDlgItem(hwnd, IDC_IMPORT_STORE), WM_SETTEXT,
                  0, (LPARAM)storeTitle);
                 data->hDestCertStore = store;
@@ -5236,18 +5266,22 @@ static void show_import_details(HWND lv, struct ImportWizData *data)
     item.mask = LVIF_TEXT;
     item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
     item.iSubItem = 0;
-    LoadStringW(hInstance, IDS_IMPORT_STORE_SELECTION, text, ARRAY_SIZE(text));
+    LoadStringW(hInstance, IDS_IMPORT_STORE_SELECTION, text,
+     sizeof(text)/ sizeof(text[0]));
     item.pszText = text;
     SendMessageW(lv, LVM_INSERTITEMW, 0, (LPARAM)&item);
     item.iSubItem = 1;
     if (data->autoDest)
-        LoadStringW(hInstance, IDS_IMPORT_DEST_AUTOMATIC, text, ARRAY_SIZE(text));
+        LoadStringW(hInstance, IDS_IMPORT_DEST_AUTOMATIC, text,
+         sizeof(text)/ sizeof(text[0]));
     else
-        LoadStringW(hInstance, IDS_IMPORT_DEST_DETERMINED, text, ARRAY_SIZE(text));
+        LoadStringW(hInstance, IDS_IMPORT_DEST_DETERMINED, text,
+         sizeof(text)/ sizeof(text[0]));
     SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
     item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
     item.iSubItem = 0;
-    LoadStringW(hInstance, IDS_IMPORT_CONTENT, text, ARRAY_SIZE(text));
+    LoadStringW(hInstance, IDS_IMPORT_CONTENT, text,
+     sizeof(text)/ sizeof(text[0]));
     SendMessageW(lv, LVM_INSERTITEMW, 0, (LPARAM)&item);
     switch (data->contentType)
     {
@@ -5273,14 +5307,15 @@ static void show_import_details(HWND lv, struct ImportWizData *data)
         contentID = IDS_IMPORT_CONTENT_STORE;
         break;
     }
-    LoadStringW(hInstance, contentID, text, ARRAY_SIZE(text));
+    LoadStringW(hInstance, contentID, text, sizeof(text)/ sizeof(text[0]));
     item.iSubItem = 1;
     SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
     if (data->fileName)
     {
         item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
         item.iSubItem = 0;
-        LoadStringW(hInstance, IDS_IMPORT_FILE, text, ARRAY_SIZE(text));
+        LoadStringW(hInstance, IDS_IMPORT_FILE, text,
+         sizeof(text)/ sizeof(text[0]));
         SendMessageW(lv, LVM_INSERTITEMW, 0, (LPARAM)&item);
         item.iSubItem = 1;
         item.pszText = data->fileName;
@@ -5387,10 +5422,12 @@ static LRESULT CALLBACK import_finish_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
                     pTitle = data->pwszWizardTitle;
                 else
                 {
-                    LoadStringW(hInstance, IDS_IMPORT_WIZARD, title, ARRAY_SIZE(title));
+                    LoadStringW(hInstance, IDS_IMPORT_WIZARD, title,
+                     sizeof(title) / sizeof(title[0]));
                     pTitle = title;
                 }
-                LoadStringW(hInstance, IDS_IMPORT_SUCCEEDED, message, ARRAY_SIZE(message));
+                LoadStringW(hInstance, IDS_IMPORT_SUCCEEDED, message,
+                 sizeof(message) / sizeof(message[0]));
                 MessageBoxW(hwnd, message, pTitle, MB_OK);
             }
             else
@@ -5580,7 +5617,8 @@ static LRESULT CALLBACK export_welcome_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
         int height;
 
         data = (struct ExportWizData *)page->lParam;
-        LoadStringW(hInstance, IDS_WIZARD_TITLE_FONT, fontFace, ARRAY_SIZE(fontFace));
+        LoadStringW(hInstance, IDS_WIZARD_TITLE_FONT, fontFace,
+         sizeof(fontFace) / sizeof(fontFace[0]));
         height = -MulDiv(12, GetDeviceCaps(hDC, LOGPIXELSY), 72);
         data->titleFont = CreateFontW(height, 0, 0, 0, FW_BOLD, 0, 0, 0,
          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -5695,7 +5733,8 @@ static LRESULT CALLBACK export_private_key_dlg_proc(HWND hwnd, UINT msg,
         {
             WCHAR error[MAX_STRING_LEN];
 
-            LoadStringW(hInstance, errorID, error, ARRAY_SIZE(error));
+            LoadStringW(hInstance, errorID, error,
+             sizeof(error) / sizeof(error[0]));
             SendMessageW(GetDlgItem(hwnd, IDC_EXPORT_PRIVATE_KEY_UNAVAILABLE),
              WM_SETTEXT, 0, (LPARAM)error);
             EnableWindow(GetDlgItem(hwnd, IDC_EXPORT_PRIVATE_KEY_YES), FALSE);
@@ -5909,10 +5948,12 @@ static void export_password_mismatch(HWND hwnd, const struct ExportWizData *data
         pTitle = data->pwszWizardTitle;
     else
     {
-        LoadStringW(hInstance, IDS_EXPORT_WIZARD, title, ARRAY_SIZE(title));
+        LoadStringW(hInstance, IDS_EXPORT_WIZARD, title,
+         sizeof(title) / sizeof(title[0]));
         pTitle = title;
     }
-    LoadStringW(hInstance, IDS_EXPORT_PASSWORD_MISMATCH, error, ARRAY_SIZE(error));
+    LoadStringW(hInstance, IDS_EXPORT_PASSWORD_MISMATCH, error,
+     sizeof(error) / sizeof(error[0]));
     MessageBoxW(hwnd, error, pTitle, MB_ICONERROR | MB_OK);
     SetFocus(GetDlgItem(hwnd, IDC_EXPORT_PASSWORD));
 }
@@ -6072,10 +6113,12 @@ static BOOL export_validate_filename(HWND hwnd, struct ExportWizData *data,
             pTitle = data->pwszWizardTitle;
         else
         {
-            LoadStringW(hInstance, IDS_EXPORT_WIZARD, title, ARRAY_SIZE(title));
+            LoadStringW(hInstance, IDS_EXPORT_WIZARD, title,
+             sizeof(title) / sizeof(title[0]));
             pTitle = title;
         }
-        LoadStringW(hInstance, IDS_EXPORT_FILE_EXISTS, warning, ARRAY_SIZE(warning));
+        LoadStringW(hInstance, IDS_EXPORT_FILE_EXISTS, warning,
+         sizeof(warning) / sizeof(warning[0]));
         if (MessageBoxW(hwnd, warning, pTitle, MB_YESNO) == IDYES)
             forceCreate = TRUE;
         else
@@ -6103,10 +6146,12 @@ static BOOL export_validate_filename(HWND hwnd, struct ExportWizData *data,
                 pTitle = data->pwszWizardTitle;
             else
             {
-                LoadStringW(hInstance, IDS_EXPORT_WIZARD, title, ARRAY_SIZE(title));
+                LoadStringW(hInstance, IDS_EXPORT_WIZARD, title,
+                 sizeof(title) / sizeof(title[0]));
                 pTitle = title;
             }
-            LoadStringW(hInstance, IDS_IMPORT_OPEN_FAILED, error, ARRAY_SIZE(error));
+            LoadStringW(hInstance, IDS_IMPORT_OPEN_FAILED, error,
+             sizeof(error) / sizeof(error[0]));
             FormatMessageW(
              FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
              GetLastError(), 0, (LPWSTR) &msgBuf, 0, NULL);
@@ -6255,10 +6300,12 @@ static LRESULT CALLBACK export_file_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
                     pTitle = data->pwszWizardTitle;
                 else
                 {
-                    LoadStringW(hInstance, IDS_EXPORT_WIZARD, title, ARRAY_SIZE(title));
+                    LoadStringW(hInstance, IDS_EXPORT_WIZARD, title,
+                     sizeof(title) / sizeof(title[0]));
                     pTitle = title;
                 }
-                LoadStringW(hInstance, IDS_IMPORT_EMPTY_FILE, error, ARRAY_SIZE(error));
+                LoadStringW(hInstance, IDS_IMPORT_EMPTY_FILE, error,
+                 sizeof(error) / sizeof(error[0]));
                 MessageBoxW(hwnd, error, pTitle, MB_ICONERROR | MB_OK);
                 SetWindowLongPtrW(hwnd, DWLP_MSGRESULT, 1);
                 ret = 1;
@@ -6309,7 +6356,7 @@ static LRESULT CALLBACK export_file_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
              data->contextInfo.dwExportFormat,
              data->exportInfo.dwSubjectChoice);
             ofn.lpstrFile = fileBuf;
-            ofn.nMaxFile = ARRAY_SIZE(fileBuf);
+            ofn.nMaxFile = sizeof(fileBuf) / sizeof(fileBuf[0]);
             fileBuf[0] = 0;
             if (GetSaveFileNameW(&ofn))
                 SendMessageW(GetDlgItem(hwnd, IDC_EXPORT_FILENAME), WM_SETTEXT,
@@ -6334,7 +6381,8 @@ static void show_export_details(HWND lv, const struct ExportWizData *data)
     {
         item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
         item.iSubItem = 0;
-        LoadStringW(hInstance, IDS_IMPORT_FILE, text, ARRAY_SIZE(text));
+        LoadStringW(hInstance, IDS_IMPORT_FILE, text,
+         sizeof(text)/ sizeof(text[0]));
         item.pszText = text;
         SendMessageW(lv, LVM_INSERTITEMW, 0, (LPARAM)&item);
         item.iSubItem = 1;
@@ -6355,27 +6403,32 @@ static void show_export_details(HWND lv, const struct ExportWizData *data)
     {
         item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
         item.iSubItem = 0;
-        LoadStringW(hInstance, IDS_EXPORT_INCLUDE_CHAIN, text, ARRAY_SIZE(text));
+        LoadStringW(hInstance, IDS_EXPORT_INCLUDE_CHAIN, text,
+         sizeof(text) / sizeof(text[0]));
         SendMessageW(lv, LVM_INSERTITEMW, item.iItem, (LPARAM)&item);
         item.iSubItem = 1;
-        LoadStringW(hInstance, data->contextInfo.fExportChain ? IDS_YES : IDS_NO, text,
-         ARRAY_SIZE(text));
+        LoadStringW(hInstance,
+         data->contextInfo.fExportChain ? IDS_YES : IDS_NO, text,
+         sizeof(text) / sizeof(text[0]));
         SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
 
         item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
         item.iSubItem = 0;
-        LoadStringW(hInstance, IDS_EXPORT_KEYS, text, ARRAY_SIZE(text));
+        LoadStringW(hInstance, IDS_EXPORT_KEYS, text,
+         sizeof(text) / sizeof(text[0]));
         SendMessageW(lv, LVM_INSERTITEMW, item.iItem, (LPARAM)&item);
         item.iSubItem = 1;
-        LoadStringW(hInstance, data->contextInfo.fExportPrivateKeys ? IDS_YES : IDS_NO, text,
-         ARRAY_SIZE(text));
+        LoadStringW(hInstance,
+         data->contextInfo.fExportPrivateKeys ? IDS_YES : IDS_NO, text,
+         sizeof(text) / sizeof(text[0]));
         SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
     }
     }
 
     item.iItem = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
     item.iSubItem = 0;
-    LoadStringW(hInstance, IDS_EXPORT_FORMAT, text, ARRAY_SIZE(text));
+    LoadStringW(hInstance, IDS_EXPORT_FORMAT, text,
+     sizeof(text)/ sizeof(text[0]));
     SendMessageW(lv, LVM_INSERTITEMW, 0, (LPARAM)&item);
 
     item.iSubItem = 1;
@@ -6406,7 +6459,7 @@ static void show_export_details(HWND lv, const struct ExportWizData *data)
             contentID = IDS_EXPORT_FILTER_CERT;
         }
     }
-    LoadStringW(hInstance, contentID, text, ARRAY_SIZE(text));
+    LoadStringW(hInstance, contentID, text, sizeof(text) / sizeof(text[0]));
     SendMessageW(lv, LVM_SETITEMTEXTW, item.iItem, (LPARAM)&item);
 }
 
@@ -6778,10 +6831,12 @@ static LRESULT CALLBACK export_finish_dlg_proc(HWND hwnd, UINT msg, WPARAM wp,
                 pTitle = data->pwszWizardTitle;
             else
             {
-                LoadStringW(hInstance, IDS_EXPORT_WIZARD, title, ARRAY_SIZE(title));
+                LoadStringW(hInstance, IDS_EXPORT_WIZARD, title,
+                 sizeof(title) / sizeof(title[0]));
                 pTitle = title;
             }
-            LoadStringW(hInstance, messageID, message, ARRAY_SIZE(message));
+            LoadStringW(hInstance, messageID, message,
+             sizeof(message) / sizeof(message[0]));
             MessageBoxW(hwnd, message, pTitle, mbFlags);
             break;
         }

@@ -179,7 +179,7 @@ static void update_visible_region( struct dce *dce )
         }
     }
 
-    if (!surface) SetRectEmpty( &top_rect );
+    if (!surface) top_rect = get_virtual_screen_rect();
     __wine_set_visible_region( dce->hdc, vis_rgn, &win_rect, &top_rect, surface );
     if (surface) window_surface_release( surface );
 }
@@ -652,12 +652,12 @@ static HRGN send_ncpaint( HWND hwnd, HWND *child, UINT *flags )
 
     if (whole_rgn)
     {
-        RECT client, window, update;
+        RECT client, update;
         INT type;
 
         /* check if update rgn overlaps with nonclient area */
         type = GetRgnBox( whole_rgn, &update );
-        WIN_GetRectangles( hwnd, COORDS_SCREEN, &window, &client );
+        WIN_GetRectangles( hwnd, COORDS_SCREEN, 0, &client );
 
         if ((*flags & UPDATE_NONCLIENT) ||
             update.left < client.left || update.top < client.top ||
@@ -667,10 +667,15 @@ static HRGN send_ncpaint( HWND hwnd, HWND *child, UINT *flags )
             CombineRgn( client_rgn, client_rgn, whole_rgn, RGN_AND );
 
             /* check if update rgn contains complete nonclient area */
-            if (type == SIMPLEREGION && EqualRect( &window, &update ))
+            if (type == SIMPLEREGION)
             {
-                DeleteObject( whole_rgn );
-                whole_rgn = (HRGN)1;
+                RECT window;
+                GetWindowRect( hwnd, &window );
+                if (EqualRect( &window, &update ))
+                {
+                    DeleteObject( whole_rgn );
+                    whole_rgn = (HRGN)1;
+                }
             }
         }
         else
@@ -1222,6 +1227,8 @@ BOOL WINAPI RedrawWindow( HWND hwnd, const RECT *rect, HRGN hrgn, UINT flags )
     static const RECT empty;
     BOOL ret;
 
+    if (!hwnd) hwnd = GetDesktopWindow();
+
     if (TRACE_ON(win))
     {
         if (hrgn)
@@ -1264,8 +1271,6 @@ BOOL WINAPI RedrawWindow( HWND hwnd, const RECT *rect, HRGN hrgn, UINT flags )
             ret = redraw_window_rects( hwnd, flags, (const RECT *)data->Buffer, data->rdh.nCount );
         HeapFree( GetProcessHeap(), 0, data );
     }
-
-    if (!hwnd) hwnd = GetDesktopWindow();
 
     if (flags & RDW_UPDATENOW) update_now( hwnd, flags );
     else if (flags & RDW_ERASENOW) erase_now( hwnd, flags );
@@ -1465,10 +1470,10 @@ static INT scroll_window( HWND hwnd, INT dx, INT dy, const RECT *rect, const REC
     rdw_flags = (flags & SW_ERASE) && (flags & SW_INVALIDATE) ?
                                 RDW_INVALIDATE | RDW_ERASE  : RDW_INVALIDATE ;
 
+    if (!WIN_IsWindowDrawable( hwnd, TRUE )) return ERROR;
     hwnd = WIN_GetFullHandle( hwnd );
 
-    if (!WIN_IsWindowDrawable( hwnd, TRUE )) SetRectEmpty(&rc);
-    else GetClientRect(hwnd, &rc);
+    GetClientRect(hwnd, &rc);
 
     if (clipRect) IntersectRect(&cliprc,&rc,clipRect);
     else cliprc = rc;

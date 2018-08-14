@@ -1087,7 +1087,7 @@ static GstBusSyncReply watch_bus(GstBus *bus, GstMessage *msg, gpointer data)
 static void unknown_type(GstElement *bin, GstPad *pad, GstCaps *caps, gpointer user)
 {
     gchar *strcaps = gst_caps_to_string(caps);
-    ERR("Could not find a filter for caps: %s\n", debugstr_a(strcaps));
+    ERR("Could not find a filter for caps: %s\n", strcaps);
     g_free(strcaps);
 }
 
@@ -1470,6 +1470,12 @@ static HRESULT WINAPI GST_GetState(IBaseFilter *iface, DWORD dwMilliSecsTimeout,
     }
 }
 
+static HRESULT WINAPI GST_FindPin(IBaseFilter *iface, LPCWSTR Id, IPin **ppPin)
+{
+    FIXME("(%p)->(%s,%p) stub\n", iface, debugstr_w(Id), ppPin);
+    return E_NOTIMPL;
+}
+
 static const IBaseFilterVtbl GST_Vtbl = {
     GST_QueryInterface,
     BaseFilterImpl_AddRef,
@@ -1482,7 +1488,7 @@ static const IBaseFilterVtbl GST_Vtbl = {
     BaseFilterImpl_SetSyncSource,
     BaseFilterImpl_GetSyncSource,
     BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
+    GST_FindPin,
     BaseFilterImpl_QueryFilterInfo,
     BaseFilterImpl_JoinFilterGraph,
     BaseFilterImpl_QueryVendorInfo

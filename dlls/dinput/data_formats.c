@@ -25,6 +25,8 @@
 #include "windef.h"
 #include "dinput.h"
 
+#define numObjects(x) (sizeof(x) / sizeof(x[0]))
+
 static const DIOBJECTDATAFORMAT dfDIJoystick[] = {
   { &GUID_XAxis,DIJOFS_X,DIDFT_OPTIONAL|DIDFT_AXIS|DIDFT_ANYINSTANCE,0},
   { &GUID_YAxis,DIJOFS_Y,DIDFT_OPTIONAL|DIDFT_AXIS|DIDFT_ANYINSTANCE,0},
@@ -77,7 +79,7 @@ const DIDATAFORMAT c_dfDIJoystick = {
     sizeof(DIOBJECTDATAFORMAT),
     DIDF_ABSAXIS,
     sizeof(DIJOYSTATE),
-    ARRAY_SIZE(dfDIJoystick),
+    numObjects(dfDIJoystick),
     (LPDIOBJECTDATAFORMAT)dfDIJoystick
 };
 
@@ -253,7 +255,7 @@ const DIDATAFORMAT c_dfDIJoystick2 = {
     sizeof(DIOBJECTDATAFORMAT),
     DIDF_ABSAXIS,
     sizeof(DIJOYSTATE2),
-    ARRAY_SIZE(dfDIJoystick2),
+    numObjects(dfDIJoystick2),
     (LPDIOBJECTDATAFORMAT)dfDIJoystick2
 };
 
@@ -272,7 +274,7 @@ const DIDATAFORMAT c_dfDIMouse = {
     sizeof(DIOBJECTDATAFORMAT),
     DIDF_RELAXIS,
     sizeof(DIMOUSESTATE),
-    ARRAY_SIZE(dfDIMouse),
+    numObjects(dfDIMouse),
     (LPDIOBJECTDATAFORMAT)dfDIMouse
 };
 
@@ -295,7 +297,7 @@ const DIDATAFORMAT c_dfDIMouse2 = {
     sizeof(DIOBJECTDATAFORMAT),
     DIDF_RELAXIS,
     sizeof(DIMOUSESTATE2),
-    ARRAY_SIZE(dfDIMouse2),
+    numObjects(dfDIMouse2),
     (LPDIOBJECTDATAFORMAT)dfDIMouse2
 };
 
@@ -563,6 +565,6 @@ const DIDATAFORMAT c_dfDIKeyboard = {
     sizeof(DIOBJECTDATAFORMAT),
     DIDF_RELAXIS,
     256,
-    ARRAY_SIZE(dfDIKeyboard),
+    numObjects(dfDIKeyboard),
     (LPDIOBJECTDATAFORMAT)dfDIKeyboard
 };

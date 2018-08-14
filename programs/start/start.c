@@ -100,7 +100,8 @@ static void fatal_string_error(int which, DWORD error_code, const WCHAR *filenam
 {
 	WCHAR msg[2048];
 
-	if (!LoadStringW(GetModuleHandleW(NULL), which, msg, ARRAY_SIZE(msg)))
+	if (!LoadStringW(GetModuleHandleW(NULL), which,
+					msg, sizeof(msg)/sizeof(WCHAR)))
 		WINE_ERR("LoadString failed, error %d\n", GetLastError());
 
 	fatal_error(msg, error_code, filename);
@@ -110,7 +111,8 @@ static void fatal_string(int which)
 {
 	WCHAR msg[2048];
 
-	if (!LoadStringW(GetModuleHandleW(NULL), which, msg, ARRAY_SIZE(msg)))
+	if (!LoadStringW(GetModuleHandleW(NULL), which,
+					msg, sizeof(msg)/sizeof(WCHAR)))
 		WINE_ERR("LoadString failed, error %d\n", GetLastError());
 
 	output(msg);

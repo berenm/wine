@@ -36,6 +36,10 @@
 /* Magic value defined by Vulkan ICD / Loader spec */
 #define VULKAN_ICD_MAGIC_VALUE 0x01CDC0DE
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+#endif
+
 #define WINEVULKAN_QUIRK_GET_DEVICE_PROC_ADDR 0x00000001
 
 struct vulkan_func
@@ -86,7 +90,7 @@ struct VkInstance_T
      * dispatchable objects.
      */
     struct VkPhysicalDevice_T **phys_devs;
-    uint32_t phys_dev_count;
+    uint32_t num_phys_devs;
 
     unsigned int quirks;
 };
@@ -106,8 +110,6 @@ struct VkQueue_T
     struct wine_vk_base base;
     struct VkDevice_T *device; /* parent */
     VkQueue queue; /* native queue */
-
-    VkDeviceQueueCreateFlags flags;
 };
 
 void *wine_vk_get_device_proc_addr(const char *name) DECLSPEC_HIDDEN;

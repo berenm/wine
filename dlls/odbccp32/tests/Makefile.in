@@ -3,6 +3,3 @@ IMPORTS   = odbccp32 advapi32
 
 C_SRCS = \
 	misc.c
-
-RC_SRCS = \
-	odbccp32.rc

@@ -1840,23 +1840,11 @@ static void test_create_device(void)
     swapchain_desc.OutputWindow = NULL;
     hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION,
             &swapchain_desc, &swapchain, &device, &feature_level, &immediate_context);
-    todo_wine ok(hr == DXGI_ERROR_INVALID_CALL, "D3D11CreateDeviceAndSwapChain returned %#x.\n", hr);
-    if (SUCCEEDED(hr))
-    {
-        refcount = IDXGISwapChain_Release(swapchain);
-        ok(!refcount, "Swapchain has %u references left.\n", refcount);
-        refcount = ID3D11DeviceContext_Release(immediate_context);
-        ok(!refcount, "Immediate context has %u references left.\n", refcount);
-        refcount = ID3D11Device_Release(device);
-        ok(!refcount, "Device has %u references left.\n", refcount);
-    }
-    else
-    {
-        ok(!swapchain, "Got unexpected swapchain pointer %p.\n", swapchain);
-        ok(!device, "Got unexpected device pointer %p.\n", device);
-        ok(!feature_level, "Got unexpected feature level %#x.\n", feature_level);
-        ok(!immediate_context, "Got unexpected immediate context pointer %p.\n", immediate_context);
-    }
+    ok(hr == DXGI_ERROR_INVALID_CALL, "D3D11CreateDeviceAndSwapChain returned %#x.\n", hr);
+    ok(!swapchain, "Got unexpected swapchain pointer %p.\n", swapchain);
+    ok(!device, "Got unexpected device pointer %p.\n", device);
+    ok(!feature_level, "Got unexpected feature level %#x.\n", feature_level);
+    ok(!immediate_context, "Got unexpected immediate context pointer %p.\n", immediate_context);
 
     swapchain = (IDXGISwapChain *)0xdeadbeef;
     device = (ID3D11Device *)0xdeadbeef;
@@ -5154,8 +5142,8 @@ static void test_create_query(void)
         {D3D11_QUERY_TIMESTAMP_DISJOINT,            D3D_FEATURE_LEVEL_10_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_PIPELINE_STATISTICS,           D3D_FEATURE_LEVEL_10_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_OCCLUSION_PREDICATE,           D3D_FEATURE_LEVEL_10_0, TRUE,  TRUE,  FALSE},
-        {D3D11_QUERY_SO_STATISTICS,                 D3D_FEATURE_LEVEL_10_0, FALSE, FALSE, FALSE},
-        {D3D11_QUERY_SO_OVERFLOW_PREDICATE,         D3D_FEATURE_LEVEL_10_0, TRUE,  TRUE,  FALSE},
+        {D3D11_QUERY_SO_STATISTICS,                 D3D_FEATURE_LEVEL_10_0, FALSE, FALSE, TRUE},
+        {D3D11_QUERY_SO_OVERFLOW_PREDICATE,         D3D_FEATURE_LEVEL_10_0, TRUE,  TRUE,  TRUE},
         {D3D11_QUERY_SO_STATISTICS_STREAM0,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0, D3D_FEATURE_LEVEL_11_0, TRUE,  FALSE, TRUE},
         {D3D11_QUERY_SO_STATISTICS_STREAM1,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, FALSE},
@@ -18554,13 +18542,10 @@ static void test_uav_store_immediate_constant(void)
 {
     D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc;
     struct d3d11_test_context test_context;
-    D3D11_TEXTURE2D_DESC texture_desc;
     ID3D11UnorderedAccessView *uav;
     ID3D11DeviceContext *context;
     struct resource_readback rb;
-    ID3D11Texture2D *texture;
     ID3D11ComputeShader *cs;
-    unsigned int uint_data;
     ID3D11Device *device;
     ID3D11Buffer *buffer;
     float float_data;
@@ -18602,42 +18587,6 @@ static void test_uav_store_immediate_constant(void)
         0x0400089c, 0x0011e000, 0x00000000, 0x00005555, 0x0400009b, 0x00000001, 0x00000001, 0x00000001,
         0x0d0000a4, 0x0011e0f2, 0x00000000, 0x00004002, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
         0x00004002, 0x3f800000, 0x3f800000, 0x3f800000, 0x3f800000, 0x0100003e,
-    };
-    static const DWORD cs_store_unorm_code[] =
-    {
-#if 0
-        RWTexture2D<unorm float> u;
-
-        [numthreads(1, 1, 1)]
-        void main()
-        {
-            u[uint2(0, 0)] = 0.5f;
-        }
-#endif
-        0x43425844, 0x3623f1de, 0xe847109e, 0x8e3da13f, 0xb6787b06, 0x00000001, 0x000000b8, 0x00000003,
-        0x0000002c, 0x0000003c, 0x0000004c, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
-        0x00000008, 0x00000000, 0x00000008, 0x58454853, 0x00000064, 0x00050050, 0x00000019, 0x0100086a,
-        0x0400189c, 0x0011e000, 0x00000000, 0x00001111, 0x0400009b, 0x00000001, 0x00000001, 0x00000001,
-        0x0d0000a4, 0x0011e0f2, 0x00000000, 0x00004002, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00004002, 0x3f000000, 0x3f000000, 0x3f000000, 0x3f000000, 0x0100003e,
-    };
-    static const DWORD cs_store_snorm_code[] =
-    {
-#if 0
-        RWTexture2D<snorm float> u;
-
-        [numthreads(1, 1, 1)]
-        void main()
-        {
-            u[uint2(0, 0)] = -0.5f;
-        }
-#endif
-        0x43425844, 0xce5397fc, 0x7464bc06, 0xc79aa56c, 0x881bd7ef, 0x00000001, 0x000000b8, 0x00000003,
-        0x0000002c, 0x0000003c, 0x0000004c, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
-        0x00000008, 0x00000000, 0x00000008, 0x58454853, 0x00000064, 0x00050050, 0x00000019, 0x0100086a,
-        0x0400189c, 0x0011e000, 0x00000000, 0x00002222, 0x0400009b, 0x00000001, 0x00000001, 0x00000001,
-        0x0d0000a4, 0x0011e0f2, 0x00000000, 0x00004002, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00004002, 0xbf000000, 0xbf000000, 0xbf000000, 0xbf000000, 0x0100003e,
     };
     static const D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
     static const unsigned int zero[4] = {0};
@@ -18686,57 +18635,7 @@ static void test_uav_store_immediate_constant(void)
     ok(float_data == 1.0f, "Got unexpected value %.8e.\n", float_data);
     release_resource_readback(&rb);
 
-    texture_desc.Width = 64;
-    texture_desc.Height = 64;
-    texture_desc.MipLevels = 1;
-    texture_desc.ArraySize = 1;
-    texture_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    texture_desc.SampleDesc.Count = 1;
-    texture_desc.SampleDesc.Quality = 0;
-    texture_desc.Usage = D3D11_USAGE_DEFAULT;
-    texture_desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
-    texture_desc.CPUAccessFlags = 0;
-    texture_desc.MiscFlags = 0;
-    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &texture);
-    ok(hr == S_OK, "Failed to create texture, hr %#x.\n", hr);
-    ID3D11UnorderedAccessView_Release(uav);
-    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)texture, NULL, &uav);
-    ok(hr == S_OK, "Failed to create unordered access view, hr %#x.\n", hr);
-
-    ID3D11ComputeShader_Release(cs);
-    hr = ID3D11Device_CreateComputeShader(device, cs_store_unorm_code, sizeof(cs_store_unorm_code), NULL, &cs);
-    ok(hr == S_OK, "Failed to create compute shader, hr %#x.\n", hr);
-    ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, zero);
-    ID3D11DeviceContext_CSSetShader(context, cs, NULL, 0);
-    ID3D11DeviceContext_CSSetUnorderedAccessViews(context, 0, 1, &uav, NULL);
-    ID3D11DeviceContext_Dispatch(context, 1, 1, 1);
-    get_texture_readback(texture, 0, &rb);
-    uint_data = get_readback_color(&rb, 0, 0, 0);
-    ok(compare_color(uint_data, 0x80808080, 1), "Got unexpected color 0x%08x.\n", uint_data);
-    release_resource_readback(&rb);
-
-    ID3D11Texture2D_Release(texture);
-    texture_desc.Format = DXGI_FORMAT_R8G8B8A8_SNORM;
-    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &texture);
-    ok(hr == S_OK, "Failed to create texture, hr %#x.\n", hr);
-    ID3D11UnorderedAccessView_Release(uav);
-    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)texture, NULL, &uav);
-    ok(hr == S_OK, "Failed to create unordered access view, hr %#x.\n", hr);
-
-    ID3D11ComputeShader_Release(cs);
-    hr = ID3D11Device_CreateComputeShader(device, cs_store_snorm_code, sizeof(cs_store_snorm_code), NULL, &cs);
-    ok(hr == S_OK, "Failed to create compute shader, hr %#x.\n", hr);
-    ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, zero);
-    ID3D11DeviceContext_CSSetShader(context, cs, NULL, 0);
-    ID3D11DeviceContext_CSSetUnorderedAccessViews(context, 0, 1, &uav, NULL);
-    ID3D11DeviceContext_Dispatch(context, 1, 1, 1);
-    get_texture_readback(texture, 0, &rb);
-    uint_data = get_readback_color(&rb, 0, 0, 0);
-    ok(compare_color(uint_data, 0xc0c0c0c0, 1), "Got unexpected color 0x%08x.\n", uint_data);
-    release_resource_readback(&rb);
-
     ID3D11Buffer_Release(buffer);
-    ID3D11Texture2D_Release(texture);
     ID3D11ComputeShader_Release(cs);
     ID3D11UnorderedAccessView_Release(uav);
     release_test_context(&test_context);
@@ -27048,47 +26947,6 @@ static void test_multisample_resolve(void)
          DXGI_FORMAT_R8G8B8A8_UNORM,
          DXGI_FORMAT_R8G8B8A8_UNORM,
          &color, 0xffbf7f40, TRUE},
-
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         &green, 0xff00ff00, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         &color, 0xffbf7f40, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         &green, 0xff00ff00, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         &color, 0xffe1bc89, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         &green, 0xff00ff00, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         &color, 0xffe1bc89, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         &green, 0xff00ff00, TRUE},
-        {DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_TYPELESS,
-         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-         DXGI_FORMAT_R8G8B8A8_UNORM,
-         &color, 0xffbf7f40, TRUE},
     };
 
     if (!init_test_context(&test_context, NULL))
@@ -27730,174 +27588,6 @@ static void test_depth_clip(void)
     release_test_context(&test_context);
 }
 
-static void test_dual_blending(void)
-{
-    struct d3d11_test_context test_context;
-    D3D11_TEXTURE2D_DESC texture_desc;
-    ID3D11Texture2D *render_target;
-    ID3D11RenderTargetView *rtv[2];
-    ID3D11BlendState *blend_state;
-    ID3D11DeviceContext *context;
-    ID3D11VertexShader *vs;
-    ID3D11PixelShader *ps;
-    D3D11_BLEND_DESC desc;
-    ID3D11Device *device;
-    HRESULT hr;
-
-    static const DWORD vs_code[] =
-    {
-#if 0
-        struct output
-        {
-            float4 position : SV_PoSiTion;
-            float4 color0 : COLOR0;
-            float4 color1 : COLOR1;
-        };
-
-        void main(uint id : SV_VertexID, out output o)
-        {
-            float2 coords = float2((id << 1) & 2, id & 2);
-            o.position = float4(coords * float2(2, -2) + float2(-1, 1), 0, 1);
-            o.color0 = float4(1.0f, 0.0f, 0.0f, 1.0f);
-            o.color1 = float4(0.0f, 1.0f, 0.0f, 1.0f);
-        }
-#endif
-        0x43425844, 0x93c216a1, 0xbaa7e8d4, 0xd5368c6a, 0x4e889e07, 0x00000001, 0x00000224, 0x00000003,
-        0x0000002c, 0x00000060, 0x000000cc, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
-        0x00000000, 0x00000006, 0x00000001, 0x00000000, 0x00000101, 0x565f5653, 0x65747265, 0x00444978,
-        0x4e47534f, 0x00000064, 0x00000003, 0x00000008, 0x00000050, 0x00000000, 0x00000001, 0x00000003,
-        0x00000000, 0x0000000f, 0x0000005c, 0x00000000, 0x00000000, 0x00000003, 0x00000001, 0x0000000f,
-        0x0000005c, 0x00000001, 0x00000000, 0x00000003, 0x00000002, 0x0000000f, 0x505f5653, 0x5469536f,
-        0x006e6f69, 0x4f4c4f43, 0xabab0052, 0x52444853, 0x00000150, 0x00010040, 0x00000054, 0x04000060,
-        0x00101012, 0x00000000, 0x00000006, 0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x03000065,
-        0x001020f2, 0x00000001, 0x03000065, 0x001020f2, 0x00000002, 0x02000068, 0x00000001, 0x07000029,
-        0x00100012, 0x00000000, 0x0010100a, 0x00000000, 0x00004001, 0x00000001, 0x07000001, 0x00100012,
-        0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x00000002, 0x07000001, 0x00100042, 0x00000000,
-        0x0010100a, 0x00000000, 0x00004001, 0x00000002, 0x05000056, 0x00100032, 0x00000000, 0x00100086,
-        0x00000000, 0x0f000032, 0x00102032, 0x00000000, 0x00100046, 0x00000000, 0x00004002, 0x40000000,
-        0xc0000000, 0x00000000, 0x00000000, 0x00004002, 0xbf800000, 0x3f800000, 0x00000000, 0x00000000,
-        0x08000036, 0x001020c2, 0x00000000, 0x00004002, 0x00000000, 0x00000000, 0x00000000, 0x3f800000,
-        0x08000036, 0x001020f2, 0x00000001, 0x00004002, 0x3f800000, 0x00000000, 0x00000000, 0x3f800000,
-        0x08000036, 0x001020f2, 0x00000002, 0x00004002, 0x00000000, 0x3f800000, 0x00000000, 0x3f800000,
-        0x0100003e,
-    };
-    static const DWORD ps_code[] =
-    {
-#if 0
-        struct input
-        {
-            float4 position : SV_PoSiTiOn;
-            float4 color1 : COLOR1;
-            float4 color0 : COLOR0;
-        };
-
-        struct output
-        {
-            float4 target0 : SV_Target0;
-            float4 target1 : SV_Target1;
-        };
-
-        void main(const in input i, out output o)
-        {
-            o.target0 = i.color0;
-            o.target1 = i.color1;
-        }
-#endif
-        0x43425844, 0x620ef963, 0xed8f19fe, 0x7b3a0a53, 0x126ce021, 0x00000001, 0x00000150, 0x00000003,
-        0x0000002c, 0x00000098, 0x000000e4, 0x4e475349, 0x00000064, 0x00000003, 0x00000008, 0x00000050,
-        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000f, 0x0000005c, 0x00000001, 0x00000000,
-        0x00000003, 0x00000001, 0x00000f0f, 0x0000005c, 0x00000000, 0x00000000, 0x00000003, 0x00000002,
-        0x00000f0f, 0x505f5653, 0x5469536f, 0x006e4f69, 0x4f4c4f43, 0xabab0052, 0x4e47534f, 0x00000044,
-        0x00000002, 0x00000008, 0x00000038, 0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x0000000f,
-        0x00000038, 0x00000001, 0x00000000, 0x00000003, 0x00000001, 0x0000000f, 0x545f5653, 0x65677261,
-        0xabab0074, 0x52444853, 0x00000064, 0x00000040, 0x00000019, 0x03001062, 0x001010f2, 0x00000001,
-        0x03001062, 0x001010f2, 0x00000002, 0x03000065, 0x001020f2, 0x00000000, 0x03000065, 0x001020f2,
-        0x00000001, 0x05000036, 0x001020f2, 0x00000000, 0x00101e46, 0x00000002, 0x05000036, 0x001020f2,
-        0x00000001, 0x00101e46, 0x00000001, 0x0100003e,
-    };
-
-    static const float white[] = {1.0f, 1.0f, 1.0f, 1.0f};
-
-    if (!init_test_context(&test_context, NULL))
-        return;
-
-    device = test_context.device;
-    context = test_context.immediate_context;
-
-    hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &vs);
-    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
-    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &ps);
-    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
-
-    ID3D11Texture2D_GetDesc(test_context.backbuffer, &texture_desc);
-    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &render_target);
-    ok(SUCCEEDED(hr), "Failed to create texture, hr %#x.\n", hr);
-
-    rtv[0] = test_context.backbuffer_rtv;
-    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)render_target, NULL, &rtv[1]);
-    ok(SUCCEEDED(hr), "Failed to create render target view, hr %#x.\n", hr);
-
-    ID3D11DeviceContext_VSSetShader(context, vs, NULL, 0);
-    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
-    ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    ID3D11DeviceContext_OMSetRenderTargets(context, 2, rtv, NULL);
-
-    ID3D11DeviceContext_ClearRenderTargetView(context, rtv[0], white);
-    ID3D11DeviceContext_ClearRenderTargetView(context, rtv[1], white);
-    ID3D11DeviceContext_Draw(context, 3, 0);
-
-    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
-    check_texture_color(render_target, 0xff0000ff, 0);
-
-    memset(&desc, 0, sizeof(desc));
-    desc.AlphaToCoverageEnable = FALSE;
-    desc.IndependentBlendEnable = FALSE;
-    desc.RenderTarget[0].BlendEnable = TRUE;
-    desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_COLOR;
-    desc.RenderTarget[0].DestBlend = D3D11_BLEND_SRC1_COLOR;
-    desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-    desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
-    desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
-    desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-    desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-
-    hr = ID3D11Device_CreateBlendState(device, &desc, &blend_state);
-    ok(SUCCEEDED(hr), "Failed to create blend state, hr %#x.\n", hr);
-
-    ID3D11DeviceContext_OMSetBlendState(context, blend_state, NULL, D3D11_DEFAULT_SAMPLE_MASK);
-    ID3D11DeviceContext_ClearRenderTargetView(context, rtv[0], white);
-    ID3D11DeviceContext_ClearRenderTargetView(context, rtv[1], white);
-    ID3D11DeviceContext_Draw(context, 3, 0);
-
-    check_texture_color(test_context.backbuffer, 0xff00ffff, 0);
-    todo_wine check_texture_color(render_target, 0xff0000ff, 0);
-
-    ID3D11BlendState_Release(blend_state);
-
-    desc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
-    desc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
-    desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-    desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-    hr = ID3D11Device_CreateBlendState(device, &desc, &blend_state);
-    ok(SUCCEEDED(hr), "Failed to create blend state, hr %#x.\n", hr);
-
-    ID3D11DeviceContext_OMSetBlendState(context, blend_state, NULL, D3D11_DEFAULT_SAMPLE_MASK);
-    ID3D11DeviceContext_ClearRenderTargetView(context, rtv[0], white);
-    ID3D11DeviceContext_ClearRenderTargetView(context, rtv[1], white);
-    ID3D11DeviceContext_Draw(context, 3, 0);
-
-    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
-    check_texture_color(render_target, 0xff0000ff, 0);
-
-    ID3D11BlendState_Release(blend_state);
-
-    ID3D11RenderTargetView_Release(rtv[1]);
-    ID3D11Texture2D_Release(render_target);
-    ID3D11PixelShader_Release(ps);
-    ID3D11VertexShader_Release(vs);
-    release_test_context(&test_context);
-}
-
 START_TEST(d3d11)
 {
     unsigned int argc, i;
@@ -28030,7 +27720,6 @@ START_TEST(d3d11)
     run_for_each_feature_level_in_range(D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_11_0, test_negative_viewports);
     test_early_depth_stencil();
     test_conservative_depth_output();
-    test_dual_blending();
     test_format_compatibility();
     test_clip_distance();
     test_combined_clip_and_cull_distances();

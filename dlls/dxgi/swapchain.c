@@ -252,11 +252,12 @@ static HRESULT STDMETHODCALLTYPE DECLSPEC_HOTPATCH d3d11_swapchain_SetFullscreen
         if (swapchain->target)
             IDXGIOutput_Release(swapchain->target);
         swapchain->target = target;
-        return S_OK;
+    }
+    else
+    {
+        IDXGIOutput_Release(target);
     }
 
-    if (target)
-        IDXGIOutput_Release(target);
     return hr;
 }
 
@@ -1526,6 +1527,7 @@ static BOOL init_vk_funcs(struct dxgi_vk_funcs *dxgi, VkDevice vk_device)
         return FALSE;
     }
 
+    dxgi->p_vkAcquireNextImageKHR = vk->p_vkAcquireNextImageKHR;
     dxgi->p_vkCreateSwapchainKHR = vk->p_vkCreateSwapchainKHR;
     dxgi->p_vkCreateWin32SurfaceKHR = vk->p_vkCreateWin32SurfaceKHR;
     dxgi->p_vkDestroySurfaceKHR = vk->p_vkDestroySurfaceKHR;
@@ -1546,11 +1548,10 @@ static BOOL init_vk_funcs(struct dxgi_vk_funcs *dxgi, VkDevice vk_device)
         ERR("Failed to get device proc "#name".\n"); \
         return FALSE; \
     }
-    LOAD_DEVICE_PFN(vkAcquireNextImageKHR)
     LOAD_DEVICE_PFN(vkCreateFence)
-    LOAD_DEVICE_PFN(vkDestroyFence)
-    LOAD_DEVICE_PFN(vkResetFences)
     LOAD_DEVICE_PFN(vkWaitForFences)
+    LOAD_DEVICE_PFN(vkResetFences)
+    LOAD_DEVICE_PFN(vkDestroyFence)
 #undef LOAD_DEVICE_PFN
 
     return TRUE;

@@ -72,7 +72,7 @@ PWINE_ACMDRIVERID MSACM_RegisterDriverFromRegistry(LPCWSTR pszRegEntry)
     /* The requested registry entry must have the format msacm.XXXXX in order to
        be recognized in any future sessions of msacm
      */
-    if (0 == strncmpiW(pszRegEntry, msacmW, ARRAY_SIZE(msacmW))) {
+    if (0 == strncmpiW(pszRegEntry, msacmW, sizeof(msacmW)/sizeof(WCHAR))) {
         lRet = RegOpenKeyExW(HKEY_LOCAL_MACHINE, drvkey, 0, KEY_QUERY_VALUE, &hKey);
         if (lRet != ERROR_SUCCESS) {
             WARN("unable to open registry key - 0x%08x\n", lRet);
@@ -373,31 +373,31 @@ void MSACM_RegisterAllDrivers(void)
     if (lRet == ERROR_SUCCESS) {
 	RegQueryInfoKeyW( hKey, 0, 0, 0, &cnt, 0, 0, 0, 0, 0, 0, 0);
 	for (i = 0; i < cnt; i++) {
-	    bufLen = ARRAY_SIZE(buf);
+	    bufLen = sizeof(buf) / sizeof(buf[0]);
 	    lRet = RegEnumKeyExW(hKey, i, buf, &bufLen, 0, 0, 0, &lastWrite);
 	    if (lRet != ERROR_SUCCESS) continue;
-	    if (strncmpiW(buf, msacmW, ARRAY_SIZE(msacmW))) continue;
+	    if (strncmpiW(buf, msacmW, sizeof(msacmW)/sizeof(msacmW[0]))) continue;
 	    if (!(name = strchrW(buf, '='))) continue;
 	    *name = 0;
 	    MSACM_RegisterDriver(buf, name + 1, 0);
 	}
 	i = 0;
-	cnt = ARRAY_SIZE(valname);
+	cnt = sizeof(valname) / sizeof(*valname);
 	bufLen = sizeof(buf);
 	while(RegEnumValueW(hKey, i, valname, &cnt, 0,
 		    &type, (BYTE*)buf, &bufLen) == ERROR_SUCCESS){
-	    if (!strncmpiW(valname, msacmW, ARRAY_SIZE(msacmW)))
+	    if(!strncmpiW(valname, msacmW, sizeof(msacmW) / sizeof(*msacmW)))
 		MSACM_RegisterDriver(valname, buf, 0);
 	    ++i;
 	}
     	RegCloseKey( hKey );
     }
 
-    if (GetPrivateProfileSectionW(drv32, buf, ARRAY_SIZE(buf), sys))
+    if (GetPrivateProfileSectionW(drv32, buf, sizeof(buf)/sizeof(buf[0]), sys))
     {
 	for(s = buf; *s;  s += strlenW(s) + 1)
 	{
-	    if (strncmpiW(s, msacmW, ARRAY_SIZE(msacmW))) continue;
+	    if (strncmpiW(s, msacmW, sizeof(msacmW)/sizeof(msacmW[0]))) continue;
 	    if (!(name = strchrW(s, '='))) continue;
 	    *name = 0;
 	    MSACM_RegisterDriver(s, name + 1, 0);

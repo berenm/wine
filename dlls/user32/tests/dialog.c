@@ -55,7 +55,6 @@ static LONG g_styleInitialFocusT1, g_styleInitialFocusT2;
 static BOOL g_bInitialFocusInitDlgResult, g_bReceivedCommand;
 
 static BOOL g_terminated;
-static BOOL g_button1Clicked;
 
 typedef struct {
     INT_PTR id;
@@ -162,7 +161,7 @@ static BOOL CreateWindows (HINSTANCE hinst)
          */
         if (p->id >= numwnds)
         {
-            if (p->id >=  ARRAY_SIZE(hwnd))
+            if (p->id >=  sizeof(hwnd)/sizeof(hwnd[0]))
             {
                 trace ("Control %ld is out of range\n", p->id);
                 return FALSE;
@@ -475,10 +474,6 @@ static LRESULT CALLBACK main_window_procA (HWND hwnd, UINT uiMsg, WPARAM wParam,
                 g_terminated = TRUE;
                 return 0;
             }
-            else if ((wParam == 100 || wParam == 0xFFFF) && lParam)
-            {
-                g_button1Clicked = TRUE;
-            }
             break;
     }
 
@@ -544,26 +539,6 @@ static LRESULT CALLBACK testDlgWinProc (HWND hwnd, UINT uiMsg, WPARAM wParam,
     return DefDlgProcA (hwnd, uiMsg, wParam, lParam);
 }
 
-static LRESULT CALLBACK test_control_procA(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-{
-    switch(msg)
-    {
-        case WM_CREATE:
-        {
-            static const short sample[] = { 10,1,2,3,4,5 };
-            CREATESTRUCTA *cs = (CREATESTRUCTA *)lparam;
-            short *data = cs->lpCreateParams;
-            ok(!memcmp(data, sample, sizeof(sample)), "data mismatch: %d,%d,%d,%d,%d\n", data[0], data[1], data[2], data[3], data[4]);
-        }
-        return 0;
-
-    default:
-        break;
-    }
-
-    return DefWindowProcA(hwnd, msg, wparam, lparam);
-}
-
 static BOOL RegisterWindowClasses (void)
 {
     WNDCLASSA cls;
@@ -583,10 +558,7 @@ static BOOL RegisterWindowClasses (void)
 
     cls.lpfnWndProc = main_window_procA;
     cls.lpszClassName = "IsDialogMessageWindowClass";
-    if (!RegisterClassA (&cls)) return FALSE;
 
-    cls.lpfnWndProc = test_control_procA;
-    cls.lpszClassName = "TESTCONTROL";
     if (!RegisterClassA (&cls)) return FALSE;
 
     GetClassInfoA(0, "#32770", &cls);
@@ -815,34 +787,6 @@ static void test_IsDialogMessage(void)
     ok (!IsDialogMessageA(msg.hwnd, &msg), "expected failure\n");
 
     UnhookWindowsHookEx(hook);
-    DestroyWindow(g_hwndMain);
-
-    g_hwndMain = CreateWindowA("IsDialogMessageWindowClass", "IsDialogMessageWindowClass", WS_OVERLAPPEDWINDOW,
-                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_hinst, 0);
-    SetFocus(g_hwndButton1);
-    g_button1Clicked = FALSE;
-    FormEnterMsg(&msg, g_hwndButton1);
-    ok(IsDialogMessageA(g_hwndMain, &msg), "Did not handle the ENTER\n");
-    ok(g_button1Clicked, "Did not receive button 1 click notification\n");
-
-    g_button1Clicked = FALSE;
-    FormEnterMsg(&msg, g_hwndMain);
-    ok(IsDialogMessageA(g_hwndMain, &msg), "Did not handle the ENTER\n");
-    ok(g_button1Clicked, "Did not receive button 1 click notification\n");
-
-    g_button1Clicked = FALSE;
-    FormEnterMsg(&msg, g_hwndButton2);
-    ok(IsDialogMessageA(g_hwndMain, &msg), "Did not handle the ENTER\n");
-    ok(g_button1Clicked, "Did not receive button 1 click notification\n");
-
-    /* Button with id larger than 0xFFFF should also work */
-    g_button1Clicked = FALSE;
-    FormEnterMsg(&msg, g_hwndMain);
-    SetWindowLongPtrW(g_hwndButton1, GWLP_ID, 0x1FFFF);
-    ok(IsDialogMessageA(g_hwndMain, &msg), "Did not handle the ENTER\n");
-    ok(g_button1Clicked, "Did not receive button 1 click notification\n");
-
-    DestroyWindow(g_hwndMain);
 }
 
 
@@ -1101,7 +1045,7 @@ static void test_GetDlgItemText(void)
     BOOL ret;
 
     strcpy(string, "Overwrite Me");
-    ret = GetDlgItemTextA(NULL, 0, string, ARRAY_SIZE(string));
+    ret = GetDlgItemTextA(NULL, 0, string, sizeof(string)/sizeof(string[0]));
     ok(!ret, "GetDlgItemText(NULL) shouldn't have succeeded\n");
 
     ok(string[0] == '\0' || broken(!strcmp(string, "Overwrite Me")),
@@ -1517,7 +1461,7 @@ static INT_PTR CALLBACK test_aw_conversion_dlgproc(HWND hdlg, UINT msg, WPARAM w
            (BYTE)buff[0], (BYTE)buff[1], len);
 
         memset(buffW, 0xff, sizeof(buffW));
-        len = GetWindowTextW(hdlg, buffW, ARRAY_SIZE(buffW));
+        len = GetWindowTextW(hdlg, buffW, sizeof(buffW)/sizeof(buffW[0]));
         ok(buffW[0] == 'W' && buffW[1] == 0xffff && len == 0, "Unexpected window text %#x, %#x, len %d\n",
             buffW[0], buffW[1], len);
 
@@ -1623,7 +1567,7 @@ static INT_PTR CALLBACK test_aw_conversion_dlgproc2(HWND hdlg, UINT msg, WPARAM 
         ok(!strcmp(buff, testtext) && len == 0, "Unexpected window text %s, len %d\n", buff, len);
 
         memset(buffW, 0xff, sizeof(buffW));
-        len = GetWindowTextW(hdlg, buffW, ARRAY_SIZE(buffW));
+        len = GetWindowTextW(hdlg, buffW, sizeof(buffW)/sizeof(buffW[0]));
         ok(buffW[0] == 0 && buffW[1] == 0xffff && len == 0, "Unexpected window text %#x, %#x, len %d\n",
             buffW[0], buffW[1], len);
 
@@ -2058,69 +2002,8 @@ static LRESULT CALLBACK msgbox_hook_proc(INT code, WPARAM wParam, LPARAM lParam)
     return CallNextHookEx(NULL, code, wParam, lParam);
 }
 
-struct create_window_params
-{
-    BOOL owner;
-    char caption[64];
-    DWORD style;
-};
-
-static DWORD WINAPI create_window_thread(void *param)
-{
-    struct create_window_params *p = param;
-    HWND owner = 0;
-
-    if (p->owner)
-    {
-        owner = CreateWindowExA(0, "Static", NULL, WS_POPUP, 10, 10, 10, 10, 0, 0, 0, NULL);
-        ok(owner != 0, "failed to create owner window\n");
-    }
-
-    MessageBoxA(owner, NULL, p->caption, p->style);
-
-    if (owner) DestroyWindow(owner);
-
-    return 0;
-}
-
-static HWND wait_for_window(const char *caption)
-{
-    HWND hwnd;
-    DWORD timeout = 0;
-
-    for (;;)
-    {
-        hwnd = FindWindowA(NULL, caption);
-        if (hwnd) break;
-
-        Sleep(50);
-        timeout += 50;
-        if (timeout > 3000)
-        {
-            ok(0, "failed to wait for a window %s\n", caption);
-            break;
-        }
-    }
-
-    Sleep(50);
-    return hwnd;
-}
-
 static void test_MessageBox(void)
 {
-    static const struct
-    {
-        DWORD mb_style;
-        DWORD ex_style;
-    } test[] =
-    {
-        { MB_OK, 0 },
-        { MB_OK | MB_TASKMODAL, 0 },
-        { MB_OK | MB_SYSTEMMODAL, WS_EX_TOPMOST },
-    };
-    struct create_window_params params;
-    HANDLE thread;
-    DWORD tid, i;
     HHOOK hook;
     int ret;
 
@@ -2130,64 +2013,6 @@ static void test_MessageBox(void)
     ok(ret == IDCANCEL, "got %d\n", ret);
 
     UnhookWindowsHookEx(hook);
-
-    sprintf(params.caption, "pid %08x, tid %08x, time %08x",
-            GetCurrentProcessId(), GetCurrentThreadId(), GetCurrentTime());
-
-    params.owner = FALSE;
-
-    for (i = 0; i < sizeof(test)/sizeof(test[0]); i++)
-    {
-        HWND hwnd;
-        DWORD ex_style;
-
-        params.style = test[i].mb_style;
-
-        thread = CreateThread(NULL, 0, create_window_thread, &params, 0, &tid);
-
-        hwnd = wait_for_window(params.caption);
-        ex_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
-        ok((ex_style & WS_EX_TOPMOST) == test[i].ex_style, "%d: got window ex_style %#x\n", i, ex_style);
-
-        PostMessageA(hwnd, WM_COMMAND, IDCANCEL, 0);
-
-        ok(WaitForSingleObject(thread, 5000) != WAIT_TIMEOUT, "thread failed to terminate\n");
-        CloseHandle(thread);
-    }
-
-    params.owner = TRUE;
-
-    for (i = 0; i < sizeof(test)/sizeof(test[0]); i++)
-    {
-        HWND hwnd;
-        DWORD ex_style;
-
-        params.style = test[i].mb_style;
-
-        thread = CreateThread(NULL, 0, create_window_thread, &params, 0, &tid);
-
-        hwnd = wait_for_window(params.caption);
-        ex_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
-        ok((ex_style & WS_EX_TOPMOST) == test[i].ex_style, "%d: got window ex_style %#x\n", i, ex_style);
-
-        PostMessageA(hwnd, WM_COMMAND, IDCANCEL, 0);
-
-        ok(WaitForSingleObject(thread, 5000) != WAIT_TIMEOUT, "thread failed to terminate\n");
-        CloseHandle(thread);
-    }
-}
-
-static INT_PTR CALLBACK custom_test_dialog_proc(HWND hdlg, UINT msg, WPARAM wparam, LPARAM lparam)
-{
-    if (msg == WM_INITDIALOG)
-        EndDialog(hdlg, 0);
-
-    return FALSE;
-}
-
-static void test_dialog_custom_data(void)
-{
-    DialogBoxA(g_hinst, "CUSTOM_TEST_DIALOG", NULL, custom_test_dialog_proc);
 }
 
 START_TEST(dialog)
@@ -2196,7 +2021,6 @@ START_TEST(dialog)
 
     if (!RegisterWindowClasses()) assert(0);
 
-    test_dialog_custom_data();
     test_GetNextDlgItem();
     test_IsDialogMessage();
     test_WM_NEXTDLGCTL();

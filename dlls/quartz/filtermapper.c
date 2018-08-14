@@ -37,11 +37,13 @@
 #include "wine/unicode.h"
 #include "uuids.h"
 #include "initguid.h"
-#include "wine/fil_data.h"
+#include "fil_data.h"
 
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(quartz);
+
+#define ARRAYSIZE(array) (sizeof(array)/sizeof((array)[0]))
 
 typedef struct FilterMapper3Impl
 {
@@ -262,7 +264,7 @@ static HRESULT WINAPI FilterMapper3_CreateCategory(
 {
     LPWSTR wClsidAMCat = NULL;
     LPWSTR wClsidCategory = NULL;
-    WCHAR wszKeyName[ARRAY_SIZE(wszClsidSlash)-1 + ARRAY_SIZE(wszSlashInstance)-1 + (CHARS_IN_GUID-1) * 2 + 1];
+    WCHAR wszKeyName[ARRAYSIZE(wszClsidSlash)-1 + ARRAYSIZE(wszSlashInstance)-1 + (CHARS_IN_GUID-1) * 2 + 1];
     HKEY hKey = NULL;
     LONG lRet;
     HRESULT hr;
@@ -703,7 +705,7 @@ static HRESULT WINAPI FilterMapper3_RegisterFilter(
      * the + 1 is for the separator ('\\'). The -1 is
      * because CHARS_IN_GUID includes the null terminator
      */
-    nameLen = ARRAY_SIZE(wszDevice) + CHARS_IN_GUID - 1 + 1;
+    nameLen = sizeof(wszDevice)/sizeof(wszDevice[0]) + CHARS_IN_GUID - 1 + 1;
 
     if (szInstance)
         nameLen += strlenW(szInstance);
@@ -1266,7 +1268,7 @@ static HRESULT WINAPI FilterMapper_RegisterFilter(IFilterMapper * iface, CLSID c
     LPWSTR wszClsid = NULL;
     HKEY hKey;
     LONG lRet;
-    WCHAR wszKeyName[ARRAY_SIZE(wszFilterSlash)-1 + (CHARS_IN_GUID-1) + 1];
+    WCHAR wszKeyName[ARRAYSIZE(wszFilterSlash)-1 + (CHARS_IN_GUID-1) + 1];
 
     TRACE("(%p)->(%s, %s, %x)\n", iface, debugstr_guid(&clsid), debugstr_w(szName), dwMerit);
 
@@ -1335,7 +1337,7 @@ static HRESULT WINAPI FilterMapper_RegisterPin(
     HKEY hKey = NULL;
     HKEY hPinsKey = NULL;
     WCHAR * wszPinsKeyName;
-    WCHAR wszKeyName[ARRAY_SIZE(wszClsidSlash)-1 + (CHARS_IN_GUID-1) + 1];
+    WCHAR wszKeyName[ARRAYSIZE(wszClsidSlash)-1 + (CHARS_IN_GUID-1) + 1];
 
     TRACE("(%p)->(%s, %s, %d, %d, %d, %d, %s, %s)\n", iface, debugstr_guid(&Filter), debugstr_w(szName), bRendered,
                 bOutput, bZero, bMany, debugstr_guid(&ConnectsToFilter), debugstr_w(ConnectsToPin));
@@ -1496,7 +1498,7 @@ static HRESULT WINAPI FilterMapper_UnregisterFilter(IFilterMapper * iface, CLSID
     LONG lRet;
     LPWSTR wszClsid = NULL;
     HKEY hKey;
-    WCHAR wszKeyName[ARRAY_SIZE(wszClsidSlash)-1 + (CHARS_IN_GUID-1) + 1];
+    WCHAR wszKeyName[ARRAYSIZE(wszClsidSlash)-1 + (CHARS_IN_GUID-1) + 1];
 
     TRACE("(%p)->(%s)\n", iface, debugstr_guid(&Filter));
 
@@ -1561,7 +1563,7 @@ static HRESULT WINAPI FilterMapper_UnregisterPin(IFilterMapper * iface, CLSID Fi
     LPWSTR wszClsid = NULL;
     HKEY hKey = NULL;
     WCHAR * wszPinNameKey;
-    WCHAR wszKeyName[ARRAY_SIZE(wszClsidSlash)-1 + (CHARS_IN_GUID-1) + 1];
+    WCHAR wszKeyName[ARRAYSIZE(wszClsidSlash)-1 + (CHARS_IN_GUID-1) + 1];
 
     TRACE("(%p)->(%s, %s)\n", iface, debugstr_guid(&Filter), debugstr_w(Name));
 

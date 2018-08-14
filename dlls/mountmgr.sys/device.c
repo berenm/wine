@@ -25,9 +25,6 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef HAVE_TERMIOS_H
-# include <termios.h>
-#endif
 #include <sys/time.h>
 
 #define NONAMELESSUNION
@@ -519,8 +516,8 @@ static NTSTATUS set_volume_info( struct volume *volume, struct dos_drive *drive,
         id = disk_device->unix_mount;
         id_len = strlen( disk_device->unix_mount ) + 1;
     }
-    if (volume->mount) set_mount_point_id( volume->mount, id, id_len, -1 );
-    if (drive && drive->mount) set_mount_point_id( drive->mount, id, id_len, drive->drive );
+    if (volume->mount) set_mount_point_id( volume->mount, id, id_len );
+    if (drive && drive->mount) set_mount_point_id( drive->mount, id, id_len );
 
     return STATUS_SUCCESS;
 }
@@ -661,7 +658,7 @@ static void create_drive_devices(void)
             if (!RegQueryValueExW( drives_key, driveW, NULL, &type, (BYTE *)buffer, &size ) &&
                 type == REG_SZ)
             {
-                for (j = 0; j < ARRAY_SIZE(drive_types); j++)
+                for (j = 0; j < sizeof(drive_types)/sizeof(drive_types[0]); j++)
                     if (drive_types[j][0] && !strcmpiW( buffer, drive_types[j] ))
                     {
                         drive_type = j;
@@ -1048,27 +1045,6 @@ static BOOL create_port_device( DRIVER_OBJECT *driver, int n, const char *unix_p
     if (!unix_path)
         return FALSE;
 
-#ifdef linux
-    /* Serial port device files almost always exist on Linux even if the corresponding serial
-     * ports don't exist. Do a basic functionality check before advertising a serial port. */
-    if (driver == serial_driver)
-    {
-        struct termios tios;
-        int fd;
-
-        if ((fd = open( unix_path, O_RDONLY )) == -1)
-            return FALSE;
-
-        if (tcgetattr( fd, &tios ) == -1)
-        {
-            close( fd );
-            return FALSE;
-        }
-
-        close( fd );
-    }
-#endif
-
     /* create DOS device */
     sprintf( p, "%u", n );
     if (symlink( unix_path, dosdevices_path ) != 0)
@@ -1147,7 +1123,7 @@ static void create_port_devices( DRIVER_OBJECT *driver )
         p[1] = 'o';
         p[2] = 'm';
         search_paths = serial_search_paths;
-        num_search_paths = ARRAY_SIZE(serial_search_paths);
+        num_search_paths = sizeof(serial_search_paths)/sizeof(serial_search_paths[0]);
         windows_ports_key_name = serialcomm_keyW;
     }
     else
@@ -1156,7 +1132,7 @@ static void create_port_devices( DRIVER_OBJECT *driver )
         p[1] = 'p';
         p[2] = 't';
         search_paths = parallel_search_paths;
-        num_search_paths = ARRAY_SIZE(parallel_search_paths);
+        num_search_paths = sizeof(parallel_search_paths)/sizeof(parallel_search_paths[0]);
         windows_ports_key_name = parallel_ports_keyW;
     }
     p += 3;

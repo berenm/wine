@@ -73,6 +73,7 @@ static struct screen_size {
     {1920, 1200},
     {2560, 1600}
 };
+#define NUM_DESKTOP_MODES (sizeof(screen_sizes) / sizeof(struct screen_size))
 
 #define _NET_WM_STATE_REMOVE 0
 #define _NET_WM_STATE_ADD 1
@@ -87,7 +88,7 @@ static void make_modes(void)
 
     /* original specified desktop size */
     X11DRV_Settings_AddOneMode(screen_width, screen_height, 0, 60);
-    for (i=0; i<ARRAY_SIZE(screen_sizes); i++)
+    for (i=0; i<NUM_DESKTOP_MODES; i++)
     {
         if ( (screen_sizes[i].width <= max_width) && (screen_sizes[i].height <= max_height) )
         {
@@ -159,7 +160,7 @@ void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height )
     dd_modes = X11DRV_Settings_SetHandlers("desktop", 
                                            X11DRV_desktop_GetCurrentMode, 
                                            X11DRV_desktop_SetCurrentMode, 
-                                           ARRAY_SIZE(screen_sizes)+2, 1);
+                                           NUM_DESKTOP_MODES+2, 1);
     make_modes();
     X11DRV_Settings_AddDepthModes();
     dd_mode_count = X11DRV_Settings_GetModeCount();

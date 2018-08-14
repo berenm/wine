@@ -91,20 +91,15 @@ static HRESULT WINAPI DEVENUM_IParseDisplayName_ParseDisplayName(IParseDisplayNa
 
     name = strchrW(name, ':') + 1;
 
-    if (!strncmpW(name, swW, 3))
+    if (name[0] == 's' && name[1] == 'w' && name[2] == ':')
     {
         type = DEVICE_FILTER;
         name += 3;
     }
-    else if (!strncmpW(name, cmW, 3))
+    else if (name[0] == 'c' && name[1] == 'm' && name[2] == ':')
     {
         type = DEVICE_CODEC;
         name += 3;
-    }
-    else if (!strncmpW(name, dmoW, 4))
-    {
-        type = DEVICE_DMO;
-        name += 4;
     }
     else
     {
@@ -115,41 +110,22 @@ static HRESULT WINAPI DEVENUM_IParseDisplayName_ParseDisplayName(IParseDisplayNa
     if (!(mon = DEVENUM_IMediaCatMoniker_Construct()))
         return E_OUTOFMEMORY;
 
-    if (type == DEVICE_DMO)
+    lstrcpynW(buffer, name, CHARS_IN_GUID);
+    if (CLSIDFromString(buffer, &class) == S_OK)
     {
-        lstrcpynW(buffer, name, CHARS_IN_GUID);
-        if (FAILED(CLSIDFromString(buffer, &mon->clsid)))
-        {
-            IMoniker_Release(&mon->IMoniker_iface);
-            return MK_E_SYNTAX;
-        }
-
-        lstrcpynW(buffer, name + CHARS_IN_GUID - 1, CHARS_IN_GUID);
-        if (FAILED(CLSIDFromString(buffer, &mon->class)))
-        {
-            IMoniker_Release(&mon->IMoniker_iface);
-            return MK_E_SYNTAX;
-        }
-    }
-    else
-    {
-        lstrcpynW(buffer, name, CHARS_IN_GUID);
-        if (CLSIDFromString(buffer, &class) == S_OK)
-        {
-            mon->has_class = TRUE;
-            mon->class = class;
-            name += CHARS_IN_GUID;
-        }
-
-        if (!(mon->name = CoTaskMemAlloc((strlenW(name) + 1) * sizeof(WCHAR))))
-        {
-            IMoniker_Release(&mon->IMoniker_iface);
-            return E_OUTOFMEMORY;
-        }
-        strcpyW(mon->name, name);
+        mon->has_class = TRUE;
+        mon->class = class;
+        name += CHARS_IN_GUID;
     }
 
     mon->type = type;
+
+    if (!(mon->name = CoTaskMemAlloc((strlenW(name) + 1) * sizeof(WCHAR))))
+    {
+        IMoniker_Release(&mon->IMoniker_iface);
+        return E_OUTOFMEMORY;
+    }
+    strcpyW(mon->name, name);
 
     *ret = &mon->IMoniker_iface;
 

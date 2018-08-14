@@ -193,6 +193,8 @@ static const struct {
 };
 
 #undef  ErrorString
+#define ErrorStringCount (sizeof(ErrorStrings) / sizeof(ErrorStrings[0]))
+#define ParamErrorStringCount (sizeof(ParamErrorStrings) / sizeof(ParamErrorStrings[0]))
 
 /***********************************************************************
 *	GetErrorString (internal)
@@ -202,7 +204,7 @@ static const char *GetErrorString(UINT16 uErr)
   static char buffer[80];
   unsigned int n;
 
-  for (n = 0; n < ARRAY_SIZE(ErrorStrings); n++) {
+  for (n = 0; n < ErrorStringCount; n++) {
     if (uErr == ErrorStrings[n].constant)
       return ErrorStrings[n].name;
   }
@@ -227,7 +229,7 @@ static const char *GetParamErrorString(UINT16 uErr) {
 	{
 		unsigned int n;
 
-		for (n = 0; n < ARRAY_SIZE(ParamErrorStrings); n++) {
+		for (n = 0; n < ParamErrorStringCount; n++) {
 			if (uErr == ParamErrorStrings[n].constant) {
 				strcat(buffer, ParamErrorStrings[n].name);
 				return buffer;

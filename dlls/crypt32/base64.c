@@ -622,7 +622,7 @@ static LONG Base64WithHeaderAndTrailerToBinaryA(LPCSTR pszString,
 
     if (!(headerBegins = strstr(pszString, header)))
     {
-        TRACE("Can't find %s in %s.\n", header, debugstr_an(pszString, cchString));
+        TRACE("Can't find %s in %s.\n", header, pszString);
         return ERROR_INVALID_DATA;
     }
 
@@ -746,7 +746,7 @@ BOOL WINAPI CryptStringToBinaryA(LPCSTR pszString,
     StringToBinaryAFunc decoder;
     LONG ret;
 
-    TRACE("(%s, %d, %08x, %p, %p, %p, %p)\n", debugstr_an(pszString, cchString ? cchString : -1),
+    TRACE("(%s, %d, %08x, %p, %p, %p, %p)\n", debugstr_a(pszString),
      cchString, dwFlags, pbBinary, pcbBinary, pdwSkip, pdwFlags);
 
     if (!pszString)
@@ -833,7 +833,7 @@ static LONG Base64WithHeaderAndTrailerToBinaryW(LPCWSTR pszString,
 
     if (!(headerBegins = strstrW(pszString, header)))
     {
-        TRACE("Can't find %s in %s.\n", debugstr_w(header), debugstr_wn(pszString, cchString));
+        TRACE("Can't find %s in %s.\n", debugstr_w(header), debugstr_w(pszString));
         return ERROR_INVALID_DATA;
     }
 
@@ -957,7 +957,7 @@ BOOL WINAPI CryptStringToBinaryW(LPCWSTR pszString,
     StringToBinaryWFunc decoder;
     LONG ret;
 
-    TRACE("(%s, %d, %08x, %p, %p, %p, %p)\n", debugstr_wn(pszString, cchString ? cchString : -1),
+    TRACE("(%s, %d, %08x, %p, %p, %p, %p)\n", debugstr_w(pszString),
      cchString, dwFlags, pbBinary, pcbBinary, pdwSkip, pdwFlags);
 
     if (!pszString)

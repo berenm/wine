@@ -79,6 +79,9 @@ static const Format ADPCM_Formats[] =
     {1,  4, 22050}, {2,	4, 22050},  {1,  4, 44100}, {2,	 4, 44100},
 };
 
+#define	NUM_PCM_FORMATS		(sizeof(PCM_Formats) / sizeof(PCM_Formats[0]))
+#define	NUM_ADPCM_FORMATS	(sizeof(ADPCM_Formats) / sizeof(ADPCM_Formats[0]))
+
 /***********************************************************************
  *           ADPCM_GetFormatIndex
  */
@@ -90,11 +93,11 @@ static	DWORD	ADPCM_GetFormatIndex(const WAVEFORMATEX *wfx)
     switch (wfx->wFormatTag)
     {
     case WAVE_FORMAT_PCM:
-	hi = ARRAY_SIZE(PCM_Formats);
+	hi = NUM_PCM_FORMATS;
 	fmts = PCM_Formats;
 	break;
     case WAVE_FORMAT_IMA_ADPCM:
-	hi = ARRAY_SIZE(ADPCM_Formats);
+	hi = NUM_ADPCM_FORMATS;
 	fmts = ADPCM_Formats;
 	break;
     default:
@@ -582,13 +585,13 @@ static	LRESULT	ADPCM_FormatTagDetails(PACMFORMATTAGDETAILSW aftd, DWORD dwQuery)
     case 0:
 	aftd->dwFormatTag = WAVE_FORMAT_PCM;
 	aftd->cbFormatSize = sizeof(PCMWAVEFORMAT);
-	aftd->cStandardFormats = ARRAY_SIZE(PCM_Formats);
+	aftd->cStandardFormats = NUM_PCM_FORMATS;
         lstrcpyW(aftd->szFormatTag, szPcm);
         break;
     case 1:
 	aftd->dwFormatTag = WAVE_FORMAT_IMA_ADPCM;
 	aftd->cbFormatSize = sizeof(IMAADPCMWAVEFORMAT);
-	aftd->cStandardFormats = ARRAY_SIZE(ADPCM_Formats);
+	aftd->cStandardFormats = NUM_ADPCM_FORMATS;
         lstrcpyW(aftd->szFormatTag, szImaAdPcm);
 	break;
     }
@@ -611,7 +614,7 @@ static	LRESULT	ADPCM_FormatDetails(PACMFORMATDETAILSW afd, DWORD dwQuery)
 	switch (afd->dwFormatTag)
         {
 	case WAVE_FORMAT_PCM:
-	    if (afd->dwFormatIndex >= ARRAY_SIZE(PCM_Formats)) return ACMERR_NOTPOSSIBLE;
+	    if (afd->dwFormatIndex >= NUM_PCM_FORMATS) return ACMERR_NOTPOSSIBLE;
 	    afd->pwfx->nChannels = PCM_Formats[afd->dwFormatIndex].nChannels;
 	    afd->pwfx->nSamplesPerSec = PCM_Formats[afd->dwFormatIndex].rate;
 	    afd->pwfx->wBitsPerSample = PCM_Formats[afd->dwFormatIndex].nBits;
@@ -624,7 +627,7 @@ static	LRESULT	ADPCM_FormatDetails(PACMFORMATDETAILSW afd, DWORD dwQuery)
 		afd->pwfx->nSamplesPerSec * afd->pwfx->nBlockAlign;
 	    break;
 	case WAVE_FORMAT_IMA_ADPCM:
-	    if (afd->dwFormatIndex >= ARRAY_SIZE(ADPCM_Formats)) return ACMERR_NOTPOSSIBLE;
+	    if (afd->dwFormatIndex >= NUM_ADPCM_FORMATS) return ACMERR_NOTPOSSIBLE;
 	    afd->pwfx->nChannels = ADPCM_Formats[afd->dwFormatIndex].nChannels;
 	    afd->pwfx->nSamplesPerSec = ADPCM_Formats[afd->dwFormatIndex].rate;
 	    afd->pwfx->wBitsPerSample = ADPCM_Formats[afd->dwFormatIndex].nBits;

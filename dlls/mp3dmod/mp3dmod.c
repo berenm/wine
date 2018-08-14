@@ -43,9 +43,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(mp3dmod);
 static HINSTANCE mp3dmod_instance;
 
 struct mp3_decoder {
-    IUnknown IUnknown_inner;
     IMediaObject IMediaObject_iface;
-    IUnknown *outer;
     LONG ref;
     mpg123_handle *mh;
     DMO_MEDIA_TYPE outtype;
@@ -53,35 +51,33 @@ struct mp3_decoder {
     REFERENCE_TIME timestamp;
 };
 
-static inline struct mp3_decoder *impl_from_IUnknown(IUnknown *iface)
+static inline struct mp3_decoder *impl_from_IMediaObject(IMediaObject *iface)
 {
-    return CONTAINING_RECORD(iface, struct mp3_decoder, IUnknown_inner);
+    return CONTAINING_RECORD(iface, struct mp3_decoder, IMediaObject_iface);
 }
 
-static HRESULT WINAPI Unknown_QueryInterface(IUnknown *iface, REFIID iid, void **obj)
+static HRESULT WINAPI MediaObject_QueryInterface(IMediaObject *iface, REFIID iid, void **ppv)
 {
-    struct mp3_decoder *This = impl_from_IUnknown(iface);
+    struct mp3_decoder *This = impl_from_IMediaObject(iface);
 
-    TRACE("(%p)->(%s, %p)\n", This, debugstr_guid(iid), obj);
+    TRACE("(%p)->(%s, %p)\n", This, debugstr_guid(iid), ppv);
 
-    if (IsEqualGUID(iid, &IID_IUnknown))
-        *obj = &This->IUnknown_inner;
-    else if (IsEqualGUID(iid, &IID_IMediaObject))
-        *obj = &This->IMediaObject_iface;
+    if (IsEqualIID(iid, &IID_IUnknown) || IsEqualIID(iid, &IID_IMediaObject))
+        *ppv = &This->IMediaObject_iface;
     else
     {
         FIXME("no interface for %s\n", debugstr_guid(iid));
-        *obj = NULL;
+        *ppv = NULL;
         return E_NOINTERFACE;
     }
 
-    IUnknown_AddRef((IUnknown *)*obj);
+    IMediaObject_AddRef(iface);
     return S_OK;
 }
 
-static ULONG WINAPI Unknown_AddRef(IUnknown *iface)
+static ULONG WINAPI MediaObject_AddRef(IMediaObject *iface)
 {
-    struct mp3_decoder *This = impl_from_IUnknown(iface);
+    struct mp3_decoder *This = impl_from_IMediaObject(iface);
     ULONG refcount = InterlockedIncrement(&This->ref);
 
     TRACE("(%p) AddRef from %d\n", This, refcount - 1);
@@ -89,9 +85,9 @@ static ULONG WINAPI Unknown_AddRef(IUnknown *iface)
     return refcount;
 }
 
-static ULONG WINAPI Unknown_Release(IUnknown *iface)
+static ULONG WINAPI MediaObject_Release(IMediaObject *iface)
 {
-    struct mp3_decoder *This = impl_from_IUnknown(iface);
+    struct mp3_decoder *This = impl_from_IMediaObject(iface);
     ULONG refcount = InterlockedDecrement(&This->ref);
 
     TRACE("(%p) Release from %d\n", This, refcount + 1);
@@ -102,35 +98,6 @@ static ULONG WINAPI Unknown_Release(IUnknown *iface)
         heap_free(This);
     }
     return refcount;
-}
-
-static const IUnknownVtbl Unknown_vtbl = {
-    Unknown_QueryInterface,
-    Unknown_AddRef,
-    Unknown_Release,
-};
-
-static inline struct mp3_decoder *impl_from_IMediaObject(IMediaObject *iface)
-{
-    return CONTAINING_RECORD(iface, struct mp3_decoder, IMediaObject_iface);
-}
-
-static HRESULT WINAPI MediaObject_QueryInterface(IMediaObject *iface, REFIID iid, void **obj)
-{
-    struct mp3_decoder *This = impl_from_IMediaObject(iface);
-    return IUnknown_QueryInterface(This->outer, iid, obj);
-}
-
-static ULONG WINAPI MediaObject_AddRef(IMediaObject *iface)
-{
-    struct mp3_decoder *This = impl_from_IMediaObject(iface);
-    return IUnknown_AddRef(This->outer);
-}
-
-static ULONG WINAPI MediaObject_Release(IMediaObject *iface)
-{
-    struct mp3_decoder *This = impl_from_IMediaObject(iface);
-    return IUnknown_Release(This->outer);
 }
 
 static HRESULT WINAPI MediaObject_GetStreamCount(IMediaObject *iface, DWORD *input, DWORD *output)
@@ -422,7 +389,7 @@ static HRESULT WINAPI MediaObject_Lock(IMediaObject *iface, LONG lock)
     return E_NOTIMPL;
 }
 
-static const IMediaObjectVtbl MediaObject_vtbl = {
+static const IMediaObjectVtbl IMediaObject_vtbl = {
     MediaObject_QueryInterface,
     MediaObject_AddRef,
     MediaObject_Release,
@@ -449,28 +416,23 @@ static const IMediaObjectVtbl MediaObject_vtbl = {
     MediaObject_Lock,
 };
 
-static HRESULT create_mp3_decoder(IUnknown *outer, REFIID iid, void **obj)
+static HRESULT create_mp3_decoder(REFIID iid, void **obj)
 {
     struct mp3_decoder *This;
-    HRESULT hr;
     int err;
 
     if (!(This = heap_alloc_zero(sizeof(*This))))
         return E_OUTOFMEMORY;
 
-    This->IUnknown_inner.lpVtbl = &Unknown_vtbl;
-    This->IMediaObject_iface.lpVtbl = &MediaObject_vtbl;
-    This->ref = 1;
-    This->outer = outer ? outer : &This->IUnknown_inner;
+    This->IMediaObject_iface.lpVtbl = &IMediaObject_vtbl;
+    This->ref = 0;
 
     mpg123_init();
     This->mh = mpg123_new(NULL, &err);
     mpg123_open_feed(This->mh);
     mpg123_format_none(This->mh);
 
-    hr = IUnknown_QueryInterface(&This->IUnknown_inner, iid, obj);
-    IUnknown_Release(&This->IUnknown_inner);
-    return hr;
+    return IMediaObject_QueryInterface(&This->IMediaObject_iface, iid, obj);
 }
 
 static HRESULT WINAPI ClassFactory_QueryInterface(IClassFactory *iface, REFIID iid, void **obj)
@@ -504,13 +466,13 @@ static HRESULT WINAPI ClassFactory_CreateInstance(IClassFactory *iface, IUnknown
 {
     TRACE("(%p, %s, %p)\n", outer, debugstr_guid(iid), obj);
 
-    if (outer && !IsEqualGUID(iid, &IID_IUnknown))
+    if (outer)
     {
         *obj = NULL;
-        return E_NOINTERFACE;
+        return CLASS_E_NOAGGREGATION;
     }
 
-    return create_mp3_decoder(outer, iid, obj);
+    return create_mp3_decoder(iid, obj);
 }
 
 static HRESULT WINAPI ClassFactory_LockServer(IClassFactory *iface, BOOL lock)

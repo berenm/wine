@@ -145,7 +145,10 @@ out:
 
 static void Copy_PinInfo(PIN_INFO * pDest, const PIN_INFO * pSrc)
 {
-    /* avoid copying uninitialized data */
+    /* Tempting to just do a memcpy, but the name field is
+       128 characters long! We will probably never exceed 10
+       most of the time, so we are better off copying
+       each field manually */
     strcpyW(pDest->achName, pSrc->achName);
     pDest->dir = pSrc->dir;
     pDest->pFilter = pSrc->pFilter;

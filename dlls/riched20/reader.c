@@ -2175,13 +2175,14 @@ static RTFKey	rtfKey[] =
 
 	{ 0,		-1,			NULL,		0 }
 };
+#define RTF_KEY_COUNT (sizeof(rtfKey) / sizeof(RTFKey))
 
 typedef struct tagRTFHashTableEntry {
 	int count;
 	RTFKey **value;
 } RTFHashTableEntry;
 
-static RTFHashTableEntry rtfHashTable[ARRAY_SIZE(rtfKey) * 2];
+static RTFHashTableEntry rtfHashTable[RTF_KEY_COUNT * 2];
 
 
 /*
@@ -2198,7 +2199,7 @@ void LookupInit(void)
 		int index;
 
 		rp->rtfKHash = Hash (rp->rtfKStr);
-		index = rp->rtfKHash % (ARRAY_SIZE(rtfKey) * 2);
+		index = rp->rtfKHash % (RTF_KEY_COUNT * 2);
 		if (!rtfHashTable[index].count)
 			rtfHashTable[index].value = heap_alloc(sizeof(RTFKey *));
 		else
@@ -2211,7 +2212,7 @@ void LookupCleanup(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(rtfKey) * 2; i++)
+	for (i=0; i<RTF_KEY_COUNT*2; i++)
 	{
 		heap_free( rtfHashTable[i].value );
 		rtfHashTable[i].value = NULL;
@@ -2234,7 +2235,7 @@ static void Lookup(RTF_Info *info, char *s)
 
 	++s;			/* skip over the leading \ character */
 	hash = Hash (s);
-        entry = &rtfHashTable[hash % (ARRAY_SIZE(rtfKey) * 2)];
+        entry = &rtfHashTable[hash % (RTF_KEY_COUNT * 2)];
 	for (i = 0; i < entry->count; i++)
 	{
                 rp = entry->value[i];

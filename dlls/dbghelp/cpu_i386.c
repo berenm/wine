@@ -213,16 +213,16 @@ static BOOL i386_stack_walk(struct cpu_stack_walk* csw, LPSTACKFRAME64 frame, CO
         /* Init done */
         set_curr_mode((frame->AddrPC.Mode == AddrModeFlat) ? stm_32bit : stm_16bit);
 
-        /* cur_switch holds address of SystemReserved1[0] field in TEB in debuggee
+        /* cur_switch holds address of WOW32Reserved field in TEB in debuggee
          * address space
          */
         if (NtQueryInformationThread(csw->hThread, ThreadBasicInformation, &info,
                                      sizeof(info), NULL) == STATUS_SUCCESS)
         {
-            curr_switch = (DWORD_PTR)info.TebBaseAddress + FIELD_OFFSET(TEB, SystemReserved1[0]);
+            curr_switch = (DWORD_PTR)info.TebBaseAddress + FIELD_OFFSET(TEB, WOW32Reserved);
             if (!sw_read_mem(csw, curr_switch, &p, sizeof(p)))
             {
-                WARN("Can't read TEB:SystemReserved1[0]\n");
+                WARN("Can't read TEB:WOW32Reserved\n");
                 goto done_err;
             }
             next_switch = p;
@@ -449,7 +449,7 @@ static BOOL i386_stack_walk(struct cpu_stack_walk* csw, LPSTACKFRAME64 frame, CO
          * work if the parameter is in fact bigger than 16bit, but
          * there's no way to know that here
          */
-        for (i = 0; i < ARRAY_SIZE(frame->Params); i++)
+        for (i = 0; i < sizeof(frame->Params) / sizeof(frame->Params[0]); i++)
         {
             sw_read_mem(csw, p + (2 + i) * sizeof(WORD), &val16, sizeof(val16));
             frame->Params[i] = val16;
@@ -482,7 +482,7 @@ static BOOL i386_stack_walk(struct cpu_stack_walk* csw, LPSTACKFRAME64 frame, CO
         frame->AddrReturn.Mode = AddrModeFlat;
         frame->AddrReturn.Offset = newctx.Eip;
 #endif
-        for (i = 0; i < ARRAY_SIZE(frame->Params); i++)
+        for (i = 0; i < sizeof(frame->Params) / sizeof(frame->Params[0]); i++)
         {
             sw_read_mem(csw, frame->AddrFrame.Offset + (2 + i) * sizeof(DWORD), &val32, sizeof(val32));
             frame->Params[i] = val32;

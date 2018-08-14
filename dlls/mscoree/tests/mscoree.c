@@ -35,7 +35,6 @@ static const WCHAR v4_0[] = {'v','4','.','0','.','3','0','3','1','9',0};
 static HMODULE hmscoree;
 
 static HRESULT (WINAPI *pGetCORVersion)(LPWSTR, DWORD, DWORD*);
-static HRESULT (WINAPI *pCorIsLatestSvc)(INT*, INT*);
 static HRESULT (WINAPI *pGetCORSystemDirectory)(LPWSTR, DWORD, DWORD*);
 static HRESULT (WINAPI *pGetRequestedRuntimeInfo)(LPCWSTR, LPCWSTR, LPCWSTR, DWORD, DWORD, LPWSTR, DWORD, DWORD*, LPWSTR, DWORD, DWORD*);
 static HRESULT (WINAPI *pLoadLibraryShim)(LPCWSTR, LPCWSTR, LPVOID, HMODULE*);
@@ -56,7 +55,6 @@ static BOOL init_functionpointers(void)
     }
 
     pGetCORVersion = (void *)GetProcAddress(hmscoree, "GetCORVersion");
-    pCorIsLatestSvc = (void *)GetProcAddress(hmscoree, "CorIsLatestSvc");
     pGetCORSystemDirectory = (void *)GetProcAddress(hmscoree, "GetCORSystemDirectory");
     pGetRequestedRuntimeInfo = (void *)GetProcAddress(hmscoree, "GetRequestedRuntimeInfo");
     pLoadLibraryShim = (void *)GetProcAddress(hmscoree, "LoadLibraryShim");
@@ -65,7 +63,7 @@ static BOOL init_functionpointers(void)
     pCLRCreateInstance = (void *)GetProcAddress(hmscoree, "CLRCreateInstance");
 
     if (!pGetCORVersion || !pGetCORSystemDirectory || !pGetRequestedRuntimeInfo || !pLoadLibraryShim ||
-        !pCreateInterface || !pCLRCreateInstance || !pCorIsLatestSvc
+        !pCreateInterface || !pCLRCreateInstance
         )
     {
         win_skip("functions not available\n");
@@ -291,9 +289,6 @@ static void test_versioninfo(void)
     hr = pGetRequestedRuntimeInfo( NULL, v2_0_0, NULL, 0, RUNTIME_INFO_UPGRADE_VERSION, path, MAX_PATH, &path_len, version, MAX_PATH, NULL);
     ok(hr == S_OK, "GetRequestedRuntimeInfo returned %08x\n", hr);
     ok(!winetest_strcmpW(version, v2_0), "version is %s , expected %s\n", wine_dbgstr_w(version), wine_dbgstr_w(v2_0));
-
-    hr =  pCorIsLatestSvc(NULL, NULL);
-    ok(hr == E_POINTER, "CorIsLatestSvc returned %08x\n", hr);
 }
 
 static void test_loadlibraryshim(void)

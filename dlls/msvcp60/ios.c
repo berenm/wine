@@ -8101,7 +8101,7 @@ basic_istream_char* __thiscall basic_istream_char_ignore(basic_istream_char *thi
                 break;
             }
 
-            if(ch==delim)
+            if(ch==(unsigned char)delim)
                 break;
 
             this->count++;
@@ -8346,6 +8346,9 @@ fpos_int* __thiscall basic_istream_char_tellg(basic_istream_char *this, fpos_int
 
     basic_streambuf_char_pubseekoff(basic_ios_char_rdbuf_get(base),
             ret, 0, SEEKDIR_cur, OPENMODE_in);
+
+    if(ret->off==-1 && ret->pos==0 && ret->state==0)
+        basic_ios_char_setstate(base, IOSTATE_failbit);
 
     return ret;
 }
@@ -9843,6 +9846,8 @@ fpos_int* __thiscall basic_istream_wchar_tellg(basic_istream_wchar *this, fpos_i
 
     basic_streambuf_wchar_pubseekoff(basic_ios_wchar_rdbuf_get(base),
             ret, 0, SEEKDIR_cur, OPENMODE_in);
+    if(ret->off==-1 && ret->pos==0 && ret->state==0)
+        basic_ios_wchar_setstate(base, IOSTATE_failbit);
 
     return ret;
 }

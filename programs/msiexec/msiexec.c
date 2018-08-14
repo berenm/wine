@@ -30,9 +30,6 @@
 #include "wine/debug.h"
 #include "wine/unicode.h"
 
-#include "initguid.h"
-DEFINE_GUID(GUID_NULL,0,0,0,0,0,0,0,0,0,0,0);
-
 WINE_DEFAULT_DEBUG_CHANNEL(msiexec);
 
 typedef HRESULT (WINAPI *DLLREGISTERSERVER)(void);
@@ -71,11 +68,11 @@ static void ShowUsage(int ExitCode)
 
     /* MsiGetFileVersion need the full path */
     *filename = 0;
-    res = GetModuleFileNameW(hmsi, filename, ARRAY_SIZE(filename));
+    res = GetModuleFileNameW(hmsi, filename, sizeof(filename) / sizeof(filename[0]));
     if (!res)
         WINE_ERR("GetModuleFileName failed: %d\n", GetLastError());
 
-    len = ARRAY_SIZE(msiexec_version);
+    len = sizeof(msiexec_version) / sizeof(msiexec_version[0]);
     *msiexec_version = 0;
     res = MsiGetFileVersionW(filename, msiexec_version, &len, NULL, NULL);
     if (res)
@@ -398,66 +395,11 @@ static DWORD DoUnregServer(void)
 
 extern UINT CDECL __wine_msi_call_dll_function(GUID *guid);
 
-static DWORD CALLBACK custom_action_thread(void *arg)
+static int DoEmbedding(LPCWSTR key)
 {
-    GUID *guid = arg;
-    return __wine_msi_call_dll_function(guid);
-}
-
-static int custom_action_server(const WCHAR *arg)
-{
-    static const WCHAR pipe_name[] = {'\\','\\','.','\\','p','i','p','e','\\','m','s','i','c','a','_','%','x','_','%','d',0};
-    DWORD client_pid = atoiW(arg);
-    DWORD64 thread64;
-    WCHAR buffer[24];
-    HANDLE thread;
-    HANDLE pipe;
-    DWORD size;
     GUID guid;
-
-    TRACE("%s\n", debugstr_w(arg));
-
-    if (!client_pid)
-    {
-        ERR("Invalid parameter %s\n", debugstr_w(arg));
-        return 1;
-    }
-
-    sprintfW(buffer, pipe_name, client_pid, sizeof(void *) * 8);
-    pipe = CreateFileW(buffer, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-    if (pipe == INVALID_HANDLE_VALUE)
-    {
-        ERR("Failed to create custom action server pipe: %u\n", GetLastError());
-        return GetLastError();
-    }
-
-    /* We need this to unmarshal streams, and some apps expect it to be present. */
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
-
-    while (ReadFile(pipe, &guid, sizeof(guid), &size, NULL) && size == sizeof(guid))
-    {
-        if (IsEqualGUID(&guid, &GUID_NULL))
-        {
-            /* package closed; time to shut down */
-            CoUninitialize();
-            return 0;
-        }
-
-        thread = CreateThread(NULL, 0, custom_action_thread, &guid, 0, NULL);
-
-        /* give the thread handle to the client to wait on, since we might have
-         * to run a nested action and can't block during this one */
-        thread64 = (DWORD_PTR)thread;
-        if (!WriteFile(pipe, &thread64, sizeof(thread64), &size, NULL) || size != sizeof(thread64))
-        {
-            ERR("Failed to write to custom action server pipe: %u\n", GetLastError());
-            CoUninitialize();
-            return GetLastError();
-        }
-    }
-    ERR("Failed to read from custom action server pipe: %u\n", GetLastError());
-    CoUninitialize();
-    return GetLastError();
+    CLSIDFromString(key, &guid);
+    return __wine_msi_call_dll_function(&guid);
 }
 
 /*
@@ -654,7 +596,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 	if (argc == 3 && msi_option_equal(argvW[1], "Embedding"))
-        return custom_action_server(argvW[2]);
+		return DoEmbedding( argvW[2] );
 
 	for(i = 1; i < argc; i++)
 	{

@@ -38,7 +38,7 @@ extern struct env_stack *pushd_directories;
 
 BATCH_CONTEXT *context = NULL;
 DWORD errorlevel;
-WCHAR quals[MAXSTRING], param1[MAXSTRING], param2[MAXSTRING];
+WCHAR quals[MAX_PATH], param1[MAXSTRING], param2[MAXSTRING];
 BOOL  interactive;
 FOR_CONTEXT forloopcontext; /* The 'for' loop context */
 BOOL delayedsubst = FALSE; /* The current delayed substitution setting */
@@ -1099,41 +1099,24 @@ void WCMD_run_program (WCHAR *command, BOOL called)
              wine_dbgstr_w(stemofsearch));
   while (pathposn) {
     WCHAR  thisDir[MAX_PATH] = {'\0'};
-    int    length            = 0;
     WCHAR *pos               = NULL;
     BOOL  found             = FALSE;
-    BOOL inside_quotes      = FALSE;
 
     /* Work on the first directory on the search path */
-    pos = pathposn;
-    while ((inside_quotes || *pos != ';') && *pos != 0)
-    {
-        if (*pos == '"')
-            inside_quotes = !inside_quotes;
-        pos++;
-    }
-
-    if (*pos) { /* Reached semicolon */
+    pos = strchrW(pathposn, ';');
+    if (pos) {
       memcpy(thisDir, pathposn, (pos-pathposn) * sizeof(WCHAR));
       thisDir[(pos-pathposn)] = 0x00;
       pathposn = pos+1;
-    } else {    /* Reached string end */
+
+    } else {
       strcpyW(thisDir, pathposn);
       pathposn = NULL;
     }
 
-    /* Remove quotes */
-    length = strlenW(thisDir);
-    if (thisDir[length - 1] == '"')
-        thisDir[length - 1] = 0;
-
-    if (*thisDir != '"')
-        strcpyW(temp, thisDir);
-    else
-        strcpyW(temp, thisDir + 1);
-
     /* Since you can have eg. ..\.. on the path, need to expand
        to full information                                      */
+    strcpyW(temp, thisDir);
     GetFullPathNameW(temp, MAX_PATH, thisDir, NULL);
 
     /* 1. If extension supplied, see if that file exists */
@@ -1344,17 +1327,12 @@ void WCMD_execute (const WCHAR *command, const WCHAR *redirects,
     cmd = new_cmd;
 
 /*
- * Changing default drive has to be handled as a special case, anything
- * else if it exists after whitespace is ignored
+ *	Changing default drive has to be handled as a special case.
  */
 
-    if ((cmd[1] == ':') && IsCharAlphaW(cmd[0]) &&
-        (!cmd[2] || cmd[2] == ' ' || cmd[2] == '\t')) {
+    if ((strlenW(cmd) == 2) && (cmd[1] == ':') && IsCharAlphaW(cmd[0])) {
       WCHAR envvar[5];
       WCHAR dir[MAX_PATH];
-
-      /* Ignore potential garbage on the same line */
-      cmd[2]=0x00;
 
       /* According to MSDN CreateProcess docs, special env vars record
          the current directory on each drive, in the form =C:
@@ -2365,19 +2343,9 @@ int wmain (int argc, WCHAR *argvW[])
   static const WCHAR offW[] = {'O','F','F','\0'};
   static const WCHAR promptW[] = {'P','R','O','M','P','T','\0'};
   static const WCHAR defaultpromptW[] = {'$','P','$','G','\0'};
-  static const WCHAR comspecW[] = {'C','O','M','S','P','E','C',0};
-  static const WCHAR cmdW[] = {'\\','c','m','d','.','e','x','e',0};
-  WCHAR comspec[MAX_PATH];
   CMD_LIST *toExecute = NULL;         /* Commands left to be executed */
   OSVERSIONINFOW osv;
   char osver[50];
-
-  if (!GetEnvironmentVariableW(comspecW, comspec, sizeof(comspec)/sizeof(WCHAR)))
-  {
-      GetSystemDirectoryW(comspec, (sizeof(comspec) - sizeof(cmdW))/sizeof(WCHAR));
-      strcatW(comspec, cmdW);
-      SetEnvironmentVariableW(comspecW, comspec);
-  }
 
   srand(time(NULL));
 

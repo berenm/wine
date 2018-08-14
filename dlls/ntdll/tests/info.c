@@ -22,7 +22,6 @@
 #include <winnls.h>
 #include <stdio.h>
 
-static NTSTATUS (WINAPI * pRtlDowncaseUnicodeString)(UNICODE_STRING *, const UNICODE_STRING *, BOOLEAN);
 static NTSTATUS (WINAPI * pNtQuerySystemInformation)(SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG);
 static NTSTATUS (WINAPI * pNtQuerySystemInformationEx)(SYSTEM_INFORMATION_CLASS, void*, ULONG, void*, ULONG, ULONG*);
 static NTSTATUS (WINAPI * pNtPowerInformation)(POWER_INFORMATION_LEVEL, PVOID, ULONG, PVOID, ULONG);
@@ -55,17 +54,6 @@ static DWORD one_before_last_pid = 0;
     } \
   } while(0)
 
-/* Firmware table providers */
-#define ACPI 0x41435049
-#define FIRM 0x4649524D
-#define RSMB 0x52534D42
-
-#ifdef linux
-static const int firmware_todo = 0;
-#else
-static const int firmware_todo = 1;
-#endif
-
 static BOOL InitFunctionPtrs(void)
 {
     /* All needed functions are NT based, so using GetModuleHandle is a good check */
@@ -78,7 +66,6 @@ static BOOL InitFunctionPtrs(void)
         return FALSE;
     }
 
-    NTDLL_GET_PROC(RtlDowncaseUnicodeString);
     NTDLL_GET_PROC(NtQuerySystemInformation);
     NTDLL_GET_PROC(NtPowerInformation);
     NTDLL_GET_PROC(NtQueryInformationProcess);
@@ -574,62 +561,6 @@ done:
     HeapFree( GetProcessHeap(), 0, shi);
 }
 
-static void test_query_handle_ex(void)
-{
-    NTSTATUS status;
-    ULONG ExpectedLength, ReturnLength;
-    ULONG SystemInformationLength = sizeof(SYSTEM_HANDLE_INFORMATION_EX);
-    SYSTEM_HANDLE_INFORMATION_EX* shi = HeapAlloc(GetProcessHeap(), 0, SystemInformationLength);
-    HANDLE EventHandle;
-    BOOL found;
-    INT i;
-
-    EventHandle = CreateEventA(NULL, FALSE, FALSE, NULL);
-    ok( EventHandle != NULL, "CreateEventA failed %u\n", GetLastError() );
-
-    ReturnLength = 0xdeadbeef;
-    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, shi, SystemInformationLength, &ReturnLength);
-    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
-    ok( ReturnLength != 0xdeadbeef, "Expected valid ReturnLength\n" );
-
-    SystemInformationLength = ReturnLength;
-    shi = HeapReAlloc(GetProcessHeap(), 0, shi , SystemInformationLength);
-    memset(shi, 0x55, SystemInformationLength);
-
-    ReturnLength = 0xdeadbeef;
-    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, shi, SystemInformationLength, &ReturnLength);
-    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
-    ExpectedLength = FIELD_OFFSET(SYSTEM_HANDLE_INFORMATION_EX, Handle[shi->Count]);
-    ok( ReturnLength == ExpectedLength, "Expected length %u, got %u\n", ExpectedLength, ReturnLength );
-    ok( shi->Count > 1, "Expected more than 1 handle, got %u\n", (DWORD)shi->Count );
-
-    for (i = 0, found = FALSE; i < shi->Count && !found; i++)
-        found = (shi->Handle[i].UniqueProcessId == GetCurrentProcessId()) &&
-                ((HANDLE)(ULONG_PTR)shi->Handle[i].HandleValue == EventHandle);
-    ok( found, "Expected to find event handle %p (pid %x) in handle list\n", EventHandle, GetCurrentProcessId() );
-
-    if (!found)
-    {
-        for (i = 0; i < shi->Count; i++)
-            trace( "%d: handle %x pid %x\n", i, (DWORD)shi->Handle[i].HandleValue, (DWORD)shi->Handle[i].UniqueProcessId );
-    }
-
-    CloseHandle(EventHandle);
-
-    ReturnLength = 0xdeadbeef;
-    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, shi, SystemInformationLength, &ReturnLength);
-    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
-    for (i = 0, found = FALSE; i < shi->Count && !found; i++)
-        found = (shi->Handle[i].UniqueProcessId == GetCurrentProcessId()) &&
-                ((HANDLE)(ULONG_PTR)shi->Handle[i].HandleValue == EventHandle);
-    ok( !found, "Unexpectedly found event handle in handle list\n" );
-
-    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, NULL, SystemInformationLength, &ReturnLength);
-    ok( status == STATUS_ACCESS_VIOLATION, "Expected STATUS_ACCESS_VIOLATION, got %08x\n", status );
-
-    HeapFree( GetProcessHeap(), 0, shi);
-}
-
 static void test_query_cache(void)
 {
     NTSTATUS status;
@@ -893,58 +824,6 @@ static void test_query_logicalprocex(void)
         HeapFree(GetProcessHeap(), 0, infoex);
         HeapFree(GetProcessHeap(), 0, infoex2);
     }
-}
-
-static void test_query_firmware(void)
-{
-    static const ULONG min_sfti_len = FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION, TableBuffer);
-    ULONG len1, len2;
-    NTSTATUS status;
-    SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti;
-
-    sfti = HeapAlloc(GetProcessHeap(), 0, min_sfti_len);
-    ok(!!sfti, "Failed to allocate memory\n");
-
-    sfti->ProviderSignature = 0;
-    sfti->Action = 0;
-    sfti->TableID = 0;
-
-    status = pNtQuerySystemInformation(SystemFirmwareTableInformation, sfti, min_sfti_len - 1, &len1);
-    ok(status == STATUS_INFO_LENGTH_MISMATCH || broken(status == STATUS_INVALID_INFO_CLASS) /* xp */,
-       "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
-    if (len1 == 0) /* xp, 2003 */
-    {
-        win_skip("SystemFirmwareTableInformation is not available\n");
-        HeapFree(GetProcessHeap(), 0, sfti);
-        return;
-    }
-    ok(len1 == min_sfti_len, "Expected length %u, got %u\n", min_sfti_len, len1);
-
-    status = pNtQuerySystemInformation(SystemFirmwareTableInformation, sfti, min_sfti_len, &len1);
-    ok(status == STATUS_NOT_IMPLEMENTED, "Expected STATUS_NOT_IMPLEMENTED, got %08x\n", status);
-    ok(len1 == 0, "Expected length 0, got %u\n", len1);
-
-    sfti->ProviderSignature = RSMB;
-    sfti->Action = SystemFirmwareTable_Get;
-
-    status = pNtQuerySystemInformation(SystemFirmwareTableInformation, sfti, min_sfti_len, &len1);
-todo_wine_if(firmware_todo)
-    ok(status == STATUS_BUFFER_TOO_SMALL, "Expected STATUS_BUFFER_TOO_SMALL, got %08x\n", status);
-    ok(len1 >= min_sfti_len, "Expected length >= %u, got %u\n", min_sfti_len, len1);
-    ok(sfti->TableBufferLength == len1 - min_sfti_len,
-       "Expected length %u, got %u\n", len1 - min_sfti_len, sfti->TableBufferLength);
-
-    sfti = HeapReAlloc(GetProcessHeap(), 0, sfti, len1);
-    ok(!!sfti, "Failed to allocate memory\n");
-
-    status = pNtQuerySystemInformation(SystemFirmwareTableInformation, sfti, len1, &len2);
-todo_wine_if(firmware_todo)
-    ok(status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
-    ok(len2 == len1, "Expected length %u, got %u\n", len1, len2);
-    ok(sfti->TableBufferLength == len1 - min_sfti_len,
-       "Expected length %u, got %u\n", len1 - min_sfti_len, sfti->TableBufferLength);
-
-    HeapFree(GetProcessHeap(), 0, sfti);
 }
 
 static void test_query_processor_power_info(void)
@@ -1897,30 +1776,20 @@ static void test_mapprotection(void)
     NTSTATUS status;
     SIZE_T retlen, count;
     void (*f)(void);
-    BOOL reset_flags = FALSE;
 
-    /* Switch to being a noexec unaware process */
-    status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessExecuteFlags, &oldflags, sizeof (oldflags), &flagsize);
-    if (status == STATUS_INVALID_PARAMETER)
-    {
-        skip("Unable to query process execute flags on this platform\n");
+    if (!pNtClose) {
+        skip("No NtClose ... Win98\n");
         return;
     }
-    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
-    trace("Process execute flags %08x\n", oldflags);
-
-    if (oldflags & MEM_EXECUTE_OPTION_DISABLE)
-    {
-        if (oldflags & MEM_EXECUTE_OPTION_PERMANENT)
-        {
-            skip("Unable to turn off noexec\n");
-            return;
-        }
-
-        status = pNtSetInformationProcess( GetCurrentProcess(), ProcessExecuteFlags, &flags, sizeof(flags) );
-        ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
-        reset_flags = TRUE;
+    /* Switch to being a noexec unaware process */
+    status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessExecuteFlags, &oldflags, sizeof (oldflags), &flagsize);
+    if (status == STATUS_INVALID_PARAMETER) {
+        skip("Invalid Parameter on ProcessExecuteFlags query?\n");
+        return;
     }
+    ok( (status == STATUS_SUCCESS) || (status == STATUS_INVALID_INFO_CLASS), "Expected STATUS_SUCCESS, got %08x\n", status);
+    status = pNtSetInformationProcess( GetCurrentProcess(), ProcessExecuteFlags, &flags, sizeof(flags) );
+    ok( (status == STATUS_SUCCESS) || (status == STATUS_INVALID_INFO_CLASS), "Expected STATUS_SUCCESS, got %08x\n", status);
 
     size.u.LowPart  = 0x2000;
     size.u.HighPart = 0;
@@ -1963,25 +1832,20 @@ static void test_mapprotection(void)
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     pNtClose (h);
 
-    if (reset_flags)
-        pNtSetInformationProcess( GetCurrentProcess(), ProcessExecuteFlags, &oldflags, sizeof(oldflags) );
+    /* Switch back */
+    pNtSetInformationProcess( GetCurrentProcess(), ProcessExecuteFlags, &oldflags, sizeof(oldflags) );
 }
 
 static void test_queryvirtualmemory(void)
 {
     NTSTATUS status;
     SIZE_T readcount;
-    static const WCHAR windowsW[] = {'w','i','n','d','o','w','s'};
     static const char teststring[] = "test string";
     static char datatestbuf[42] = "abc";
     static char rwtestbuf[42];
     MEMORY_BASIC_INFORMATION mbi;
     char stackbuf[42];
     HMODULE module;
-    char buffer_name[sizeof(MEMORY_SECTION_NAME) + MAX_PATH * sizeof(WCHAR)];
-    MEMORY_SECTION_NAME *msn = (MEMORY_SECTION_NAME *)buffer_name;
-    BOOL found;
-    int i;
 
     module = GetModuleHandleA( "ntdll.dll" );
     trace("Check flags of the PE header of NTDLL.DLL at %p\n", module);
@@ -2059,43 +1923,6 @@ static void test_queryvirtualmemory(void)
     /* check error code when addr is higher than working set limit */
     status = pNtQueryVirtualMemory(NtCurrentProcess(), (void *)~0, MemoryBasicInformation, &mbi, sizeof(mbi), &readcount);
     ok(status == STATUS_INVALID_PARAMETER, "Expected STATUS_INVALID_PARAMETER, got %08x\n", status);
-
-    trace("Check section name of NTDLL.DLL with invalid size\n");
-    module = GetModuleHandleA( "ntdll.dll" );
-    memset(msn, 0, sizeof(*msn));
-    readcount = 0;
-    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(*msn), &readcount);
-    ok( status == STATUS_BUFFER_OVERFLOW, "Expected STATUS_BUFFER_OVERFLOW, got %08x\n", status);
-    ok( readcount > 0, "Expected readcount to be > 0\n");
-
-    trace("Check section name of NTDLL.DLL with invalid size\n");
-    module = GetModuleHandleA( "ntdll.dll" );
-    memset(msn, 0, sizeof(*msn));
-    readcount = 0;
-    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(*msn) - 1, &readcount);
-    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
-    ok( readcount > 0, "Expected readcount to be > 0\n");
-
-    trace("Check section name of NTDLL.DLL\n");
-    module = GetModuleHandleA( "ntdll.dll" );
-    memset(msn, 0x55, sizeof(*msn));
-    memset(buffer_name, 0x77, sizeof(buffer_name));
-    readcount = 0;
-    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(buffer_name), &readcount);
-    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
-    ok( readcount > 0, "Expected readcount to be > 0\n");
-    trace ("Section Name: %s\n", wine_dbgstr_w(msn->SectionFileName.Buffer));
-    pRtlDowncaseUnicodeString( &msn->SectionFileName, &msn->SectionFileName, FALSE );
-    for (found = FALSE, i = (msn->SectionFileName.Length - sizeof(windowsW)) / sizeof(WCHAR); i >= 0; i--)
-        found |= !memcmp( &msn->SectionFileName.Buffer[i], windowsW, sizeof(windowsW) );
-    ok( found, "Section name does not contain \"Windows\"\n");
-
-    trace("Check section name of non mapped memory\n");
-    memset(msn, 0, sizeof(*msn));
-    readcount = 0;
-    status = pNtQueryVirtualMemory(NtCurrentProcess(), &buffer_name, MemorySectionName, msn, sizeof(buffer_name), &readcount);
-    ok( status == STATUS_INVALID_ADDRESS, "Expected STATUS_INVALID_ADDRESS, got %08x\n", status);
-    ok( readcount == 0 || broken(readcount != 0) /* wow64 */, "Expected readcount to be 0\n");
 }
 
 static void test_affinity(void)
@@ -2367,10 +2194,6 @@ START_TEST(info)
     trace("Starting test_query_handle()\n");
     test_query_handle();
 
-    /* 0x40 SystemHandleInformation */
-    trace("Starting test_query_handle_ex()\n");
-    test_query_handle_ex();
-
     /* 0x15 SystemCacheInformation */
     trace("Starting test_query_cache()\n");
     test_query_cache();
@@ -2443,10 +2266,6 @@ START_TEST(info)
     /* 0x1F ProcessDebugFlags */
     trace("Starting test_process_debug_flags()\n");
     test_query_process_debug_flags(argc, argv);
-
-    /* 0x4C SystemFirmwareTableInformation */
-    trace("Starting test_query_firmware()\n");
-    test_query_firmware();
 
     /* belongs to its own file */
     trace("Starting test_readvirtualmemory()\n");

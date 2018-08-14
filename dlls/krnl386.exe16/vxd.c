@@ -80,6 +80,8 @@ static struct vxdcall_service vxd_services[] =
     { {'v','w','i','n','3','2','.','v','x','d',0}, 0x002a, NULL, NULL }
 };
 
+#define NB_VXD_SERVICES  (sizeof(vxd_services)/sizeof(vxd_services[0]))
+
 #define W32S_APP2WINE(addr) ((addr)? (DWORD)(addr) + W32S_offset : 0)
 #define W32S_WINE2APP(addr) ((addr)? (DWORD)(addr) - W32S_offset : 0)
 
@@ -129,8 +131,8 @@ static HANDLE open_vxd_handle( LPCWSTR name )
         return 0;
     }
     memcpy( nameW.Buffer, prefixW, sizeof(prefixW) );
-    MultiByteToWideChar( CP_UNIXCP, 0, dir, -1, nameW.Buffer + ARRAY_SIZE(prefixW), len );
-    len += ARRAY_SIZE(prefixW);
+    MultiByteToWideChar( CP_UNIXCP, 0, dir, -1, nameW.Buffer + sizeof(prefixW)/sizeof(WCHAR), len );
+    len += sizeof(prefixW) / sizeof(WCHAR);
     nameW.Buffer[len-1] = '/';
     strcpyW( nameW.Buffer + len, name );
 
@@ -201,7 +203,7 @@ HANDLE __wine_vxd_open( LPCWSTR filenameW, DWORD access, SECURITY_ATTRIBUTES *sa
 
     /* normalize the filename */
 
-    if (strlenW( filenameW ) >= ARRAY_SIZE(name) - 4 ||
+    if (strlenW( filenameW ) >= sizeof(name)/sizeof(WCHAR) - 4 ||
         strchrW( filenameW, '/' ) || strchrW( filenameW, '\\' ))
     {
         SetLastError( ERROR_FILE_NOT_FOUND );
@@ -291,7 +293,7 @@ void WINAPI DECLSPEC_HIDDEN __regs_VxDCall( CONTEXT *context )
     DWORD service = stack32_pop( context );
 
     RtlEnterCriticalSection( &vxd_section );
-    for (i = 0; i < ARRAY_SIZE(vxd_services); i++)
+    for (i = 0; i < NB_VXD_SERVICES; i++)
     {
         if (HIWORD(service) != vxd_services[i].service) continue;
         if (!vxd_services[i].module)  /* need to load it */

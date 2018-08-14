@@ -40,6 +40,8 @@
 #include "wine/wined3d.h"
 #include "wine/winedxgi.h"
 
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+
 enum dxgi_frame_latency
 {
     DXGI_FRAME_LATENCY_MAX     = 16,
@@ -113,7 +115,6 @@ struct dxgi_factory
     struct wined3d *wined3d;
     BOOL extended;
     HWND device_window;
-    HWND assoc_window;
 };
 
 HRESULT dxgi_factory_create(REFIID riid, void **factory, BOOL extended) DECLSPEC_HIDDEN;

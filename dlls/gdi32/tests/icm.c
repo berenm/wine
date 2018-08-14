@@ -278,7 +278,7 @@ static void test_SetICMProfileW( HDC dc )
         return;
     }
 
-    len = ARRAY_SIZE(profile);
+    len = sizeof(profile)/sizeof(profile[0]);
     ret = GetICMProfileW( dc, &len, profile );
     ok(ret, "GetICMProfileW failed %u\n", GetLastError());
 

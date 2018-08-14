@@ -4694,7 +4694,7 @@ static INT TREEVIEW_ProcessLetterKeys(TREEVIEW_INFO *infoPtr, WPARAM charCode, L
         item.mask = TVIF_TEXT;
         item.hItem = idx;
         item.pszText = buffer;
-        item.cchTextMax = ARRAY_SIZE(buffer);
+        item.cchTextMax = sizeof(buffer);
         TREEVIEW_GetItemT( infoPtr, &item, TRUE );
 
         /* check for a match */

@@ -195,13 +195,13 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
 	 && ! IsEqualGUID( &IID_IUnknown, riid) )
 	return E_NOINTERFACE;
 
-    for (i = 0; i < ARRAY_SIZE(object_creation); i++)
+    for (i=0; i < sizeof(object_creation)/sizeof(object_creation[0]); i++)
     {
 	if (IsEqualGUID(object_creation[i].clsid, rclsid))
 	    break;
     }
 
-    if (i == ARRAY_SIZE(object_creation))
+    if (i == sizeof(object_creation)/sizeof(object_creation[0]))
     {
 	FIXME("%s: no class found.\n", debugstr_guid(rclsid));
 	return CLASS_E_CLASSNOTAVAILABLE;

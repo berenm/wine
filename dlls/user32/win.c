@@ -43,8 +43,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(win);
 #define NB_USER_HANDLES  ((LAST_USER_HANDLE - FIRST_USER_HANDLE + 1) >> 1)
 #define USER_HANDLE_TO_INDEX(hwnd) ((LOWORD(hwnd) - FIRST_USER_HANDLE) >> 1)
 
-extern HANDLE CDECL __wine_create_default_token(BOOL admin);
-
 static DWORD process_layout = ~0u;
 
 static struct list window_surfaces = LIST_INIT( window_surfaces );
@@ -1571,9 +1569,12 @@ HWND WIN_CreateWindowEx( CREATESTRUCTW *cs, LPCWSTR className, HINSTANCE module,
     cy = cs->cy;
     if ((cs->style & WS_THICKFRAME) || !(cs->style & (WS_POPUP | WS_CHILD)))
     {
-        MINMAXINFO info = WINPOS_GetMinMaxInfo( hwnd );
-        cx = max( min( cx, info.ptMaxTrackSize.x ), info.ptMinTrackSize.x );
-        cy = max( min( cy, info.ptMaxTrackSize.y ), info.ptMinTrackSize.y );
+        POINT maxSize, maxPos, minTrack, maxTrack;
+        WINPOS_GetMinMaxInfo( hwnd, &maxSize, &maxPos, &minTrack, &maxTrack);
+        if (maxTrack.x < cx) cx = maxTrack.x;
+        if (maxTrack.y < cy) cy = maxTrack.y;
+        if (minTrack.x > cx) cx = minTrack.x;
+        if (minTrack.y > cy) cy = minTrack.y;
     }
 
     if (cx < 0) cx = 0;
@@ -2054,7 +2055,6 @@ HWND WINAPI GetDesktopWindow(void)
         WCHAR app[MAX_PATH + sizeof(explorer)/sizeof(WCHAR)];
         WCHAR cmdline[MAX_PATH + (sizeof(explorer) + sizeof(args))/sizeof(WCHAR)];
         WCHAR desktop[MAX_PATH];
-        HANDLE token;
         void *redir;
 
         SERVER_START_REQ( set_user_object_info )
@@ -2087,12 +2087,9 @@ HWND WINAPI GetDesktopWindow(void)
         strcpyW( cmdline, app );
         strcatW( cmdline, args );
 
-        if (!(token = __wine_create_default_token( FALSE )))
-            ERR( "Failed to create limited token\n" );
-
         Wow64DisableWow64FsRedirection( &redir );
-        if (CreateProcessAsUserW( token, app, cmdline, NULL, NULL, FALSE, DETACHED_PROCESS,
-                                  NULL, windir, &si, &pi ))
+        if (CreateProcessW( app, cmdline, NULL, NULL, FALSE, DETACHED_PROCESS,
+                            NULL, windir, &si, &pi ))
         {
             TRACE( "started explorer pid %04x tid %04x\n", pi.dwProcessId, pi.dwThreadId );
             WaitForInputIdle( pi.hProcess, 10000 );
@@ -2101,8 +2098,6 @@ HWND WINAPI GetDesktopWindow(void)
         }
         else WARN( "failed to start explorer, err %d\n", GetLastError() );
         Wow64RevertWow64FsRedirection( redir );
-
-        if (token) CloseHandle( token );
 
         SERVER_START_REQ( get_desktop_window )
         {
@@ -2165,13 +2160,9 @@ BOOL WINAPI EnableWindow( HWND hwnd, BOOL enable )
  */
 BOOL WINAPI IsWindowEnabled(HWND hWnd)
 {
-    LONG ret;
-
-    SetLastError(NO_ERROR);
-    ret = GetWindowLongW( hWnd, GWL_STYLE );
-    if (!ret && GetLastError() != NO_ERROR) return FALSE;
-    return !(ret & WS_DISABLED);
+    return !(GetWindowLongW( hWnd, GWL_STYLE ) & WS_DISABLED);
 }
+
 
 /***********************************************************************
  *		IsWindowUnicode (USER32.@)
@@ -2248,15 +2239,11 @@ UINT WINAPI GetDpiForWindow( HWND hwnd )
         SetLastError( ERROR_INVALID_WINDOW_HANDLE );
         return 0;
     }
-    if (win == WND_DESKTOP)
-    {
-        POINT pt = { 0, 0 };
-        return get_monitor_dpi( MonitorFromPoint( pt, MONITOR_DEFAULTTOPRIMARY ));
-    }
+    if (win == WND_DESKTOP) return get_monitor_dpi( GetDesktopWindow() );
     if (win != WND_OTHER_PROCESS)
     {
         ret = win->dpi;
-        if (!ret) ret = get_win_monitor_dpi( hwnd );
+        if (!ret) ret = get_monitor_dpi( hwnd );
         WIN_ReleasePtr( win );
     }
     else
@@ -3621,12 +3608,13 @@ BOOL WINAPI FlashWindowEx( PFLASHWINFO pfinfo )
         if (!wndPtr || wndPtr == WND_OTHER_PROCESS || wndPtr == WND_DESKTOP) return FALSE;
         hwnd = wndPtr->obj.handle;  /* make it a full handle */
 
-        wparam = (wndPtr->flags & WIN_NCACTIVATED) != 0;
+        if (pfinfo->dwFlags) wparam = !(wndPtr->flags & WIN_NCACTIVATED);
+        else wparam = (hwnd == GetForegroundWindow());
 
         WIN_ReleasePtr( wndPtr );
         SendMessageW( hwnd, WM_NCACTIVATE, wparam, 0 );
         USER_Driver->pFlashWindowEx( pfinfo );
-        return (pfinfo->dwFlags & FLASHW_CAPTION) ? TRUE : wparam;
+        return wparam;
     }
 }
 

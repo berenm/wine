@@ -150,7 +150,7 @@ static const char *debugstr_SP(const GUID *id) {
 
   if (!id) return "(null)";
 
-  for (i = 0; i < ARRAY_SIZE(guids); i++) {
+  for (i = 0; i < sizeof(guids)/sizeof(guids[0]); i++) {
     if (IsEqualGUID(id, guids[i].guid))
       return guids[i].name;
   }

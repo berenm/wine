@@ -282,6 +282,8 @@ static struct magic_device magic_devices[] =
     { {'h','p','s','c','a','n',0},         NULL, { { 0, 0 } }, INT21_IoctlHPScanHandler },
 };
 
+#define NB_MAGIC_DEVICES  (sizeof(magic_devices)/sizeof(magic_devices[0]))
+
 
 /* Many calls translate a drive argument like this:
    drive number (00h = default, 01h = A:, etc)
@@ -814,8 +816,8 @@ static HANDLE INT21_CreateMagicDeviceHandle( LPCWSTR name )
         return 0;
     }
     memcpy( nameW.Buffer, prefixW, sizeof(prefixW) );
-    MultiByteToWideChar( CP_UNIXCP, 0, dir, -1, nameW.Buffer + ARRAY_SIZE(prefixW), len );
-    len += ARRAY_SIZE(prefixW);
+    MultiByteToWideChar( CP_UNIXCP, 0, dir, -1, nameW.Buffer + sizeof(prefixW)/sizeof(WCHAR), len );
+    len += sizeof(prefixW) / sizeof(WCHAR);
     nameW.Buffer[len-1] = '/';
     strcpyW( nameW.Buffer + len, name );
 
@@ -854,13 +856,13 @@ static HANDLE INT21_OpenMagicDevice( LPCWSTR name, DWORD access )
     if ((p = strrchrW( name, '/' ))) name = p + 1;
     if ((p = strrchrW( name, '\\' ))) name = p + 1;
 
-    for (i = 0; i < ARRAY_SIZE(magic_devices); i++)
+    for (i = 0; i < NB_MAGIC_DEVICES; i++)
     {
         int len = strlenW( magic_devices[i].name );
         if (!strncmpiW( magic_devices[i].name, name, len ) &&
             (!name[len] || name[len] == '.' || name[len] == ':')) break;
     }
-    if (i == ARRAY_SIZE(magic_devices)) return 0;
+    if (i == NB_MAGIC_DEVICES) return 0;
 
     if (!magic_devices[i].handle) /* need to open it */
     {
@@ -2637,7 +2639,7 @@ static void INT21_Ioctl_Char( CONTEXT *context )
         }
     } else {
         UINT i;
-        for (i = 0; i < ARRAY_SIZE(magic_devices); i++)
+        for (i = 0; i < NB_MAGIC_DEVICES; i++)
         {
             if (!magic_devices[i].handle) continue;
             if (magic_devices[i].index.QuadPart == info.IndexNumber.QuadPart)
@@ -3264,7 +3266,7 @@ static BOOL INT21_NetworkFunc (CONTEXT *context)
     case 0x00: /* Get machine name. */
         {
             WCHAR dstW[MAX_COMPUTERNAME_LENGTH + 1];
-            DWORD s = ARRAY_SIZE(dstW);
+            DWORD s = sizeof(dstW) / sizeof(WCHAR);
             int len;
 
             char *dst = CTX_SEG_OFF_TO_LIN (context,context->SegDs,context->Edx);

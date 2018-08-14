@@ -1,5 +1,5 @@
 /*
- * Device Enumeration
+ *	exported dll functions for devenum.dll
  *
  * Copyright (C) 2002 John K. Hohm
  * Copyright (C) 2002 Robert Shearman
@@ -26,7 +26,19 @@
 WINE_DEFAULT_DEBUG_CHANNEL(devenum);
 
 DECLSPEC_HIDDEN LONG dll_refs;
-static HINSTANCE devenum_instance;
+DECLSPEC_HIDDEN HINSTANCE DEVENUM_hInstance;
+
+typedef struct
+{
+    REFCLSID clsid;
+    LPCWSTR friendly_name;
+    BOOL instance;
+} register_info;
+
+/***********************************************************************
+ *		Global string constant definitions
+ */
+const WCHAR clsid_keyname[6] = { 'C', 'L', 'S', 'I', 'D', 0 };
 
 /***********************************************************************
  *		DllEntryPoint
@@ -37,101 +49,29 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID fImpLoad)
 
     switch(fdwReason) {
     case DLL_PROCESS_ATTACH:
-        devenum_instance = hinstDLL;
+        DEVENUM_hInstance = hinstDLL;
         DisableThreadLibraryCalls(hinstDLL);
 	break;
     }
     return TRUE;
 }
 
-struct class_factory
-{
-    IClassFactory IClassFactory_iface;
-    IUnknown *obj;
-};
-
-static inline struct class_factory *impl_from_IClassFactory( IClassFactory *iface )
-{
-    return CONTAINING_RECORD( iface, struct class_factory, IClassFactory_iface );
-}
-
-static HRESULT WINAPI ClassFactory_QueryInterface(IClassFactory *iface, REFIID iid, void **obj)
-{
-    TRACE("(%p, %s, %p)\n", iface, debugstr_guid(iid), obj);
-
-    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IClassFactory))
-    {
-        IClassFactory_AddRef(iface);
-        *obj = iface;
-        return S_OK;
-    }
-
-    *obj = NULL;
-    WARN("no interface for %s\n", debugstr_guid(iid));
-    return E_NOINTERFACE;
-}
-
-static ULONG WINAPI ClassFactory_AddRef(IClassFactory *iface)
-{
-    DEVENUM_LockModule();
-    return 2;
-}
-
-static ULONG WINAPI ClassFactory_Release(IClassFactory *iface)
-{
-    DEVENUM_UnlockModule();
-    return 1;
-}
-
-static HRESULT WINAPI ClassFactory_CreateInstance(IClassFactory *iface,
-    IUnknown *outer, REFIID iid, void **obj)
-{
-    struct class_factory *This = impl_from_IClassFactory( iface );
-
-    TRACE("(%p, %s, %p)\n", outer, debugstr_guid(iid), obj);
-
-    if (!obj) return E_POINTER;
-
-    if (outer) return CLASS_E_NOAGGREGATION;
-
-    return IUnknown_QueryInterface(This->obj, iid, obj);
-}
-
-static HRESULT WINAPI ClassFactory_LockServer(IClassFactory *iface, BOOL lock)
-{
-    if (lock)
-        DEVENUM_LockModule();
-    else
-        DEVENUM_UnlockModule();
-    return S_OK;
-}
-
-static const IClassFactoryVtbl ClassFactory_vtbl = {
-    ClassFactory_QueryInterface,
-    ClassFactory_AddRef,
-    ClassFactory_Release,
-    ClassFactory_CreateInstance,
-    ClassFactory_LockServer
-};
-
-static struct class_factory create_devenum_cf = { { &ClassFactory_vtbl }, (IUnknown *)&DEVENUM_CreateDevEnum };
-static struct class_factory device_moniker_cf = { { &ClassFactory_vtbl }, (IUnknown *)&DEVENUM_ParseDisplayName };
-
 /***********************************************************************
  *		DllGetClassObject (DEVENUM.@)
  */
-HRESULT WINAPI DllGetClassObject(REFCLSID clsid, REFIID iid, void **obj)
+HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID iid, LPVOID *ppv)
 {
-    TRACE("(%s, %s, %p)\n", debugstr_guid(clsid), debugstr_guid(iid), obj);
+    TRACE("(%s, %s, %p)\n", debugstr_guid(rclsid), debugstr_guid(iid), ppv);
 
-    *obj = NULL;
+    *ppv = NULL;
 
-    if (IsEqualGUID(clsid, &CLSID_SystemDeviceEnum))
-        return IClassFactory_QueryInterface(&create_devenum_cf.IClassFactory_iface, iid, obj);
-    else if (IsEqualGUID(clsid, &CLSID_CDeviceMoniker))
-        return IClassFactory_QueryInterface(&device_moniker_cf.IClassFactory_iface, iid, obj);
+    /* FIXME: we should really have two class factories.
+     * Oh well - works just fine as it is */
+    if (IsEqualGUID(rclsid, &CLSID_SystemDeviceEnum) ||
+        IsEqualGUID(rclsid, &CLSID_CDeviceMoniker))
+        return IClassFactory_QueryInterface(&DEVENUM_ClassFactory.IClassFactory_iface, iid, ppv);
 
-    FIXME("class %s not available\n", debugstr_guid(clsid));
+    FIXME("CLSID: %s, IID: %s\n", debugstr_guid(rclsid), debugstr_guid(iid));
     return CLASS_E_CLASSNOTAVAILABLE;
 }
 
@@ -154,7 +94,7 @@ HRESULT WINAPI DllRegisterServer(void)
 
     TRACE("\n");
 
-    res = __wine_register_resources( devenum_instance );
+    res = __wine_register_resources( DEVENUM_hInstance );
     if (FAILED(res))
         return res;
 
@@ -202,5 +142,5 @@ HRESULT WINAPI DllRegisterServer(void)
 HRESULT WINAPI DllUnregisterServer(void)
 {
     FIXME("stub!\n");
-    return __wine_unregister_resources( devenum_instance );
+    return __wine_unregister_resources( DEVENUM_hInstance );
 }

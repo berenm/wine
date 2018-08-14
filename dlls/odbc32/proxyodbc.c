@@ -175,13 +175,6 @@ static SQLRETURN (*pSQLTransact)(SQLHENV,SQLHDBC,SQLUSMALLINT);
 static void *dmHandle;
 static int nErrorType;
 
-SQLRETURN WINAPI ODBC32_SQLAllocEnv(SQLHENV *);
-SQLRETURN WINAPI ODBC32_SQLFreeEnv(SQLHENV);
-SQLRETURN WINAPI ODBC32_SQLDataSources(SQLHENV, SQLUSMALLINT, SQLCHAR *, SQLSMALLINT,
-                                       SQLSMALLINT *, SQLCHAR *, SQLSMALLINT, SQLSMALLINT *);
-SQLRETURN WINAPI ODBC32_SQLDrivers(SQLHENV, SQLUSMALLINT, SQLCHAR *, SQLSMALLINT, SQLSMALLINT *,
-                                   SQLCHAR *, SQLSMALLINT, SQLSMALLINT *);
-
 /***********************************************************************
  * ODBC_ReplicateODBCInstToRegistry
  *
@@ -225,7 +218,7 @@ static void ODBC_ReplicateODBCInstToRegistry (SQLHENV hEnv)
 
             success = TRUE;
             dirn = SQL_FETCH_FIRST;
-            while ((sql_ret = ODBC32_SQLDrivers (hEnv, dirn, (SQLCHAR*)desc, sizeof(desc),
+            while ((sql_ret = SQLDrivers (hEnv, dirn, (SQLCHAR*)desc, sizeof(desc),
                     &sizedesc, NULL, 0, NULL)) == SQL_SUCCESS ||
                     sql_ret == SQL_SUCCESS_WITH_INFO)
             {
@@ -352,7 +345,7 @@ static void ODBC_ReplicateODBCToRegistry (BOOL is_user, SQLHENV hEnv)
     {
         success = TRUE;
         dirn = is_user ? SQL_FETCH_FIRST_USER : SQL_FETCH_FIRST_SYSTEM;
-        while ((sql_ret = ODBC32_SQLDataSources (hEnv, dirn,
+        while ((sql_ret = SQLDataSources (hEnv, dirn,
                 (SQLCHAR*)dsn, sizeof(dsn), &sizedsn,
                 (SQLCHAR*)desc, sizeof(desc), &sizedesc)) == SQL_SUCCESS
                 || sql_ret == SQL_SUCCESS_WITH_INFO)
@@ -452,13 +445,13 @@ static void ODBC_ReplicateToRegistry (void)
     SQLRETURN sql_ret;
     SQLHENV hEnv;
 
-    if ((sql_ret = ODBC32_SQLAllocEnv (&hEnv)) == SQL_SUCCESS)
+    if ((sql_ret = SQLAllocEnv (&hEnv)) == SQL_SUCCESS)
     {
         ODBC_ReplicateODBCInstToRegistry (hEnv);
         ODBC_ReplicateODBCToRegistry (FALSE /* system dsns */, hEnv);
         ODBC_ReplicateODBCToRegistry (TRUE /* user dsns */, hEnv);
 
-        if ((sql_ret = ODBC32_SQLFreeEnv (hEnv)) != SQL_SUCCESS)
+        if ((sql_ret = SQLFreeEnv (hEnv)) != SQL_SUCCESS)
         {
             TRACE ("Error %d freeing the SQL environment.\n", (int)sql_ret);
         }
@@ -678,7 +671,7 @@ static BOOL ODBC_LoadDMFunctions(void)
 /*************************************************************************
  *				SQLAllocConnect           [ODBC32.001]
  */
-SQLRETURN WINAPI ODBC32_SQLAllocConnect(SQLHENV EnvironmentHandle, SQLHDBC *ConnectionHandle)
+SQLRETURN WINAPI SQLAllocConnect(SQLHENV EnvironmentHandle, SQLHDBC *ConnectionHandle)
 {
         SQLRETURN ret;
         TRACE("(EnvironmentHandle %p)\n",EnvironmentHandle);
@@ -699,7 +692,7 @@ SQLRETURN WINAPI ODBC32_SQLAllocConnect(SQLHENV EnvironmentHandle, SQLHDBC *Conn
 /*************************************************************************
  *				SQLAllocEnv           [ODBC32.002]
  */
-SQLRETURN WINAPI ODBC32_SQLAllocEnv(SQLHENV *EnvironmentHandle)
+SQLRETURN WINAPI  SQLAllocEnv(SQLHENV *EnvironmentHandle)
 {
         SQLRETURN ret;
         TRACE("\n");
@@ -720,7 +713,7 @@ SQLRETURN WINAPI ODBC32_SQLAllocEnv(SQLHENV *EnvironmentHandle)
 /*************************************************************************
  *				SQLAllocHandle           [ODBC32.024]
  */
-SQLRETURN WINAPI ODBC32_SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, SQLHANDLE *OutputHandle)
+SQLRETURN WINAPI SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, SQLHANDLE *OutputHandle)
 {
         SQLRETURN ret;
         TRACE("(Type %d, Handle %p)\n", HandleType, InputHandle);
@@ -752,7 +745,7 @@ SQLRETURN WINAPI ODBC32_SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHa
 /*************************************************************************
  *				SQLAllocStmt           [ODBC32.003]
  */
-SQLRETURN WINAPI ODBC32_SQLAllocStmt(SQLHDBC ConnectionHandle, SQLHSTMT *StatementHandle)
+SQLRETURN WINAPI SQLAllocStmt(SQLHDBC ConnectionHandle, SQLHSTMT *StatementHandle)
 {
         SQLRETURN ret;
 
@@ -774,7 +767,7 @@ SQLRETURN WINAPI ODBC32_SQLAllocStmt(SQLHDBC ConnectionHandle, SQLHSTMT *Stateme
 /*************************************************************************
  *				SQLAllocHandleStd           [ODBC32.077]
  */
-SQLRETURN WINAPI ODBC32_SQLAllocHandleStd( SQLSMALLINT HandleType,
+SQLRETURN WINAPI SQLAllocHandleStd( SQLSMALLINT HandleType,
                                     SQLHANDLE InputHandle, SQLHANDLE *OutputHandle)
 {
         TRACE("ProxyODBC: SQLAllocHandleStd.\n");
@@ -803,7 +796,7 @@ SQLRETURN WINAPI ODBC32_SQLAllocHandleStd( SQLSMALLINT HandleType,
 /*************************************************************************
  *				SQLBindCol           [ODBC32.004]
  */
-SQLRETURN WINAPI ODBC32_SQLBindCol(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLBindCol(SQLHSTMT StatementHandle,
                      SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
                      SQLPOINTER TargetValue, SQLLEN BufferLength,
                      SQLLEN *StrLen_or_Ind)
@@ -824,7 +817,7 @@ SQLRETURN WINAPI ODBC32_SQLBindCol(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLBindParam           [ODBC32.025]
  */
-SQLRETURN WINAPI ODBC32_SQLBindParam(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLBindParam(SQLHSTMT StatementHandle,
              SQLUSMALLINT ParameterNumber, SQLSMALLINT ValueType,
              SQLSMALLINT ParameterType, SQLULEN LengthPrecision,
              SQLSMALLINT ParameterScale, SQLPOINTER ParameterValue,
@@ -842,7 +835,7 @@ SQLRETURN WINAPI ODBC32_SQLBindParam(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLCancel           [ODBC32.005]
  */
-SQLRETURN WINAPI ODBC32_SQLCancel(SQLHSTMT StatementHandle)
+SQLRETURN WINAPI SQLCancel(SQLHSTMT StatementHandle)
 {
         TRACE("\n");
 
@@ -854,7 +847,7 @@ SQLRETURN WINAPI ODBC32_SQLCancel(SQLHSTMT StatementHandle)
 /*************************************************************************
  *				SQLCloseCursor           [ODBC32.026]
  */
-SQLRETURN WINAPI ODBC32_SQLCloseCursor(SQLHSTMT StatementHandle)
+SQLRETURN WINAPI  SQLCloseCursor(SQLHSTMT StatementHandle)
 {
         SQLRETURN ret;
         TRACE("(Handle %p)\n", StatementHandle);
@@ -870,7 +863,7 @@ SQLRETURN WINAPI ODBC32_SQLCloseCursor(SQLHSTMT StatementHandle)
 /*************************************************************************
  *				SQLColAttribute           [ODBC32.027]
  */
-SQLRETURN WINAPI ODBC32_SQLColAttribute (SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLColAttribute (SQLHSTMT StatementHandle,
              SQLUSMALLINT ColumnNumber, SQLUSMALLINT FieldIdentifier,
              SQLPOINTER CharacterAttribute, SQLSMALLINT BufferLength,
              SQLSMALLINT *StringLength, SQLLEN *NumericAttribute)
@@ -886,7 +879,7 @@ SQLRETURN WINAPI ODBC32_SQLColAttribute (SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLColumns           [ODBC32.040]
  */
-SQLRETURN WINAPI ODBC32_SQLColumns(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLColumns(SQLHSTMT StatementHandle,
              SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
              SQLCHAR *SchemaName, SQLSMALLINT NameLength2,
              SQLCHAR *TableName, SQLSMALLINT NameLength3,
@@ -903,7 +896,7 @@ SQLRETURN WINAPI ODBC32_SQLColumns(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLConnect           [ODBC32.007]
  */
-SQLRETURN WINAPI ODBC32_SQLConnect(SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLConnect(SQLHDBC ConnectionHandle,
              SQLCHAR *ServerName, SQLSMALLINT NameLength1,
              SQLCHAR *UserName, SQLSMALLINT NameLength2,
              SQLCHAR *Authentication, SQLSMALLINT NameLength3)
@@ -924,7 +917,7 @@ SQLRETURN WINAPI ODBC32_SQLConnect(SQLHDBC ConnectionHandle,
 /*************************************************************************
  *				SQLCopyDesc           [ODBC32.028]
  */
-SQLRETURN WINAPI ODBC32_SQLCopyDesc(SQLHDESC SourceDescHandle, SQLHDESC TargetDescHandle)
+SQLRETURN WINAPI SQLCopyDesc(SQLHDESC SourceDescHandle, SQLHDESC TargetDescHandle)
 {
         TRACE("\n");
 
@@ -936,7 +929,7 @@ SQLRETURN WINAPI ODBC32_SQLCopyDesc(SQLHDESC SourceDescHandle, SQLHDESC TargetDe
 /*************************************************************************
  *				SQLDataSources           [ODBC32.057]
  */
-SQLRETURN WINAPI ODBC32_SQLDataSources(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLDataSources(SQLHENV EnvironmentHandle,
              SQLUSMALLINT Direction, SQLCHAR *ServerName,
              SQLSMALLINT BufferLength1, SQLSMALLINT *NameLength1,
              SQLCHAR *Description, SQLSMALLINT BufferLength2,
@@ -964,7 +957,7 @@ SQLRETURN WINAPI ODBC32_SQLDataSources(SQLHENV EnvironmentHandle,
         return ret;
 }
 
-SQLRETURN WINAPI ODBC32_SQLDataSourcesA(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLDataSourcesA(SQLHENV EnvironmentHandle,
              SQLUSMALLINT Direction, SQLCHAR *ServerName,
              SQLSMALLINT BufferLength1, SQLSMALLINT *NameLength1,
              SQLCHAR *Description, SQLSMALLINT BufferLength2,
@@ -994,7 +987,7 @@ SQLRETURN WINAPI ODBC32_SQLDataSourcesA(SQLHENV EnvironmentHandle,
 /*************************************************************************
  *				SQLDescribeCol           [ODBC32.008]
  */
-SQLRETURN WINAPI ODBC32_SQLDescribeCol(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLDescribeCol(SQLHSTMT StatementHandle,
              SQLUSMALLINT ColumnNumber, SQLCHAR *ColumnName,
              SQLSMALLINT BufferLength, SQLSMALLINT *NameLength,
              SQLSMALLINT *DataType, SQLULEN *ColumnSize,
@@ -1011,7 +1004,7 @@ SQLRETURN WINAPI ODBC32_SQLDescribeCol(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLDisconnect           [ODBC32.009]
  */
-SQLRETURN WINAPI ODBC32_SQLDisconnect(SQLHDBC ConnectionHandle)
+SQLRETURN WINAPI SQLDisconnect(SQLHDBC ConnectionHandle)
 {
         SQLRETURN ret;
         TRACE("(Handle %p)\n", ConnectionHandle);
@@ -1027,7 +1020,7 @@ SQLRETURN WINAPI ODBC32_SQLDisconnect(SQLHDBC ConnectionHandle)
 /*************************************************************************
  *				SQLEndTran           [ODBC32.029]
  */
-SQLRETURN WINAPI ODBC32_SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT CompletionType)
+SQLRETURN WINAPI SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT CompletionType)
 {
         TRACE("\n");
 
@@ -1039,7 +1032,7 @@ SQLRETURN WINAPI ODBC32_SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQL
 /*************************************************************************
  *				SQLError           [ODBC32.010]
  */
-SQLRETURN WINAPI ODBC32_SQLError(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLError(SQLHENV EnvironmentHandle,
              SQLHDBC ConnectionHandle, SQLHSTMT StatementHandle,
              SQLCHAR *Sqlstate, SQLINTEGER *NativeError,
              SQLCHAR *MessageText, SQLSMALLINT BufferLength,
@@ -1066,7 +1059,7 @@ SQLRETURN WINAPI ODBC32_SQLError(SQLHENV EnvironmentHandle,
 /*************************************************************************
  *				SQLExecDirect           [ODBC32.011]
  */
-SQLRETURN WINAPI ODBC32_SQLExecDirect(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength)
+SQLRETURN WINAPI SQLExecDirect(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength)
 {
         TRACE("\n");
 
@@ -1078,7 +1071,7 @@ SQLRETURN WINAPI ODBC32_SQLExecDirect(SQLHSTMT StatementHandle, SQLCHAR *Stateme
 /*************************************************************************
  *				SQLExecute           [ODBC32.012]
  */
-SQLRETURN WINAPI ODBC32_SQLExecute(SQLHSTMT StatementHandle)
+SQLRETURN WINAPI SQLExecute(SQLHSTMT StatementHandle)
 {
         TRACE("\n");
 
@@ -1090,7 +1083,7 @@ SQLRETURN WINAPI ODBC32_SQLExecute(SQLHSTMT StatementHandle)
 /*************************************************************************
  *				SQLFetch           [ODBC32.013]
  */
-SQLRETURN WINAPI ODBC32_SQLFetch(SQLHSTMT StatementHandle)
+SQLRETURN WINAPI SQLFetch(SQLHSTMT StatementHandle)
 {
         TRACE("\n");
 
@@ -1102,7 +1095,7 @@ SQLRETURN WINAPI ODBC32_SQLFetch(SQLHSTMT StatementHandle)
 /*************************************************************************
  *				SQLFetchScroll          [ODBC32.030]
  */
-SQLRETURN WINAPI ODBC32_SQLFetchScroll(SQLHSTMT StatementHandle, SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
+SQLRETURN WINAPI SQLFetchScroll(SQLHSTMT StatementHandle, SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
 {
         TRACE("\n");
 
@@ -1114,7 +1107,7 @@ SQLRETURN WINAPI ODBC32_SQLFetchScroll(SQLHSTMT StatementHandle, SQLSMALLINT Fet
 /*************************************************************************
  *				SQLFreeConnect           [ODBC32.014]
  */
-SQLRETURN WINAPI ODBC32_SQLFreeConnect(SQLHDBC ConnectionHandle)
+SQLRETURN WINAPI SQLFreeConnect(SQLHDBC ConnectionHandle)
 {
         SQLRETURN ret;
         TRACE("(Handle %p)\n", ConnectionHandle);
@@ -1130,7 +1123,7 @@ SQLRETURN WINAPI ODBC32_SQLFreeConnect(SQLHDBC ConnectionHandle)
 /*************************************************************************
  *				SQLFreeEnv           [ODBC32.015]
  */
-SQLRETURN WINAPI ODBC32_SQLFreeEnv(SQLHENV EnvironmentHandle)
+SQLRETURN WINAPI SQLFreeEnv(SQLHENV EnvironmentHandle)
 {
         SQLRETURN ret;
         TRACE("(EnvironmentHandle %p)\n",EnvironmentHandle);
@@ -1146,7 +1139,7 @@ SQLRETURN WINAPI ODBC32_SQLFreeEnv(SQLHENV EnvironmentHandle)
 /*************************************************************************
  *				SQLFreeHandle           [ODBC32.031]
  */
-SQLRETURN WINAPI ODBC32_SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
+SQLRETURN WINAPI SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
         SQLRETURN ret;
         TRACE("(Type %d, Handle %p)\n", HandleType, Handle);
@@ -1162,7 +1155,7 @@ SQLRETURN WINAPI ODBC32_SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 /*************************************************************************
  *				SQLFreeStmt           [ODBC32.016]
  */
-SQLRETURN WINAPI ODBC32_SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
+SQLRETURN WINAPI SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 {
         SQLRETURN ret;
         TRACE("(Handle %p, Option %d)\n", StatementHandle, Option);
@@ -1178,7 +1171,7 @@ SQLRETURN WINAPI ODBC32_SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Optio
 /*************************************************************************
  *				SQLGetConnectAttr           [ODBC32.032]
  */
-SQLRETURN WINAPI ODBC32_SQLGetConnectAttr(SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLGetConnectAttr(SQLHDBC ConnectionHandle,
              SQLINTEGER Attribute, SQLPOINTER Value,
              SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
@@ -1193,7 +1186,7 @@ SQLRETURN WINAPI ODBC32_SQLGetConnectAttr(SQLHDBC ConnectionHandle,
 /*************************************************************************
  *				SQLGetConnectOption       [ODBC32.042]
  */
-SQLRETURN WINAPI ODBC32_SQLGetConnectOption(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLPOINTER Value)
+SQLRETURN WINAPI SQLGetConnectOption(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLPOINTER Value)
 {
         TRACE("\n");
 
@@ -1205,7 +1198,7 @@ SQLRETURN WINAPI ODBC32_SQLGetConnectOption(SQLHDBC ConnectionHandle, SQLUSMALLI
 /*************************************************************************
  *				SQLGetCursorName           [ODBC32.017]
  */
-SQLRETURN WINAPI ODBC32_SQLGetCursorName(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLGetCursorName(SQLHSTMT StatementHandle,
              SQLCHAR *CursorName, SQLSMALLINT BufferLength,
              SQLSMALLINT *NameLength)
 {
@@ -1219,7 +1212,7 @@ SQLRETURN WINAPI ODBC32_SQLGetCursorName(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLGetData           [ODBC32.043]
  */
-SQLRETURN WINAPI ODBC32_SQLGetData(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLGetData(SQLHSTMT StatementHandle,
              SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
              SQLPOINTER TargetValue, SQLLEN BufferLength,
              SQLLEN *StrLen_or_Ind)
@@ -1235,7 +1228,7 @@ SQLRETURN WINAPI ODBC32_SQLGetData(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLGetDescField           [ODBC32.033]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDescField(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLGetDescField(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
              SQLPOINTER Value, SQLINTEGER BufferLength,
              SQLINTEGER *StringLength)
@@ -1251,7 +1244,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDescField(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLGetDescRec           [ODBC32.034]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDescRec(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLGetDescRec(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, SQLCHAR *Name,
              SQLSMALLINT BufferLength, SQLSMALLINT *StringLength,
              SQLSMALLINT *Type, SQLSMALLINT *SubType,
@@ -1269,7 +1262,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDescRec(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLGetDiagField           [ODBC32.035]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDiagField(SQLSMALLINT HandleType, SQLHANDLE Handle,
+SQLRETURN WINAPI SQLGetDiagField(SQLSMALLINT HandleType, SQLHANDLE Handle,
              SQLSMALLINT RecNumber, SQLSMALLINT DiagIdentifier,
              SQLPOINTER DiagInfo, SQLSMALLINT BufferLength,
              SQLSMALLINT *StringLength)
@@ -1285,7 +1278,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDiagField(SQLSMALLINT HandleType, SQLHANDLE Handle
 /*************************************************************************
  *				SQLGetDiagRec           [ODBC32.036]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handle,
+SQLRETURN WINAPI SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handle,
              SQLSMALLINT RecNumber, SQLCHAR *Sqlstate,
              SQLINTEGER *NativeError, SQLCHAR *MessageText,
              SQLSMALLINT BufferLength, SQLSMALLINT *TextLength)
@@ -1301,7 +1294,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handle,
 /*************************************************************************
  *				SQLGetEnvAttr           [ODBC32.037]
  */
-SQLRETURN WINAPI ODBC32_SQLGetEnvAttr(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLGetEnvAttr(SQLHENV EnvironmentHandle,
              SQLINTEGER Attribute, SQLPOINTER Value,
              SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
@@ -1315,7 +1308,7 @@ SQLRETURN WINAPI ODBC32_SQLGetEnvAttr(SQLHENV EnvironmentHandle,
 /*************************************************************************
  *				SQLGetFunctions           [ODBC32.044]
  */
-SQLRETURN WINAPI ODBC32_SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT FunctionId, SQLUSMALLINT *Supported)
+SQLRETURN WINAPI SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT FunctionId, SQLUSMALLINT *Supported)
 {
         TRACE("\n");
 
@@ -1327,7 +1320,7 @@ SQLRETURN WINAPI ODBC32_SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT F
 /*************************************************************************
  *				SQLGetInfo           [ODBC32.045]
  */
-SQLRETURN WINAPI ODBC32_SQLGetInfo(SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLGetInfo(SQLHDBC ConnectionHandle,
              SQLUSMALLINT InfoType, SQLPOINTER InfoValue,
              SQLSMALLINT BufferLength, SQLSMALLINT *StringLength)
 {
@@ -1341,7 +1334,7 @@ SQLRETURN WINAPI ODBC32_SQLGetInfo(SQLHDBC ConnectionHandle,
 /*************************************************************************
  *				SQLGetStmtAttr           [ODBC32.038]
  */
-SQLRETURN WINAPI ODBC32_SQLGetStmtAttr(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLGetStmtAttr(SQLHSTMT StatementHandle,
              SQLINTEGER Attribute, SQLPOINTER Value,
              SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
@@ -1355,7 +1348,7 @@ SQLRETURN WINAPI ODBC32_SQLGetStmtAttr(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLGetStmtOption           [ODBC32.046]
  */
-SQLRETURN WINAPI ODBC32_SQLGetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT Option, SQLPOINTER Value)
+SQLRETURN WINAPI SQLGetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT Option, SQLPOINTER Value)
 {
         TRACE("\n");
 
@@ -1367,7 +1360,7 @@ SQLRETURN WINAPI ODBC32_SQLGetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT 
 /*************************************************************************
  *				SQLGetTypeInfo           [ODBC32.047]
  */
-SQLRETURN WINAPI ODBC32_SQLGetTypeInfo(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
+SQLRETURN WINAPI SQLGetTypeInfo(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
         TRACE("\n");
 
@@ -1379,7 +1372,7 @@ SQLRETURN WINAPI ODBC32_SQLGetTypeInfo(SQLHSTMT StatementHandle, SQLSMALLINT Dat
 /*************************************************************************
  *				SQLNumResultCols           [ODBC32.018]
  */
-SQLRETURN WINAPI ODBC32_SQLNumResultCols(SQLHSTMT StatementHandle, SQLSMALLINT *ColumnCount)
+SQLRETURN WINAPI SQLNumResultCols(SQLHSTMT StatementHandle, SQLSMALLINT *ColumnCount)
 {
         TRACE("\n");
 
@@ -1391,7 +1384,7 @@ SQLRETURN WINAPI ODBC32_SQLNumResultCols(SQLHSTMT StatementHandle, SQLSMALLINT *
 /*************************************************************************
  *				SQLParamData           [ODBC32.048]
  */
-SQLRETURN WINAPI ODBC32_SQLParamData(SQLHSTMT StatementHandle, SQLPOINTER *Value)
+SQLRETURN WINAPI SQLParamData(SQLHSTMT StatementHandle, SQLPOINTER *Value)
 {
         TRACE("\n");
 
@@ -1403,7 +1396,7 @@ SQLRETURN WINAPI ODBC32_SQLParamData(SQLHSTMT StatementHandle, SQLPOINTER *Value
 /*************************************************************************
  *				SQLPrepare           [ODBC32.019]
  */
-SQLRETURN WINAPI ODBC32_SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength)
+SQLRETURN WINAPI SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength)
 {
         TRACE("\n");
 
@@ -1415,7 +1408,7 @@ SQLRETURN WINAPI ODBC32_SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementT
 /*************************************************************************
  *				SQLPutData           [ODBC32.049]
  */
-SQLRETURN WINAPI ODBC32_SQLPutData(SQLHSTMT StatementHandle, SQLPOINTER Data, SQLLEN StrLen_or_Ind)
+SQLRETURN WINAPI SQLPutData(SQLHSTMT StatementHandle, SQLPOINTER Data, SQLLEN StrLen_or_Ind)
 {
         TRACE("\n");
 
@@ -1427,7 +1420,7 @@ SQLRETURN WINAPI ODBC32_SQLPutData(SQLHSTMT StatementHandle, SQLPOINTER Data, SQ
 /*************************************************************************
  *				SQLRowCount           [ODBC32.020]
  */
-SQLRETURN WINAPI ODBC32_SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCount)
+SQLRETURN WINAPI SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCount)
 {
         TRACE("\n");
 
@@ -1439,7 +1432,7 @@ SQLRETURN WINAPI ODBC32_SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCount)
 /*************************************************************************
  *				SQLSetConnectAttr           [ODBC32.039]
  */
-SQLRETURN WINAPI ODBC32_SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute,
+SQLRETURN WINAPI SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute,
         SQLPOINTER Value, SQLINTEGER StringLength)
 {
         TRACE("\n");
@@ -1452,7 +1445,7 @@ SQLRETURN WINAPI ODBC32_SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER A
 /*************************************************************************
  *				SQLSetConnectOption           [ODBC32.050]
  */
-SQLRETURN WINAPI ODBC32_SQLSetConnectOption(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLULEN Value)
+SQLRETURN WINAPI SQLSetConnectOption(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLULEN Value)
 {
         TRACE("\n");
 
@@ -1464,7 +1457,7 @@ SQLRETURN WINAPI ODBC32_SQLSetConnectOption(SQLHDBC ConnectionHandle, SQLUSMALLI
 /*************************************************************************
  *				SQLSetCursorName           [ODBC32.021]
  */
-SQLRETURN WINAPI ODBC32_SQLSetCursorName(SQLHSTMT StatementHandle, SQLCHAR *CursorName, SQLSMALLINT NameLength)
+SQLRETURN WINAPI SQLSetCursorName(SQLHSTMT StatementHandle, SQLCHAR *CursorName, SQLSMALLINT NameLength)
 {
         TRACE("\n");
 
@@ -1476,7 +1469,7 @@ SQLRETURN WINAPI ODBC32_SQLSetCursorName(SQLHSTMT StatementHandle, SQLCHAR *Curs
 /*************************************************************************
  *				SQLSetDescField           [ODBC32.073]
  */
-SQLRETURN WINAPI ODBC32_SQLSetDescField(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLSetDescField(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
              SQLPOINTER Value, SQLINTEGER BufferLength)
 {
@@ -1490,7 +1483,7 @@ SQLRETURN WINAPI ODBC32_SQLSetDescField(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLSetDescRec           [ODBC32.074]
  */
-SQLRETURN WINAPI ODBC32_SQLSetDescRec(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLSetDescRec(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, SQLSMALLINT Type,
              SQLSMALLINT SubType, SQLLEN Length,
              SQLSMALLINT Precision, SQLSMALLINT Scale,
@@ -1508,7 +1501,7 @@ SQLRETURN WINAPI ODBC32_SQLSetDescRec(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLSetEnvAttr           [ODBC32.075]
  */
-SQLRETURN WINAPI ODBC32_SQLSetEnvAttr(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLSetEnvAttr(SQLHENV EnvironmentHandle,
              SQLINTEGER Attribute, SQLPOINTER Value,
              SQLINTEGER StringLength)
 {
@@ -1522,7 +1515,7 @@ SQLRETURN WINAPI ODBC32_SQLSetEnvAttr(SQLHENV EnvironmentHandle,
 /*************************************************************************
  *				SQLSetParam           [ODBC32.022]
  */
-SQLRETURN WINAPI ODBC32_SQLSetParam(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLSetParam(SQLHSTMT StatementHandle,
              SQLUSMALLINT ParameterNumber, SQLSMALLINT ValueType,
              SQLSMALLINT ParameterType, SQLULEN LengthPrecision,
              SQLSMALLINT ParameterScale, SQLPOINTER ParameterValue,
@@ -1539,7 +1532,7 @@ SQLRETURN WINAPI ODBC32_SQLSetParam(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLSetStmtAttr           [ODBC32.076]
  */
-SQLRETURN WINAPI ODBC32_SQLSetStmtAttr(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLSetStmtAttr(SQLHSTMT StatementHandle,
                  SQLINTEGER Attribute, SQLPOINTER Value,
                  SQLINTEGER StringLength)
 {
@@ -1553,7 +1546,7 @@ SQLRETURN WINAPI ODBC32_SQLSetStmtAttr(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLSetStmtOption           [ODBC32.051]
  */
-SQLRETURN WINAPI ODBC32_SQLSetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT Option, SQLULEN Value)
+SQLRETURN WINAPI SQLSetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT Option, SQLULEN Value)
 {
         TRACE("\n");
 
@@ -1565,7 +1558,7 @@ SQLRETURN WINAPI ODBC32_SQLSetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT 
 /*************************************************************************
  *				SQLSpecialColumns           [ODBC32.052]
  */
-SQLRETURN WINAPI ODBC32_SQLSpecialColumns(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLSpecialColumns(SQLHSTMT StatementHandle,
              SQLUSMALLINT IdentifierType, SQLCHAR *CatalogName,
              SQLSMALLINT NameLength1, SQLCHAR *SchemaName,
              SQLSMALLINT NameLength2, SQLCHAR *TableName,
@@ -1582,7 +1575,7 @@ SQLRETURN WINAPI ODBC32_SQLSpecialColumns(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLStatistics           [ODBC32.053]
  */
-SQLRETURN WINAPI ODBC32_SQLStatistics(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLStatistics(SQLHSTMT StatementHandle,
              SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
              SQLCHAR *SchemaName, SQLSMALLINT NameLength2,
              SQLCHAR *TableName, SQLSMALLINT NameLength3,
@@ -1599,7 +1592,7 @@ SQLRETURN WINAPI ODBC32_SQLStatistics(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLTables           [ODBC32.054]
  */
-SQLRETURN WINAPI ODBC32_SQLTables(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLTables(SQLHSTMT StatementHandle,
              SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
              SQLCHAR *SchemaName, SQLSMALLINT NameLength2,
              SQLCHAR *TableName, SQLSMALLINT NameLength3,
@@ -1616,7 +1609,7 @@ SQLRETURN WINAPI ODBC32_SQLTables(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLTransact           [ODBC32.023]
  */
-SQLRETURN WINAPI ODBC32_SQLTransact(SQLHENV EnvironmentHandle, SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLTransact(SQLHENV EnvironmentHandle, SQLHDBC ConnectionHandle,
         SQLUSMALLINT CompletionType)
 {
         TRACE("\n");
@@ -1629,7 +1622,7 @@ SQLRETURN WINAPI ODBC32_SQLTransact(SQLHENV EnvironmentHandle, SQLHDBC Connectio
 /*************************************************************************
  *				SQLBrowseConnect           [ODBC32.055]
  */
-SQLRETURN WINAPI ODBC32_SQLBrowseConnect(
+SQLRETURN WINAPI SQLBrowseConnect(
     SQLHDBC            hdbc,
     SQLCHAR               *szConnStrIn,
     SQLSMALLINT        cbConnStrIn,
@@ -1647,7 +1640,7 @@ SQLRETURN WINAPI ODBC32_SQLBrowseConnect(
 /*************************************************************************
  *				SQLBulkOperations           [ODBC32.078]
  */
-SQLRETURN WINAPI ODBC32_SQLBulkOperations(
+SQLRETURN WINAPI  SQLBulkOperations(
         SQLHSTMT                        StatementHandle,
         SQLSMALLINT                     Operation)
 {
@@ -1661,7 +1654,7 @@ SQLRETURN WINAPI ODBC32_SQLBulkOperations(
 /*************************************************************************
  *				SQLColAttributes           [ODBC32.006]
  */
-SQLRETURN WINAPI ODBC32_SQLColAttributes(
+SQLRETURN WINAPI SQLColAttributes(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       icol,
     SQLUSMALLINT       fDescType,
@@ -1680,7 +1673,7 @@ SQLRETURN WINAPI ODBC32_SQLColAttributes(
 /*************************************************************************
  *				SQLColumnPrivileges           [ODBC32.056]
  */
-SQLRETURN WINAPI ODBC32_SQLColumnPrivileges(
+SQLRETURN WINAPI SQLColumnPrivileges(
     SQLHSTMT           hstmt,
     SQLCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -1702,7 +1695,7 @@ SQLRETURN WINAPI ODBC32_SQLColumnPrivileges(
 /*************************************************************************
  *				SQLDescribeParam          [ODBC32.058]
  */
-SQLRETURN WINAPI ODBC32_SQLDescribeParam(
+SQLRETURN WINAPI SQLDescribeParam(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       ipar,
     SQLSMALLINT           *pfSqlType,
@@ -1720,7 +1713,7 @@ SQLRETURN WINAPI ODBC32_SQLDescribeParam(
 /*************************************************************************
  *				SQLExtendedFetch           [ODBC32.059]
  */
-SQLRETURN WINAPI ODBC32_SQLExtendedFetch(
+SQLRETURN WINAPI SQLExtendedFetch(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       fFetchType,
     SQLLEN             irow,
@@ -1737,7 +1730,7 @@ SQLRETURN WINAPI ODBC32_SQLExtendedFetch(
 /*************************************************************************
  *				SQLForeignKeys           [ODBC32.060]
  */
-SQLRETURN WINAPI ODBC32_SQLForeignKeys(
+SQLRETURN WINAPI SQLForeignKeys(
     SQLHSTMT           hstmt,
     SQLCHAR               *szPkCatalogName,
     SQLSMALLINT        cbPkCatalogName,
@@ -1764,7 +1757,7 @@ SQLRETURN WINAPI ODBC32_SQLForeignKeys(
 /*************************************************************************
  *				SQLMoreResults           [ODBC32.061]
  */
-SQLRETURN WINAPI ODBC32_SQLMoreResults(SQLHSTMT hstmt)
+SQLRETURN WINAPI SQLMoreResults(SQLHSTMT hstmt)
 {
         TRACE("\n");
 
@@ -1776,7 +1769,7 @@ SQLRETURN WINAPI ODBC32_SQLMoreResults(SQLHSTMT hstmt)
 /*************************************************************************
  *				SQLNativeSql           [ODBC32.062]
  */
-SQLRETURN WINAPI ODBC32_SQLNativeSql(
+SQLRETURN WINAPI SQLNativeSql(
     SQLHDBC            hdbc,
     SQLCHAR               *szSqlStrIn,
     SQLINTEGER         cbSqlStrIn,
@@ -1794,7 +1787,7 @@ SQLRETURN WINAPI ODBC32_SQLNativeSql(
 /*************************************************************************
  *				SQLNumParams           [ODBC32.063]
  */
-SQLRETURN WINAPI ODBC32_SQLNumParams(
+SQLRETURN WINAPI SQLNumParams(
     SQLHSTMT           hstmt,
     SQLSMALLINT           *pcpar)
 {
@@ -1808,7 +1801,7 @@ SQLRETURN WINAPI ODBC32_SQLNumParams(
 /*************************************************************************
  *				SQLParamOptions           [ODBC32.064]
  */
-SQLRETURN WINAPI ODBC32_SQLParamOptions(
+SQLRETURN WINAPI SQLParamOptions(
     SQLHSTMT           hstmt,
     SQLULEN            crow,
     SQLULEN               *pirow)
@@ -1823,7 +1816,7 @@ SQLRETURN WINAPI ODBC32_SQLParamOptions(
 /*************************************************************************
  *				SQLPrimaryKeys           [ODBC32.065]
  */
-SQLRETURN WINAPI ODBC32_SQLPrimaryKeys(
+SQLRETURN WINAPI SQLPrimaryKeys(
     SQLHSTMT           hstmt,
     SQLCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -1843,7 +1836,7 @@ SQLRETURN WINAPI ODBC32_SQLPrimaryKeys(
 /*************************************************************************
  *				SQLProcedureColumns           [ODBC32.066]
  */
-SQLRETURN WINAPI ODBC32_SQLProcedureColumns(
+SQLRETURN WINAPI SQLProcedureColumns(
     SQLHSTMT           hstmt,
     SQLCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -1865,7 +1858,7 @@ SQLRETURN WINAPI ODBC32_SQLProcedureColumns(
 /*************************************************************************
  *				SQLProcedures           [ODBC32.067]
  */
-SQLRETURN WINAPI ODBC32_SQLProcedures(
+SQLRETURN WINAPI SQLProcedures(
     SQLHSTMT           hstmt,
     SQLCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -1885,7 +1878,7 @@ SQLRETURN WINAPI ODBC32_SQLProcedures(
 /*************************************************************************
  *				SQLSetPos           [ODBC32.068]
  */
-SQLRETURN WINAPI ODBC32_SQLSetPos(
+SQLRETURN WINAPI SQLSetPos(
     SQLHSTMT           hstmt,
 	SQLSETPOSIROW      irow,
     SQLUSMALLINT       fOption,
@@ -1901,7 +1894,7 @@ SQLRETURN WINAPI ODBC32_SQLSetPos(
 /*************************************************************************
  *				SQLTablePrivileges           [ODBC32.070]
  */
-SQLRETURN WINAPI ODBC32_SQLTablePrivileges(
+SQLRETURN WINAPI SQLTablePrivileges(
     SQLHSTMT           hstmt,
     SQLCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -1921,7 +1914,7 @@ SQLRETURN WINAPI ODBC32_SQLTablePrivileges(
 /*************************************************************************
  *				SQLDrivers           [ODBC32.071]
  */
-SQLRETURN WINAPI ODBC32_SQLDrivers(
+SQLRETURN WINAPI SQLDrivers(
     SQLHENV            henv,
     SQLUSMALLINT       fDirection,
     SQLCHAR               *szDriverDesc,
@@ -1950,7 +1943,7 @@ SQLRETURN WINAPI ODBC32_SQLDrivers(
 /*************************************************************************
  *				SQLBindParameter           [ODBC32.072]
  */
-SQLRETURN WINAPI ODBC32_SQLBindParameter(
+SQLRETURN WINAPI SQLBindParameter(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       ipar,
     SQLSMALLINT        fParamType,
@@ -1973,7 +1966,7 @@ SQLRETURN WINAPI ODBC32_SQLBindParameter(
 /*************************************************************************
  *				SQLDriverConnect           [ODBC32.041]
  */
-SQLRETURN WINAPI ODBC32_SQLDriverConnect(
+SQLRETURN WINAPI SQLDriverConnect(
     SQLHDBC            hdbc,
     SQLHWND            hwnd,
     SQLCHAR            *conn_str_in,
@@ -1999,7 +1992,7 @@ SQLRETURN WINAPI ODBC32_SQLDriverConnect(
 /*************************************************************************
  *				SQLSetScrollOptions           [ODBC32.069]
  */
-SQLRETURN WINAPI ODBC32_SQLSetScrollOptions(
+SQLRETURN WINAPI SQLSetScrollOptions(
     SQLHSTMT           statement_handle,
     SQLUSMALLINT       f_concurrency,
     SQLLEN             crow_keyset,
@@ -2044,7 +2037,7 @@ static BOOL SQLColAttributes_KnownStringAttribute(SQLUSMALLINT fDescType)
 /*************************************************************************
  *				SQLColAttributesW          [ODBC32.106]
  */
-SQLRETURN WINAPI ODBC32_SQLColAttributesW(
+SQLRETURN WINAPI SQLColAttributesW(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       icol,
     SQLUSMALLINT       fDescType,
@@ -2078,7 +2071,7 @@ SQLRETURN WINAPI ODBC32_SQLColAttributesW(
 /*************************************************************************
  *				SQLConnectW          [ODBC32.107]
  */
-SQLRETURN WINAPI ODBC32_SQLConnectW(SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLConnectW(SQLHDBC ConnectionHandle,
              WCHAR *ServerName, SQLSMALLINT NameLength1,
              WCHAR *UserName, SQLSMALLINT NameLength2,
              WCHAR *Authentication, SQLSMALLINT NameLength3)
@@ -2098,7 +2091,7 @@ SQLRETURN WINAPI ODBC32_SQLConnectW(SQLHDBC ConnectionHandle,
 /*************************************************************************
  *				SQLDescribeColW          [ODBC32.108]
  */
-SQLRETURN WINAPI ODBC32_SQLDescribeColW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLDescribeColW(SQLHSTMT StatementHandle,
              SQLUSMALLINT ColumnNumber, WCHAR *ColumnName,
              SQLSMALLINT BufferLength, SQLSMALLINT *NameLength,
              SQLSMALLINT *DataType, SQLULEN *ColumnSize,
@@ -2127,7 +2120,7 @@ SQLRETURN WINAPI ODBC32_SQLDescribeColW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLErrorW          [ODBC32.110]
  */
-SQLRETURN WINAPI ODBC32_SQLErrorW(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLErrorW(SQLHENV EnvironmentHandle,
              SQLHDBC ConnectionHandle, SQLHSTMT StatementHandle,
              WCHAR *Sqlstate, SQLINTEGER *NativeError,
              WCHAR *MessageText, SQLSMALLINT BufferLength,
@@ -2143,7 +2136,7 @@ SQLRETURN WINAPI ODBC32_SQLErrorW(SQLHENV EnvironmentHandle,
 /*************************************************************************
  *				SQLExecDirectW          [ODBC32.111]
  */
-SQLRETURN WINAPI ODBC32_SQLExecDirectW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLExecDirectW(SQLHSTMT StatementHandle,
     WCHAR *StatementText, SQLINTEGER TextLength)
 {
         TRACE("\n");
@@ -2155,7 +2148,7 @@ SQLRETURN WINAPI ODBC32_SQLExecDirectW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLGetCursorNameW          [ODBC32.117]
  */
-SQLRETURN WINAPI ODBC32_SQLGetCursorNameW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLGetCursorNameW(SQLHSTMT StatementHandle,
              WCHAR *CursorName, SQLSMALLINT BufferLength,
              SQLSMALLINT *NameLength)
 {
@@ -2168,7 +2161,7 @@ SQLRETURN WINAPI ODBC32_SQLGetCursorNameW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLPrepareW          [ODBC32.119]
  */
-SQLRETURN WINAPI ODBC32_SQLPrepareW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLPrepareW(SQLHSTMT StatementHandle,
     WCHAR *StatementText, SQLINTEGER TextLength)
 {
         TRACE("\n");
@@ -2180,7 +2173,7 @@ SQLRETURN WINAPI ODBC32_SQLPrepareW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLSetCursorNameW          [ODBC32.121]
  */
-SQLRETURN WINAPI ODBC32_SQLSetCursorNameW(SQLHSTMT StatementHandle, WCHAR *CursorName, SQLSMALLINT NameLength)
+SQLRETURN WINAPI SQLSetCursorNameW(SQLHSTMT StatementHandle, WCHAR *CursorName, SQLSMALLINT NameLength)
 {
         TRACE("\n");
 
@@ -2191,7 +2184,7 @@ SQLRETURN WINAPI ODBC32_SQLSetCursorNameW(SQLHSTMT StatementHandle, WCHAR *Curso
 /*************************************************************************
  *				SQLColAttributeW          [ODBC32.127]
  */
-SQLRETURN WINAPI ODBC32_SQLColAttributeW (SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLColAttributeW (SQLHSTMT StatementHandle,
              SQLUSMALLINT ColumnNumber, SQLUSMALLINT FieldIdentifier,
              SQLPOINTER CharacterAttribute, SQLSMALLINT BufferLength,
              SQLSMALLINT *StringLength, SQLLEN *NumericAttribute)
@@ -2223,7 +2216,7 @@ SQLRETURN WINAPI ODBC32_SQLColAttributeW (SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLGetConnectAttrW          [ODBC32.132]
  */
-SQLRETURN WINAPI ODBC32_SQLGetConnectAttrW(SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLGetConnectAttrW(SQLHDBC ConnectionHandle,
              SQLINTEGER Attribute, SQLPOINTER Value,
              SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
@@ -2237,7 +2230,7 @@ SQLRETURN WINAPI ODBC32_SQLGetConnectAttrW(SQLHDBC ConnectionHandle,
 /*************************************************************************
  *				SQLGetDescFieldW          [ODBC32.133]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDescFieldW(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLGetDescFieldW(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
              SQLPOINTER Value, SQLINTEGER BufferLength,
              SQLINTEGER *StringLength)
@@ -2252,7 +2245,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDescFieldW(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLGetDescRecW          [ODBC32.134]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDescRecW(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLGetDescRecW(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, WCHAR *Name,
              SQLSMALLINT BufferLength, SQLSMALLINT *StringLength,
              SQLSMALLINT *Type, SQLSMALLINT *SubType,
@@ -2269,7 +2262,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDescRecW(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLGetDiagFieldW          [ODBC32.135]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDiagFieldW(SQLSMALLINT HandleType, SQLHANDLE Handle,
+SQLRETURN WINAPI SQLGetDiagFieldW(SQLSMALLINT HandleType, SQLHANDLE Handle,
              SQLSMALLINT RecNumber, SQLSMALLINT DiagIdentifier,
              SQLPOINTER DiagInfo, SQLSMALLINT BufferLength,
              SQLSMALLINT *StringLength)
@@ -2284,7 +2277,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDiagFieldW(SQLSMALLINT HandleType, SQLHANDLE Handl
 /*************************************************************************
  *				SQLGetDiagRecW           [ODBC32.136]
  */
-SQLRETURN WINAPI ODBC32_SQLGetDiagRecW(SQLSMALLINT HandleType, SQLHANDLE Handle,
+SQLRETURN WINAPI SQLGetDiagRecW(SQLSMALLINT HandleType, SQLHANDLE Handle,
              SQLSMALLINT RecNumber, WCHAR *Sqlstate,
              SQLINTEGER *NativeError, WCHAR *MessageText,
              SQLSMALLINT BufferLength, SQLSMALLINT *TextLength)
@@ -2299,7 +2292,7 @@ SQLRETURN WINAPI ODBC32_SQLGetDiagRecW(SQLSMALLINT HandleType, SQLHANDLE Handle,
 /*************************************************************************
  *				SQLGetStmtAttrW          [ODBC32.138]
  */
-SQLRETURN WINAPI ODBC32_SQLGetStmtAttrW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLGetStmtAttrW(SQLHSTMT StatementHandle,
              SQLINTEGER Attribute, SQLPOINTER Value,
              SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
@@ -2327,7 +2320,7 @@ SQLRETURN WINAPI ODBC32_SQLGetStmtAttrW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLSetConnectAttrW          [ODBC32.139]
  */
-SQLRETURN WINAPI ODBC32_SQLSetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER Attribute,
+SQLRETURN WINAPI SQLSetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER Attribute,
         SQLPOINTER Value, SQLINTEGER StringLength)
 {
         TRACE("\n");
@@ -2339,7 +2332,7 @@ SQLRETURN WINAPI ODBC32_SQLSetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER 
 /*************************************************************************
  *				SQLColumnsW          [ODBC32.140]
  */
-SQLRETURN WINAPI ODBC32_SQLColumnsW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLColumnsW(SQLHSTMT StatementHandle,
              WCHAR *CatalogName, SQLSMALLINT NameLength1,
              WCHAR *SchemaName, SQLSMALLINT NameLength2,
              WCHAR *TableName, SQLSMALLINT NameLength3,
@@ -2355,7 +2348,7 @@ SQLRETURN WINAPI ODBC32_SQLColumnsW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLDriverConnectW          [ODBC32.141]
  */
-SQLRETURN WINAPI ODBC32_SQLDriverConnectW(
+SQLRETURN WINAPI SQLDriverConnectW(
     SQLHDBC            hdbc,
     SQLHWND            hwnd,
     WCHAR              *conn_str_in,
@@ -2376,7 +2369,7 @@ SQLRETURN WINAPI ODBC32_SQLDriverConnectW(
 /*************************************************************************
  *				SQLGetConnectOptionW      [ODBC32.142]
  */
-SQLRETURN WINAPI ODBC32_SQLGetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLPOINTER Value)
+SQLRETURN WINAPI SQLGetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLPOINTER Value)
 {
         TRACE("\n");
 
@@ -2387,7 +2380,7 @@ SQLRETURN WINAPI ODBC32_SQLGetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALL
 /*************************************************************************
  *				SQLGetInfoW          [ODBC32.145]
  */
-SQLRETURN WINAPI ODBC32_SQLGetInfoW(SQLHDBC ConnectionHandle,
+SQLRETURN WINAPI SQLGetInfoW(SQLHDBC ConnectionHandle,
              SQLUSMALLINT InfoType, SQLPOINTER InfoValue,
              SQLSMALLINT BufferLength, SQLSMALLINT *StringLength)
 {
@@ -2408,7 +2401,7 @@ SQLRETURN WINAPI ODBC32_SQLGetInfoW(SQLHDBC ConnectionHandle,
 /*************************************************************************
  *				SQLGetTypeInfoW          [ODBC32.147]
  */
-SQLRETURN WINAPI ODBC32_SQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
+SQLRETURN WINAPI SQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
         TRACE("\n");
 
@@ -2419,7 +2412,7 @@ SQLRETURN WINAPI ODBC32_SQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT Da
 /*************************************************************************
  *				SQLSetConnectOptionW          [ODBC32.150]
  */
-SQLRETURN WINAPI ODBC32_SQLSetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLLEN Value)
+SQLRETURN WINAPI SQLSetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALLINT Option, SQLLEN Value)
 {
         TRACE("\n");
 
@@ -2430,7 +2423,7 @@ SQLRETURN WINAPI ODBC32_SQLSetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALL
 /*************************************************************************
  *				SQLSpecialColumnsW          [ODBC32.152]
  */
-SQLRETURN WINAPI ODBC32_SQLSpecialColumnsW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLSpecialColumnsW(SQLHSTMT StatementHandle,
              SQLUSMALLINT IdentifierType, SQLWCHAR *CatalogName,
              SQLSMALLINT NameLength1, SQLWCHAR *SchemaName,
              SQLSMALLINT NameLength2, SQLWCHAR *TableName,
@@ -2445,7 +2438,7 @@ SQLRETURN WINAPI ODBC32_SQLSpecialColumnsW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLStatisticsW          [ODBC32.153]
  */
-SQLRETURN WINAPI ODBC32_SQLStatisticsW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLStatisticsW(SQLHSTMT StatementHandle,
              SQLWCHAR *CatalogName, SQLSMALLINT NameLength1,
              SQLWCHAR *SchemaName, SQLSMALLINT NameLength2,
              SQLWCHAR *TableName, SQLSMALLINT NameLength3,
@@ -2461,7 +2454,7 @@ SQLRETURN WINAPI ODBC32_SQLStatisticsW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLTablesW          [ODBC32.154]
  */
-SQLRETURN WINAPI ODBC32_SQLTablesW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLTablesW(SQLHSTMT StatementHandle,
              SQLWCHAR *CatalogName, SQLSMALLINT NameLength1,
              SQLWCHAR *SchemaName, SQLSMALLINT NameLength2,
              SQLWCHAR *TableName, SQLSMALLINT NameLength3,
@@ -2477,7 +2470,7 @@ SQLRETURN WINAPI ODBC32_SQLTablesW(SQLHSTMT StatementHandle,
 /*************************************************************************
  *				SQLBrowseConnectW          [ODBC32.155]
  */
-SQLRETURN WINAPI ODBC32_SQLBrowseConnectW(
+SQLRETURN WINAPI SQLBrowseConnectW(
     SQLHDBC            hdbc,
     SQLWCHAR               *szConnStrIn,
     SQLSMALLINT        cbConnStrIn,
@@ -2495,7 +2488,7 @@ SQLRETURN WINAPI ODBC32_SQLBrowseConnectW(
 /*************************************************************************
  *				SQLColumnPrivilegesW          [ODBC32.156]
  */
-SQLRETURN WINAPI ODBC32_SQLColumnPrivilegesW(
+SQLRETURN WINAPI SQLColumnPrivilegesW(
     SQLHSTMT           hstmt,
     SQLWCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -2516,7 +2509,7 @@ SQLRETURN WINAPI ODBC32_SQLColumnPrivilegesW(
 /*************************************************************************
  *				SQLDataSourcesW          [ODBC32.157]
  */
-SQLRETURN WINAPI ODBC32_SQLDataSourcesW(SQLHENV EnvironmentHandle,
+SQLRETURN WINAPI SQLDataSourcesW(SQLHENV EnvironmentHandle,
              SQLUSMALLINT Direction, WCHAR *ServerName,
              SQLSMALLINT BufferLength1, SQLSMALLINT *NameLength1,
              WCHAR *Description, SQLSMALLINT BufferLength2,
@@ -2547,7 +2540,7 @@ SQLRETURN WINAPI ODBC32_SQLDataSourcesW(SQLHENV EnvironmentHandle,
 /*************************************************************************
  *				SQLForeignKeysW          [ODBC32.160]
  */
-SQLRETURN WINAPI ODBC32_SQLForeignKeysW(
+SQLRETURN WINAPI SQLForeignKeysW(
     SQLHSTMT           hstmt,
     SQLWCHAR               *szPkCatalogName,
     SQLSMALLINT        cbPkCatalogName,
@@ -2573,7 +2566,7 @@ SQLRETURN WINAPI ODBC32_SQLForeignKeysW(
 /*************************************************************************
  *				SQLNativeSqlW          [ODBC32.162]
  */
-SQLRETURN WINAPI ODBC32_SQLNativeSqlW(
+SQLRETURN WINAPI SQLNativeSqlW(
     SQLHDBC            hdbc,
     SQLWCHAR               *szSqlStrIn,
     SQLINTEGER         cbSqlStrIn,
@@ -2590,7 +2583,7 @@ SQLRETURN WINAPI ODBC32_SQLNativeSqlW(
 /*************************************************************************
  *				SQLPrimaryKeysW          [ODBC32.165]
  */
-SQLRETURN WINAPI ODBC32_SQLPrimaryKeysW(
+SQLRETURN WINAPI SQLPrimaryKeysW(
     SQLHSTMT           hstmt,
     SQLWCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -2609,7 +2602,7 @@ SQLRETURN WINAPI ODBC32_SQLPrimaryKeysW(
 /*************************************************************************
  *				SQLProcedureColumnsW          [ODBC32.166]
  */
-SQLRETURN WINAPI ODBC32_SQLProcedureColumnsW(
+SQLRETURN WINAPI SQLProcedureColumnsW(
     SQLHSTMT           hstmt,
     SQLWCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -2630,7 +2623,7 @@ SQLRETURN WINAPI ODBC32_SQLProcedureColumnsW(
 /*************************************************************************
  *				SQLProceduresW          [ODBC32.167]
  */
-SQLRETURN WINAPI ODBC32_SQLProceduresW(
+SQLRETURN WINAPI SQLProceduresW(
     SQLHSTMT           hstmt,
     SQLWCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -2649,7 +2642,7 @@ SQLRETURN WINAPI ODBC32_SQLProceduresW(
 /*************************************************************************
  *				SQLTablePrivilegesW          [ODBC32.170]
  */
-SQLRETURN WINAPI ODBC32_SQLTablePrivilegesW(
+SQLRETURN WINAPI SQLTablePrivilegesW(
     SQLHSTMT           hstmt,
     SQLWCHAR               *szCatalogName,
     SQLSMALLINT        cbCatalogName,
@@ -2668,7 +2661,7 @@ SQLRETURN WINAPI ODBC32_SQLTablePrivilegesW(
 /*************************************************************************
  *				SQLDriversW          [ODBC32.171]
  */
-SQLRETURN WINAPI ODBC32_SQLDriversW(
+SQLRETURN WINAPI SQLDriversW(
     SQLHENV            henv,
     SQLUSMALLINT       fDirection,
     SQLWCHAR               *szDriverDesc,
@@ -2696,7 +2689,7 @@ SQLRETURN WINAPI ODBC32_SQLDriversW(
 /*************************************************************************
  *				SQLSetDescFieldW          [ODBC32.173]
  */
-SQLRETURN WINAPI ODBC32_SQLSetDescFieldW(SQLHDESC DescriptorHandle,
+SQLRETURN WINAPI SQLSetDescFieldW(SQLHDESC DescriptorHandle,
              SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
              SQLPOINTER Value, SQLINTEGER BufferLength)
 {
@@ -2709,7 +2702,7 @@ SQLRETURN WINAPI ODBC32_SQLSetDescFieldW(SQLHDESC DescriptorHandle,
 /*************************************************************************
  *				SQLSetStmtAttrW          [ODBC32.176]
  */
-SQLRETURN WINAPI ODBC32_SQLSetStmtAttrW(SQLHSTMT StatementHandle,
+SQLRETURN WINAPI SQLSetStmtAttrW(SQLHSTMT StatementHandle,
                  SQLINTEGER Attribute, SQLPOINTER Value,
                  SQLINTEGER StringLength)
 {

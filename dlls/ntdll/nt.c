@@ -30,9 +30,6 @@
 #ifdef HAVE_SYS_SYSCTL_H
 # include <sys/sysctl.h>
 #endif
-#ifdef HAVE_SYS_SYSINFO_H
-# include <sys/sysinfo.h>
-#endif
 #ifdef HAVE_MACHINE_CPU_H
 # include <machine/cpu.h>
 #endif
@@ -59,7 +56,6 @@
 #include "winternl.h"
 #include "ntdll_misc.h"
 #include "wine/server.h"
-#include "wine/library.h"
 #include "ddk/wdm.h"
 
 #ifdef __APPLE__
@@ -69,79 +65,6 @@
 #endif
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
-
-#include "pshpack1.h"
-
-struct smbios_prologue {
-    BYTE calling_method;
-    BYTE major_version;
-    BYTE minor_version;
-    BYTE revision;
-    DWORD length;
-};
-
-struct smbios_bios {
-    BYTE type;
-    BYTE length;
-    WORD handle;
-    BYTE vendor;
-    BYTE version;
-    WORD start;
-    BYTE date;
-    BYTE size;
-    UINT64 characteristics;
-};
-
-struct smbios_system {
-    BYTE type;
-    BYTE length;
-    WORD handle;
-    BYTE vendor;
-    BYTE product;
-    BYTE version;
-    BYTE serial;
-};
-
-struct smbios_board {
-    BYTE type;
-    BYTE length;
-    WORD handle;
-    BYTE vendor;
-    BYTE product;
-    BYTE version;
-    BYTE serial;
-};
-
-struct smbios_chassis {
-    BYTE type;
-    BYTE length;
-    WORD handle;
-    BYTE vendor;
-    BYTE shape;
-    BYTE version;
-    BYTE serial;
-    BYTE asset_tag;
-};
-
-#include "poppack.h"
-
-/* Firmware table providers */
-#define ACPI 0x41435049
-#define FIRM 0x4649524D
-#define RSMB 0x52534D42
-
-static DWORD translate_object_index(DWORD index)
-{
-    WORD version = MAKEWORD(NtCurrentTeb()->Peb->OSMinorVersion, NtCurrentTeb()->Peb->OSMajorVersion);
-
-    /* Process Hacker depends on this logic */
-    if (version >= 0x0602)
-        return index;
-    else if (version == 0x0601)
-        return index + 2;
-    else
-        return index + 1;
-}
 
 /*
  *	Token
@@ -192,65 +115,6 @@ NTSTATUS WINAPI NtDuplicateToken(
     SERVER_END_REQ;
 
     RtlFreeHeap( GetProcessHeap(), 0, objattr );
-    return status;
-}
-
-/******************************************************************************
- *  NtFilterToken        [NTDLL.@]
- *  ZwFilterToken        [NTDLL.@]
- */
-NTSTATUS WINAPI NtFilterToken( HANDLE token, ULONG flags, TOKEN_GROUPS *disable_sids,
-                               TOKEN_PRIVILEGES *privileges, TOKEN_GROUPS *restrict_sids,
-                               HANDLE *new_token )
-{
-    data_size_t privileges_len = 0;
-    data_size_t sids_len = 0;
-    SID *sids = NULL;
-    NTSTATUS status;
-
-    TRACE( "(%p, 0x%08x, %p, %p, %p, %p)\n", token, flags, disable_sids, privileges,
-           restrict_sids, new_token );
-
-    if (flags)
-        FIXME( "flags %x unsupported\n", flags );
-
-    if (restrict_sids)
-        FIXME( "support for restricting sids not yet implemented\n" );
-
-    if (privileges)
-        privileges_len = privileges->PrivilegeCount * sizeof(LUID_AND_ATTRIBUTES);
-
-    if (disable_sids)
-    {
-        DWORD len, i;
-        BYTE *tmp;
-
-        for (i = 0; i < disable_sids->GroupCount; i++)
-            sids_len += RtlLengthSid( disable_sids->Groups[i].Sid );
-
-        sids = RtlAllocateHeap( GetProcessHeap(), 0, sids_len );
-        if (!sids) return STATUS_NO_MEMORY;
-
-        for (i = 0, tmp = (BYTE *)sids; i < disable_sids->GroupCount; i++, tmp += len)
-        {
-            len = RtlLengthSid( disable_sids->Groups[i].Sid );
-            memcpy( tmp, disable_sids->Groups[i].Sid, len );
-        }
-    }
-
-    SERVER_START_REQ( filter_token )
-    {
-        req->handle          = wine_server_obj_handle( token );
-        req->flags           = flags;
-        req->privileges_size = privileges_len;
-        wine_server_add_data( req, privileges->Privileges, privileges_len );
-        wine_server_add_data( req, sids, sids_len );
-        status = wine_server_call( req );
-        if (!status) *new_token = wine_server_ptr_handle( reply->new_handle );
-    }
-    SERVER_END_REQ;
-
-    RtlFreeHeap( GetProcessHeap(), 0, sids );
     return status;
 }
 
@@ -411,13 +275,13 @@ NTSTATUS WINAPI NtQueryInformationToken(
         0,    /* TokenAuditPolicy */
         0,    /* TokenOrigin */
         sizeof(TOKEN_ELEVATION_TYPE), /* TokenElevationType */
-        sizeof(TOKEN_LINKED_TOKEN), /* TokenLinkedToken */
+        0,    /* TokenLinkedToken */
         sizeof(TOKEN_ELEVATION), /* TokenElevation */
         0,    /* TokenHasRestrictions */
         0,    /* TokenAccessInformation */
         0,    /* TokenVirtualizationAllowed */
         0,    /* TokenVirtualizationEnabled */
-        0,    /* TokenIntegrityLevel */
+        sizeof(TOKEN_MANDATORY_LABEL) + sizeof(SID), /* TokenIntegrityLevel [sizeof(SID) includes one SubAuthority] */
         0,    /* TokenUIAccess */
         0,    /* TokenMandatoryPolicy */
         0,    /* TokenLogonSid */
@@ -642,52 +506,18 @@ NTSTATUS WINAPI NtQueryInformationToken(
         SERVER_END_REQ;
         break;
     case TokenElevationType:
-        SERVER_START_REQ( get_token_elevation_type )
         {
             TOKEN_ELEVATION_TYPE *elevation_type = tokeninfo;
-            req->handle = wine_server_obj_handle( token );
-            status = wine_server_call( req );
-            if (status == STATUS_SUCCESS)
-                *elevation_type = reply->elevation;
+            FIXME("QueryInformationToken( ..., TokenElevationType, ...) semi-stub\n");
+            *elevation_type = TokenElevationTypeFull;
         }
-        SERVER_END_REQ;
-        break;
-    case TokenLinkedToken:
-        SERVER_START_REQ( get_token_elevation_type )
-        {
-            TOKEN_LINKED_TOKEN *linked_token = tokeninfo;
-            req->handle = wine_server_obj_handle( token );
-            status = wine_server_call( req );
-            if (status == STATUS_SUCCESS)
-            {
-                HANDLE token;
-                /* FIXME: On Wine we do not have real linked tokens yet. Typically, a
-                 * program running with admin privileges is linked to a limited token,
-                 * and vice versa. We just create a new token instead of storing links
-                 * on the wineserver side. Using TokenLinkedToken twice should return
-                 * back the original token. */
-                if ((reply->elevation == TokenElevationTypeFull || reply->elevation == TokenElevationTypeLimited) &&
-                    (token = __wine_create_default_token( reply->elevation != TokenElevationTypeFull )))
-                {
-                    status = NtDuplicateToken( token, 0, NULL, SecurityIdentification, TokenImpersonation, &linked_token->LinkedToken );
-                    NtClose( token );
-                }
-                else
-                    status = STATUS_NO_TOKEN;
-            }
-        }
-        SERVER_END_REQ;
         break;
     case TokenElevation:
-        SERVER_START_REQ( get_token_elevation_type )
         {
             TOKEN_ELEVATION *elevation = tokeninfo;
-            req->handle = wine_server_obj_handle( token );
-            status = wine_server_call( req );
-            if (status == STATUS_SUCCESS)
-                elevation->TokenIsElevated = (reply->elevation == TokenElevationTypeFull);
+            FIXME("QueryInformationToken( ..., TokenElevation, ...) semi-stub\n");
+            elevation->TokenIsElevated = TRUE;
         }
-        SERVER_END_REQ;
         break;
     case TokenSessionId:
         {
@@ -696,23 +526,18 @@ NTSTATUS WINAPI NtQueryInformationToken(
         }
         break;
     case TokenIntegrityLevel:
-        SERVER_START_REQ( get_token_integrity )
         {
-            TOKEN_MANDATORY_LABEL *tml = tokeninfo;
-            PSID sid = tml + 1;
-            DWORD sid_len = tokeninfolength < sizeof(*tml) ? 0 : tokeninfolength - sizeof(*tml);
+            /* report always "S-1-16-12288" (high mandatory level) for now */
+            static const SID high_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
+                                                            {SECURITY_MANDATORY_HIGH_RID}};
 
-            req->handle = wine_server_obj_handle( token );
-            wine_server_set_reply( req, sid, sid_len );
-            status = wine_server_call( req );
-            if (retlen) *retlen = reply->sid_len + sizeof(*tml);
-            if (status == STATUS_SUCCESS)
-            {
-                tml->Label.Sid = sid;
-                tml->Label.Attributes = SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED;
-            }
+            TOKEN_MANDATORY_LABEL *tml = tokeninfo;
+            PSID psid = tml + 1;
+
+            tml->Label.Sid = psid;
+            tml->Label.Attributes = SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED;
+            memcpy(psid, &high_level, sizeof(SID));
         }
-        SERVER_END_REQ;
         break;
     case TokenAppContainerSid:
         {
@@ -2073,200 +1898,6 @@ static NTSTATUS create_logical_proc_info(SYSTEM_LOGICAL_PROCESSOR_INFORMATION **
 }
 #endif
 
-#ifdef linux
-
-static inline void copy_smbios_string(char **buffer, char *s, size_t len)
-{
-    if (!len) return;
-    memcpy(*buffer, s, len + 1);
-    *buffer += len + 1;
-}
-
-static size_t get_smbios_string(const char *path, char *str, size_t size)
-{
-    FILE *file;
-    size_t len;
-
-    if (!(file = fopen(path, "r")))
-        return 0;
-
-    len = fread(str, 1, size - 1, file);
-    fclose(file);
-
-    if (len >= 1 && str[len - 1] == '\n')
-        len--;
-
-    str[len] = 0;
-
-    return len;
-}
-
-static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG available_len, ULONG *required_len)
-{
-    switch (sfti->ProviderSignature)
-    {
-    case RSMB:
-        {
-            char bios_vendor[128], bios_version[128], bios_date[128];
-            size_t bios_vendor_len, bios_version_len, bios_date_len;
-            char system_vendor[128], system_product[128], system_version[128], system_serial[128];
-            size_t system_vendor_len, system_product_len, system_version_len, system_serial_len;
-            char board_vendor[128], board_product[128], board_version[128], board_serial[128];
-            size_t board_vendor_len, board_product_len, board_version_len, board_serial_len;
-            char chassis_vendor[128], chassis_version[128], chassis_serial[128], chassis_asset_tag[128];
-            size_t chassis_vendor_len, chassis_version_len, chassis_serial_len, chassis_asset_tag_len;
-            char *buffer = (char*)sfti->TableBuffer;
-            BYTE string_count;
-            struct smbios_prologue *prologue;
-            struct smbios_bios *bios;
-            struct smbios_system *system;
-            struct smbios_board *board;
-            struct smbios_chassis *chassis;
-
-#define S(s) s, sizeof(s)
-            bios_vendor_len = get_smbios_string("/sys/class/dmi/id/bios_vendor", S(bios_vendor));
-            bios_version_len = get_smbios_string("/sys/class/dmi/id/bios_version", S(bios_version));
-            bios_date_len = get_smbios_string("/sys/class/dmi/id/bios_date", S(bios_date));
-            system_vendor_len = get_smbios_string("/sys/class/dmi/id/sys_vendor", S(system_vendor));
-            system_product_len = get_smbios_string("/sys/class/dmi/id/product", S(system_product));
-            system_version_len = get_smbios_string("/sys/class/dmi/id/product_version", S(system_version));
-            system_serial_len = get_smbios_string("/sys/class/dmi/id/product_serial", S(system_serial));
-            board_vendor_len = get_smbios_string("/sys/class/dmi/id/board_vendor", S(board_vendor));
-            board_product_len = get_smbios_string("/sys/class/dmi/id/board_name", S(board_product));
-            board_version_len = get_smbios_string("/sys/class/dmi/id/board_version", S(board_version));
-            board_serial_len = get_smbios_string("/sys/class/dmi/id/board_serial", S(board_serial));
-            chassis_vendor_len = get_smbios_string("/sys/class/dmi/id/chassis_vendor", S(chassis_vendor));
-            chassis_version_len = get_smbios_string("/sys/class/dmi/id/chassis_version", S(chassis_version));
-            chassis_serial_len = get_smbios_string("/sys/class/dmi/id/chassis_serial", S(chassis_serial));
-            chassis_asset_tag_len = get_smbios_string("/sys/class/dmi/id/chassis_tag", S(chassis_asset_tag));
-#undef S
-
-            *required_len = sizeof(struct smbios_prologue);
-
-            *required_len += sizeof(struct smbios_bios);
-            *required_len += max(bios_vendor_len + bios_version_len + bios_date_len + 4, 2);
-
-            *required_len += sizeof(struct smbios_system);
-            *required_len += max(system_vendor_len + system_product_len + system_version_len +
-                                 system_serial_len + 5, 2);
-
-            *required_len += sizeof(struct smbios_board);
-            *required_len += max(board_vendor_len + board_product_len + board_version_len + board_serial_len + 5, 2);
-
-            *required_len += sizeof(struct smbios_chassis);
-            *required_len += max(chassis_vendor_len + chassis_version_len + chassis_serial_len +
-                                 chassis_asset_tag_len + 5, 2);
-
-            sfti->TableBufferLength = *required_len;
-
-            *required_len += FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION, TableBuffer);
-
-            if (available_len < *required_len)
-                return STATUS_BUFFER_TOO_SMALL;
-
-            prologue = (struct smbios_prologue*)buffer;
-            prologue->calling_method = 0;
-            prologue->major_version = 2;
-            prologue->minor_version = 0;
-            prologue->revision = 0;
-            prologue->length = sfti->TableBufferLength - sizeof(struct smbios_prologue);
-            buffer += sizeof(struct smbios_prologue);
-
-            string_count = 0;
-            bios = (struct smbios_bios*)buffer;
-            bios->type = 0;
-            bios->length = sizeof(struct smbios_bios);
-            bios->handle = 0;
-            bios->vendor = bios_vendor_len ? ++string_count : 0;
-            bios->version = bios_version_len ? ++string_count : 0;
-            bios->start = 0;
-            bios->date = bios_date_len ? ++string_count : 0;
-            bios->size = 0;
-            bios->characteristics = 0x4; /* not supported */
-            buffer += sizeof(struct smbios_bios);
-
-            copy_smbios_string(&buffer, bios_vendor, bios_vendor_len);
-            copy_smbios_string(&buffer, bios_version, bios_version_len);
-            copy_smbios_string(&buffer, bios_date, bios_date_len);
-            if (!string_count) *buffer++ = 0;
-            *buffer++ = 0;
-
-            string_count = 0;
-            system = (struct smbios_system*)buffer;
-            system->type = 1;
-            system->length = sizeof(struct smbios_system);
-            system->handle = 0;
-            system->vendor = system_vendor_len ? ++string_count : 0;
-            system->product = system_product_len ? ++string_count : 0;
-            system->version = system_version_len ? ++string_count : 0;
-            system->serial = system_serial_len ? ++string_count : 0;
-            buffer += sizeof(struct smbios_system);
-
-            copy_smbios_string(&buffer, system_vendor, system_vendor_len);
-            copy_smbios_string(&buffer, system_product, system_product_len);
-            copy_smbios_string(&buffer, system_version, system_version_len);
-            copy_smbios_string(&buffer, system_serial, system_serial_len);
-            if (!string_count) *buffer++ = 0;
-            *buffer++ = 0;
-
-            string_count = 0;
-            board = (struct smbios_board*)buffer;
-            board->type = 2;
-            board->length = sizeof(struct smbios_board);
-            board->handle = 0;
-            board->vendor = board_vendor_len ? ++string_count : 0;
-            board->product = board_product_len ? ++string_count : 0;
-            board->version = board_version_len ? ++string_count : 0;
-            board->serial = board_serial_len ? ++string_count : 0;
-            buffer += sizeof(struct smbios_board);
-
-            copy_smbios_string(&buffer, board_vendor, board_vendor_len);
-            copy_smbios_string(&buffer, board_product, board_product_len);
-            copy_smbios_string(&buffer, board_version, board_version_len);
-            copy_smbios_string(&buffer, board_serial, board_serial_len);
-            if (!string_count) *buffer++ = 0;
-            *buffer++ = 0;
-
-            string_count = 0;
-            chassis = (struct smbios_chassis*)buffer;
-            chassis->type = 3;
-            chassis->length = sizeof(struct smbios_chassis);
-            chassis->handle = 0;
-            chassis->vendor = chassis_vendor_len ? ++string_count : 0;
-            chassis->shape = 0x2; /* unknown */
-            chassis->version = chassis_version_len ? ++string_count : 0;
-            chassis->serial = chassis_serial_len ? ++string_count : 0;
-            chassis->asset_tag = chassis_asset_tag_len ? ++string_count : 0;
-            buffer += sizeof(struct smbios_chassis);
-
-            copy_smbios_string(&buffer, chassis_vendor, chassis_vendor_len);
-            copy_smbios_string(&buffer, chassis_version, chassis_version_len);
-            copy_smbios_string(&buffer, chassis_serial, chassis_serial_len);
-            copy_smbios_string(&buffer, chassis_asset_tag, chassis_asset_tag_len);
-            if (!string_count) *buffer++ = 0;
-            *buffer++ = 0;
-
-            return STATUS_SUCCESS;
-        }
-    default:
-        {
-            FIXME("info_class SYSTEM_FIRMWARE_TABLE_INFORMATION provider %08x\n", sfti->ProviderSignature);
-            return STATUS_NOT_IMPLEMENTED;
-        }
-    }
-}
-
-#else
-
-static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG available_len, ULONG *required_len)
-{
-    FIXME("info_class SYSTEM_FIRMWARE_TABLE_INFORMATION\n");
-    sfti->TableBufferLength = 0;
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-#endif
-
 /******************************************************************************
  * NtQuerySystemInformation [NTDLL.@]
  * ZwQuerySystemInformation [NTDLL.@]
@@ -2328,9 +1959,6 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             SYSTEM_PERFORMANCE_INFORMATION spi;
             static BOOL fixme_written = FALSE;
             FILE *fp;
-        #ifdef HAVE_SYSINFO
-            struct sysinfo sinfo;
-        #endif
 
             memset(&spi, 0 , sizeof(spi));
             len = sizeof(spi);
@@ -2350,63 +1978,6 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                 static ULONGLONG idle;
                 /* many programs expect IdleTime to change so fake change */
                 spi.IdleTime.QuadPart = ++idle;
-            }
-
-        #ifdef HAVE_SYSINFO
-            if (!sysinfo(&sinfo))
-            {
-                ULONG64 freeram   = (ULONG64)sinfo.freeram * sinfo.mem_unit;
-                ULONG64 totalram  = (ULONG64)sinfo.totalram * sinfo.mem_unit;
-                ULONG64 totalswap = (ULONG64)sinfo.totalswap * sinfo.mem_unit;
-                ULONG64 freeswap  = (ULONG64)sinfo.freeswap * sinfo.mem_unit;
-
-                if ((fp = fopen("/proc/meminfo", "r")))
-                {
-                    unsigned long long available;
-                    char line[64];
-                    while (fgets(line, sizeof(line), fp))
-                    {
-                        if (sscanf(line, "MemAvailable: %llu kB", &available) == 1)
-                        {
-                            freeram = min(available * 1024, totalram);
-                            break;
-                        }
-                    }
-                    fclose(fp);
-                }
-
-                spi.AvailablePages      = freeram / page_size;
-                spi.TotalCommittedPages = (totalram + totalswap - freeram - freeswap) / page_size;
-                spi.TotalCommitLimit    = (totalram + totalswap) / page_size;
-            }
-        #endif
-
-            if ((fp = fopen("/proc/diskstats", "r")))
-            {
-                unsigned long long reads, reads_merged, sectors_read, read_time;
-                unsigned long long writes, writes_merged, sectors_written, write_time;
-                unsigned long long io_time, weighted_io_time, current_io;
-                unsigned int major, minor;
-                char dev[30], buffer[256];
-
-                /* the exact size (32 or 64 bits) depends on the kernel */
-                while (fscanf(fp, "%u %u %s %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu",
-                    &major, &minor, dev, &reads, &reads_merged, &sectors_read, &read_time,
-                    &writes, &writes_merged, &sectors_written, &write_time,
-                    &current_io, &io_time, &weighted_io_time) == 14)
-                {
-                    /* we have to ignore partitions as their I/O is also included in the block device */
-                    sprintf(buffer, "/sys/dev/block/%u:%u/device", major, minor);
-                    if (access(buffer, F_OK) != 0)
-                        continue;
-
-                    spi.ReadTransferCount.QuadPart += sectors_read * 512;
-                    spi.WriteTransferCount.QuadPart += sectors_written * 512;
-                    spi.ReadOperationCount += reads;
-                    spi.WriteOperationCount += writes;
-                }
-
-                fclose(fp);
             }
 
             if (Length >= len)
@@ -2443,13 +2014,11 @@ NTSTATUS WINAPI NtQuerySystemInformation(
         {
             SYSTEM_PROCESS_INFORMATION* spi = SystemInformation;
             SYSTEM_PROCESS_INFORMATION* last = NULL;
-            unsigned long clk_tck = sysconf(_SC_CLK_TCK);
             HANDLE hSnap = 0;
             WCHAR procname[1024];
             WCHAR* exename;
             DWORD wlen = 0;
             DWORD procstructlen = 0;
-            int unix_pid = -1;
 
             SERVER_START_REQ( create_snapshot )
             {
@@ -2482,7 +2051,7 @@ NTSTATUS WINAPI NtQuerySystemInformation(
 
                         if (Length >= len + procstructlen)
                         {
-                            /* ftCreationTime;
+                            /* ftCreationTime, ftUserTime, ftKernelTime;
                              * vmCounters, ioCounters
                              */
  
@@ -2497,17 +2066,9 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                             spi->UniqueProcessId = UlongToHandle(reply->pid);
                             spi->ParentProcessId = UlongToHandle(reply->ppid);
                             spi->HandleCount = reply->handles;
-                            spi->CreationTime.QuadPart = reply->start_time;
 
                             /* spi->ti will be set later on */
 
-                            if (reply->unix_pid != -1)
-                            {
-                                read_process_time(reply->unix_pid, -1, clk_tck,
-                                                  &spi->KernelTime, &spi->UserTime);
-                                read_process_memory_stats(reply->unix_pid, &spi->vmCounters);
-                            }
-                            unix_pid = reply->unix_pid;
                         }
                         len += procstructlen;
                     }
@@ -2543,15 +2104,11 @@ NTSTATUS WINAPI NtQuerySystemInformation(
 
                                     memset(&spi->ti[i], 0, sizeof(spi->ti));
 
-                                    spi->ti[i].CreateTime.QuadPart = reply->creation_time;
+                                    spi->ti[i].CreateTime.QuadPart = 0xdeadbeef;
                                     spi->ti[i].ClientId.UniqueProcess = UlongToHandle(reply->pid);
                                     spi->ti[i].ClientId.UniqueThread  = UlongToHandle(reply->tid);
                                     spi->ti[i].dwCurrentPriority = reply->base_pri + reply->delta_pri;
                                     spi->ti[i].dwBasePriority = reply->base_pri;
-
-                                    if (unix_pid != -1 && reply->unix_tid != -1)
-                                        read_process_time(unix_pid, reply->unix_tid, clk_tck,
-                                                          &spi->ti[i].KernelTime, &spi->ti[i].UserTime);
                                     i++;
                                 }
                             }
@@ -2682,22 +2239,9 @@ NTSTATUS WINAPI NtQuerySystemInformation(
         }
         break;
     case SystemModuleInformation:
-        if (!SystemInformation)
-            ret = STATUS_ACCESS_VIOLATION;
-        else if (Length < FIELD_OFFSET( SYSTEM_MODULE_INFORMATION, Modules[1] ))
-        {
-            len = FIELD_OFFSET( SYSTEM_MODULE_INFORMATION, Modules[1] );
-            ret = STATUS_INFO_LENGTH_MISMATCH;
-        }
-        else
-        {
-            SYSTEM_MODULE_INFORMATION *smi = SystemInformation;
-
-            FIXME("returning fake driver list\n");
-            smi->ModulesCount = 1;
-            memset(&smi->Modules[0], 0, sizeof(smi->Modules[0]));
-            ret = STATUS_SUCCESS;
-        }
+        /* FIXME: should be system-wide */
+        if (!SystemInformation) ret = STATUS_ACCESS_VIOLATION;
+        else ret = LdrQueryProcessModuleInformation( SystemInformation, Length, &len );
         break;
     case SystemHandleInformation:
         {
@@ -2734,65 +2278,12 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                         shi->Handle[i].OwnerPid     = info[i].owner;
                         shi->Handle[i].HandleValue  = info[i].handle;
                         shi->Handle[i].AccessMask   = info[i].access;
-                        shi->Handle[i].ObjectType   = translate_object_index(info[i].type);
-                        /* FIXME: Fill out HandleFlags, ObjectPointer */
+                        /* FIXME: Fill out ObjectType, HandleFlags, ObjectPointer */
                     }
                 }
                 else if (ret == STATUS_BUFFER_TOO_SMALL)
                 {
                     len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle[reply->count] );
-                    ret = STATUS_INFO_LENGTH_MISMATCH;
-                }
-            }
-            SERVER_END_REQ;
-
-            RtlFreeHeap( GetProcessHeap(), 0, info );
-        }
-        break;
-    case SystemExtendedHandleInformation:
-        {
-            struct handle_info *info;
-            DWORD i, num_handles;
-
-            if (Length < sizeof(SYSTEM_HANDLE_INFORMATION_EX))
-            {
-                ret = STATUS_INFO_LENGTH_MISMATCH;
-                break;
-            }
-
-            if (!SystemInformation)
-            {
-                ret = STATUS_ACCESS_VIOLATION;
-                break;
-            }
-
-            num_handles = (Length - FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION_EX, Handle ));
-            num_handles /= sizeof(SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX);
-            if (!(info = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*info) * num_handles )))
-                return STATUS_NO_MEMORY;
-
-            SERVER_START_REQ( get_system_handles )
-            {
-                wine_server_set_reply( req, info, sizeof(*info) * num_handles );
-                if (!(ret = wine_server_call( req )))
-                {
-                    SYSTEM_HANDLE_INFORMATION_EX *shi = SystemInformation;
-                    shi->Count = wine_server_reply_size( req ) / sizeof(*info);
-                    shi->Reserved = 0;
-                    len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION_EX, Handle[shi->Count] );
-                    for (i = 0; i < shi->Count; i++)
-                    {
-                        memset( &shi->Handle[i], 0, sizeof(shi->Handle[i]) );
-                        shi->Handle[i].UniqueProcessId = info[i].owner;
-                        shi->Handle[i].HandleValue     = info[i].handle;
-                        shi->Handle[i].GrantedAccess   = info[i].access;
-                        shi->Handle[i].ObjectTypeIndex = translate_object_index(info[i].type);
-                        /* FIXME: Fill out remaining fields */
-                    }
-                }
-                else if (ret == STATUS_BUFFER_TOO_SMALL)
-                {
-                    len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION_EX, Handle[reply->count] );
                     ret = STATUS_INFO_LENGTH_MISMATCH;
                 }
             }
@@ -2820,20 +2311,9 @@ NTSTATUS WINAPI NtQuerySystemInformation(
     case SystemInterruptInformation:
         {
             SYSTEM_INTERRUPT_INFORMATION sii;
-            int dev_random;
 
             memset(&sii, 0, sizeof(sii));
             len = sizeof(sii);
-
-            /* Some applications use the returned buffer for random number
-             * generation. Its unlikely that an app depends on the exact
-             * layout, so just fill with values from /dev/urandom. */
-            dev_random = open( "/dev/urandom", O_RDONLY );
-            if (dev_random != -1)
-            {
-                read( dev_random, &sii, sizeof(sii) );
-                close( dev_random );
-            }
 
             if ( Length >= len)
             {
@@ -2925,28 +2405,6 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                 else *((DWORD *)SystemInformation) = 64;
             }
             else ret = STATUS_INFO_LENGTH_MISMATCH;
-        }
-        break;
-    case SystemFirmwareTableInformation:
-        {
-            SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti = (SYSTEM_FIRMWARE_TABLE_INFORMATION*)SystemInformation;
-            len = FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION, TableBuffer);
-            if (Length < len)
-            {
-                ret = STATUS_INFO_LENGTH_MISMATCH;
-                break;
-            }
-
-            switch (sfti->Action)
-            {
-            case SystemFirmwareTable_Get:
-                ret = get_firmware_info(sfti, Length, &len);
-                break;
-            default:
-                len = 0;
-                ret = STATUS_NOT_IMPLEMENTED;
-                FIXME("info_class SYSTEM_FIRMWARE_TABLE_INFORMATION action %d\n", sfti->Action);
-            }
         }
         break;
     default:
@@ -3411,32 +2869,7 @@ NTSTATUS WINAPI NtSystemDebugControl(SYSDBG_COMMAND command, PVOID inbuffer, ULO
 NTSTATUS WINAPI NtSetLdtEntries(ULONG selector1, ULONG entry1_low, ULONG entry1_high,
                                 ULONG selector2, ULONG entry2_low, ULONG entry2_high)
 {
-#ifdef __i386__
-    union
-    {
-        LDT_ENTRY entry;
-        ULONG dw[2];
-    } sel;
+    FIXME("(%u, %u, %u, %u, %u, %u): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
 
-    TRACE("(%x,%x,%x,%x,%x,%x)\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
-
-    if (selector1)
-    {
-        sel.dw[0] = entry1_low;
-        sel.dw[1] = entry1_high;
-        if (wine_ldt_set_entry(selector1, &sel.entry) < 0)
-            return STATUS_ACCESS_DENIED;
-    }
-    if (selector2)
-    {
-        sel.dw[0] = entry2_low;
-        sel.dw[1] = entry2_high;
-        if (wine_ldt_set_entry(selector2, &sel.entry) < 0)
-            return STATUS_ACCESS_DENIED;
-    }
-    return STATUS_SUCCESS;
-#else
-    FIXME("(%x,%x,%x,%x,%x,%x): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
     return STATUS_NOT_IMPLEMENTED;
-#endif
 }

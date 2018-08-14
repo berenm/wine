@@ -21,14 +21,11 @@
 
 #include <stdarg.h>
 
-#include "ntstatus.h"
-#define WIN32_NO_STATUS
 #define COBJMACROS
 #include "wine/unicode.h"
 #include "wine/library.h"
 #include "windef.h"
 #include "winbase.h"
-#include "winternl.h"
 #include "winuser.h"
 #include "winnls.h"
 #include "winreg.h"
@@ -52,7 +49,6 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL( mscoree );
-WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 static HINSTANCE MSCOREE_hInstance;
 
@@ -263,76 +259,8 @@ VOID WINAPI _CorImageUnloading(PVOID imageBase)
 
 HRESULT WINAPI _CorValidateImage(PVOID* imageBase, LPCWSTR imageName)
 {
-    IMAGE_COR20_HEADER *cliheader;
-    IMAGE_NT_HEADERS *nt;
-    ULONG size;
-
-    TRACE("(%p, %s)\n", imageBase, debugstr_w(imageName));
-
-    if (!imageBase)
-        return E_INVALIDARG;
-
-    nt = RtlImageNtHeader(*imageBase);
-    if (!nt)
-        return STATUS_INVALID_IMAGE_FORMAT;
-
-    cliheader = RtlImageDirectoryEntryToData(*imageBase, TRUE, IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR, &size);
-    if (!cliheader || size < sizeof(*cliheader))
-        return STATUS_INVALID_IMAGE_FORMAT;
-
-#ifdef _WIN64
-    if (cliheader->Flags & COMIMAGE_FLAGS_32BITREQUIRED)
-        return STATUS_INVALID_IMAGE_FORMAT;
-
-    if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
-    {
-        if (cliheader->Flags & COMIMAGE_FLAGS_ILONLY)
-        {
-            DWORD *entry = &nt->OptionalHeader.AddressOfEntryPoint;
-            DWORD old_protect;
-
-            if (!VirtualProtect(entry, sizeof(*entry), PAGE_READWRITE, &old_protect))
-                return E_UNEXPECTED;
-            *entry = 0;
-            if (!VirtualProtect(entry, sizeof(*entry), old_protect, &old_protect))
-                return E_UNEXPECTED;
-        }
-
-        return STATUS_SUCCESS;
-    }
-
-    if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
-    {
-        if (!(cliheader->Flags & COMIMAGE_FLAGS_ILONLY))
-            return STATUS_INVALID_IMAGE_FORMAT;
-
-        FIXME("conversion of IMAGE_NT_HEADERS32 -> IMAGE_NT_HEADERS64 not implemented\n");
-        return STATUS_NOT_IMPLEMENTED;
-    }
-
-#else
-    if (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
-    {
-        if (cliheader->Flags & COMIMAGE_FLAGS_ILONLY)
-        {
-            DWORD *entry = &nt->OptionalHeader.AddressOfEntryPoint;
-            DWORD old_protect;
-
-            if (!VirtualProtect(entry, sizeof(*entry), PAGE_READWRITE, &old_protect))
-                return E_UNEXPECTED;
-            *entry = (nt->FileHeader.Characteristics & IMAGE_FILE_DLL) ?
-                ((DWORD_PTR)&_CorDllMain - (DWORD_PTR)*imageBase) :
-                ((DWORD_PTR)&_CorExeMain - (DWORD_PTR)*imageBase);
-            if (!VirtualProtect(entry, sizeof(*entry), old_protect, &old_protect))
-                return E_UNEXPECTED;
-        }
-
-        return STATUS_SUCCESS;
-    }
-
-#endif
-
-    return STATUS_INVALID_IMAGE_FORMAT;
+    TRACE("(%p, %s): stub\n", imageBase, debugstr_w(imageName));
+    return E_FAIL;
 }
 
 HRESULT WINAPI GetCORSystemDirectory(LPWSTR pbuffer, DWORD cchBuffer, DWORD *dwLength)
@@ -379,16 +307,6 @@ HRESULT WINAPI GetCORVersion(LPWSTR pbuffer, DWORD cchBuffer, DWORD *dwLength)
     }
 
     return ret;
-}
-
-HRESULT WINAPI CorIsLatestSvc(int *unk1, int *unk2)
-{
-    ERR_(winediag)("If this function is called, it is likely the result of a broken .NET installation\n");
-
-    if (!unk1 || !unk2)
-        return E_POINTER;
-
-    return S_OK;
 }
 
 HRESULT WINAPI GetRequestedRuntimeInfo(LPCWSTR pExe, LPCWSTR pwszVersion, LPCWSTR pConfigurationFile,
@@ -740,10 +658,8 @@ static BOOL install_wine_mono(void)
 {
     BOOL is_wow64 = FALSE;
     HMODULE hmsi;
-    UINT (WINAPI *pMsiEnumRelatedProductsA)(LPCSTR,DWORD,DWORD,LPSTR);
     UINT (WINAPI *pMsiGetProductInfoA)(LPCSTR,LPCSTR,LPSTR,DWORD*);
     char versionstringbuf[15];
-    char productcodebuf[39];
     UINT res;
     DWORD buffer_size;
     PROCESS_INFORMATION pi;
@@ -753,8 +669,8 @@ static BOOL install_wine_mono(void)
     LONG len;
     BOOL ret;
 
-    static const char* mono_version = "4.7.3";
-    static const char* mono_upgrade_code = "{DE624609-C6B5-486A-9274-EF0B854F6BC5}";
+    static const char* mono_version = "4.7.1";
+    static const char* mono_product_code = "{E45D8920-A758-4088-B6C6-31DBB276992E}";
 
     static const WCHAR controlW[] = {'\\','c','o','n','t','r','o','l','.','e','x','e',0};
     static const WCHAR argsW[] =
@@ -776,22 +692,11 @@ static BOOL install_wine_mono(void)
         return FALSE;
     }
 
-    pMsiEnumRelatedProductsA = (void*)GetProcAddress(hmsi, "MsiEnumRelatedProductsA");
+    pMsiGetProductInfoA = (void*)GetProcAddress(hmsi, "MsiGetProductInfoA");
 
-    res = pMsiEnumRelatedProductsA(mono_upgrade_code, 0, 0, productcodebuf);
+    buffer_size = sizeof(versionstringbuf);
 
-    if (res == ERROR_SUCCESS)
-    {
-        pMsiGetProductInfoA = (void*)GetProcAddress(hmsi, "MsiGetProductInfoA");
-
-        buffer_size = sizeof(versionstringbuf);
-
-        res = pMsiGetProductInfoA(productcodebuf, "VersionString", versionstringbuf, &buffer_size);
-    }
-    else if (res != ERROR_NO_MORE_ITEMS)
-    {
-        ERR("MsiEnumRelatedProducts failed, err=%u\n", res);
-    }
+    res = pMsiGetProductInfoA(mono_product_code, "VersionString", versionstringbuf, &buffer_size);
 
     FreeLibrary(hmsi);
 
@@ -822,7 +727,7 @@ static BOOL install_wine_mono(void)
         }
     }
 
-    len = GetSystemDirectoryW(app, MAX_PATH - ARRAY_SIZE(controlW));
+    len = GetSystemDirectoryW(app, MAX_PATH-sizeof(controlW)/sizeof(WCHAR));
     memcpy(app+len, controlW, sizeof(controlW));
 
     args = HeapAlloc(GetProcessHeap(), 0, (len*sizeof(WCHAR) + sizeof(controlW) + sizeof(argsW)));
@@ -830,7 +735,7 @@ static BOOL install_wine_mono(void)
         return FALSE;
 
     memcpy(args, app, len*sizeof(WCHAR) + sizeof(controlW));
-    memcpy(args + len + ARRAY_SIZE(controlW) - 1, argsW, sizeof(argsW));
+    memcpy(args + len + sizeof(controlW)/sizeof(WCHAR)-1, argsW, sizeof(argsW));
 
     TRACE("starting %s\n", debugstr_w(args));
 

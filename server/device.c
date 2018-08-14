@@ -38,7 +38,6 @@
 #include "handle.h"
 #include "request.h"
 #include "process.h"
-#include "esync.h"
 
 /* IRP object */
 
@@ -66,7 +65,6 @@ static const struct object_ops irp_call_ops =
     add_queue,                        /* add_queue */
     remove_queue,                     /* remove_queue */
     irp_call_signaled,                /* signaled */
-    NULL,                             /* get_esync_fd */
     no_satisfied,                     /* satisfied */
     no_signal,                        /* signal */
     no_get_fd,                        /* get_fd */
@@ -77,7 +75,6 @@ static const struct object_ops irp_call_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
-    no_alloc_handle,                  /* alloc_handle */
     no_close_handle,                  /* close_handle */
     irp_call_destroy                  /* destroy */
 };
@@ -90,12 +87,10 @@ struct device_manager
     struct object          obj;           /* object header */
     struct list            devices;       /* list of devices */
     struct list            requests;      /* list of pending irps across all devices */
-    int                    esync_fd;      /* esync file descriptor */
 };
 
 static void device_manager_dump( struct object *obj, int verbose );
 static int device_manager_signaled( struct object *obj, struct wait_queue_entry *entry );
-static int device_manager_get_esync_fd( struct object *obj, enum esync_type *type );
 static void device_manager_destroy( struct object *obj );
 
 static const struct object_ops device_manager_ops =
@@ -106,7 +101,6 @@ static const struct object_ops device_manager_ops =
     add_queue,                        /* add_queue */
     remove_queue,                     /* remove_queue */
     device_manager_signaled,          /* signaled */
-    device_manager_get_esync_fd,      /* get_esync_fd */
     no_satisfied,                     /* satisfied */
     no_signal,                        /* signal */
     no_get_fd,                        /* get_fd */
@@ -117,7 +111,6 @@ static const struct object_ops device_manager_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
-    no_alloc_handle,                  /* alloc_handle */
     no_close_handle,                  /* close_handle */
     device_manager_destroy            /* destroy */
 };
@@ -149,7 +142,6 @@ static const struct object_ops device_ops =
     no_add_queue,                     /* add_queue */
     NULL,                             /* remove_queue */
     NULL,                             /* signaled */
-    NULL,                             /* get_esync_fd */
     no_satisfied,                     /* satisfied */
     no_signal,                        /* signal */
     no_get_fd,                        /* get_fd */
@@ -160,7 +152,6 @@ static const struct object_ops device_ops =
     directory_link_name,              /* link_name */
     default_unlink_name,              /* unlink_name */
     device_open_file,                 /* open_file */
-    no_alloc_handle,                  /* alloc_handle */
     no_close_handle,                  /* close_handle */
     device_destroy                    /* destroy */
 };
@@ -196,7 +187,6 @@ static const struct object_ops device_file_ops =
     add_queue,                        /* add_queue */
     remove_queue,                     /* remove_queue */
     default_fd_signaled,              /* signaled */
-    NULL,                             /* get_esync_fd */
     no_satisfied,                     /* satisfied */
     no_signal,                        /* signal */
     device_file_get_fd,               /* get_fd */
@@ -207,7 +197,6 @@ static const struct object_ops device_file_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
-    no_alloc_handle,                  /* alloc_handle */
     device_file_close_handle,         /* close_handle */
     device_file_destroy               /* destroy */
 };
@@ -584,9 +573,6 @@ static void delete_file( struct device_file *file )
     /* terminate all pending requests */
     LIST_FOR_EACH_ENTRY_SAFE( irp, next, &file->requests, struct irp_call, dev_entry )
     {
-        if (do_esync() && file->device->manager && list_empty( &file->device->manager->requests ))
-            esync_clear( file->device->manager->esync_fd );
-
         list_remove( &irp->mgr_entry );
         set_irp_result( irp, STATUS_FILE_DELETED, NULL, 0, 0 );
     }
@@ -599,11 +585,7 @@ static void delete_device( struct device *device )
     if (!device->manager) return;  /* already deleted */
 
     LIST_FOR_EACH_ENTRY_SAFE( file, next, &device->files, struct device_file, entry )
-    {
-        grab_object( &file->obj );
         delete_file( file );
-        release_object( &file->obj );
-    }
 
     unlink_named_object( &device->obj );
     list_remove( &device->entry );
@@ -623,13 +605,6 @@ static int device_manager_signaled( struct object *obj, struct wait_queue_entry 
     return !list_empty( &manager->requests );
 }
 
-static int device_manager_get_esync_fd( struct object *obj, enum esync_type *type )
-{
-    struct device_manager *manager = (struct device_manager *)obj;
-    *type = ESYNC_MANUAL_SERVER;
-    return manager->esync_fd;
-}
-
 static void device_manager_destroy( struct object *obj )
 {
     struct device_manager *manager = (struct device_manager *)obj;
@@ -638,12 +613,7 @@ static void device_manager_destroy( struct object *obj )
     while ((ptr = list_head( &manager->devices )))
     {
         struct device *device = LIST_ENTRY( ptr, struct device, entry );
-        grab_object( &device->obj );
         delete_device( device );
-        release_object( &device->obj );
-
-        if (do_esync())
-            close( manager->esync_fd );
     }
 }
 
@@ -655,9 +625,6 @@ static struct device_manager *create_device_manager(void)
     {
         list_init( &manager->devices );
         list_init( &manager->requests );
-
-        if (do_esync())
-            manager->esync_fd = esync_create_fd( 0, 0 );
     }
     return manager;
 }
@@ -764,9 +731,6 @@ DECL_HANDLER(get_next_device_request)
             iosb->in_size = 0;
             list_remove( &irp->mgr_entry );
             list_init( &irp->mgr_entry );
-
-            if (do_esync() && list_empty( &manager->requests ))
-                esync_clear( manager->esync_fd );
         }
     }
     else set_error( STATUS_PENDING );

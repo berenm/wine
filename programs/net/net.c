@@ -61,7 +61,8 @@ static int output_vprintf(const WCHAR* fmt, __ms_va_list va_args)
     int len;
 
     SetLastError(NO_ERROR);
-    len = FormatMessageW(FORMAT_MESSAGE_FROM_STRING, fmt, 0, 0, str, ARRAY_SIZE(str), &va_args);
+    len = FormatMessageW(FORMAT_MESSAGE_FROM_STRING, fmt, 0, 0, str,
+                         sizeof(str)/sizeof(*str), &va_args);
     if (len == 0 && GetLastError() != NO_ERROR)
         WINE_FIXME("Could not format string: le=%u, fmt=%s\n", GetLastError(), wine_dbgstr_w(fmt));
     else
@@ -84,7 +85,7 @@ static int WINAPIV output_string(int msg, ...)
     WCHAR fmt[8192];
     __ms_va_list arguments;
 
-    LoadStringW(GetModuleHandleW(NULL), msg, fmt, ARRAY_SIZE(fmt));
+    LoadStringW(GetModuleHandleW(NULL), msg, fmt, sizeof(fmt)/sizeof(fmt[0]));
     __ms_va_start(arguments, msg);
     output_vprintf(fmt, arguments);
     __ms_va_end(arguments);
@@ -118,7 +119,7 @@ static BOOL net_use(int argc, const WCHAR* argv[])
         HMODULE hmod = GetModuleHandleW(NULL);
 
         /* Load the status strings */
-        for (i = 0; i < ARRAY_SIZE(status); i++)
+        for (i = 0; i < sizeof(status)/sizeof(*status); i++)
         {
             status[i] = HeapAlloc(GetProcessHeap(), 0, 1024 * sizeof(**status));
             LoadStringW(hmod, STRING_OK+i, status[i], 1024);
@@ -146,7 +147,7 @@ static BOOL net_use(int argc, const WCHAR* argv[])
         } while (rc == ERROR_MORE_DATA);
 
         /* Release the status strings */
-        for (i = 0; i < ARRAY_SIZE(status); i++)
+        for (i = 0; i < sizeof(status)/sizeof(*status); i++)
             HeapFree(GetProcessHeap(), 0, status[i]);
 
 	return TRUE;
@@ -255,7 +256,7 @@ static BOOL net_service(int operation, const WCHAR* service_name)
         return FALSE;
     }
 
-    buffer_size = ARRAY_SIZE(service_display_name);
+    buffer_size = sizeof(service_display_name)/sizeof(*service_display_name);
     GetServiceDisplayNameW(SCManager, service_name, service_display_name, &buffer_size);
     if (!service_display_name[0]) lstrcpyW(service_display_name, service_name);
 

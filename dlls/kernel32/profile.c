@@ -500,7 +500,7 @@ static BOOL PROFILE_DeleteSection( PROFILESECTION **section, LPCWSTR name )
 {
     while (*section)
     {
-        if (!strcmpiW( (*section)->name, name ))
+        if ((*section)->name[0] && !strcmpiW( (*section)->name, name ))
         {
             PROFILESECTION *to_del = *section;
             *section = to_del->next;
@@ -524,7 +524,7 @@ static BOOL PROFILE_DeleteKey( PROFILESECTION **section,
 {
     while (*section)
     {
-        if (!strcmpiW( (*section)->name, section_name ))
+        if ((*section)->name[0] && !strcmpiW( (*section)->name, section_name ))
         {
             PROFILEKEY **key = &(*section)->key;
             while (*key)
@@ -556,7 +556,7 @@ static void PROFILE_DeleteAllKeys( LPCWSTR section_name)
     PROFILESECTION **section= &CurProfile->section;
     while (*section)
     {
-        if (!strcmpiW( (*section)->name, section_name ))
+        if ((*section)->name[0] && !strcmpiW( (*section)->name, section_name ))
         {
             PROFILEKEY **key = &(*section)->key;
             while (*key)
@@ -582,28 +582,31 @@ static PROFILEKEY *PROFILE_Find( PROFILESECTION **section, LPCWSTR section_name,
                                  LPCWSTR key_name, BOOL create, BOOL create_always )
 {
     LPCWSTR p;
-    int seclen = 0, keylen = 0;
+    int seclen, keylen;
 
     while (PROFILE_isspaceW(*section_name)) section_name++;
     if (*section_name)
-    {
         p = section_name + strlenW(section_name) - 1;
-        while ((p > section_name) && PROFILE_isspaceW(*p)) p--;
-        seclen = p - section_name + 1;
-    }
+    else
+        p = section_name;
+
+    while ((p > section_name) && PROFILE_isspaceW(*p)) p--;
+    seclen = p - section_name + 1;
 
     while (PROFILE_isspaceW(*key_name)) key_name++;
     if (*key_name)
-    {
         p = key_name + strlenW(key_name) - 1;
-        while ((p > key_name) && PROFILE_isspaceW(*p)) p--;
-        keylen = p - key_name + 1;
-    }
+    else
+        p = key_name;
+
+    while ((p > key_name) && PROFILE_isspaceW(*p)) p--;
+    keylen = p - key_name + 1;
 
     while (*section)
     {
-        if (!strncmpiW((*section)->name, section_name, seclen) &&
-            ((*section)->name)[seclen] == '\0')
+        if ( ((*section)->name[0])
+             && (!(strncmpiW( (*section)->name, section_name, seclen )))
+             && (((*section)->name)[seclen] == '\0') )
         {
             PROFILEKEY **key = &(*section)->key;
 
@@ -769,7 +772,7 @@ static BOOL PROFILE_Open( LPCWSTR filename, BOOL write_access )
     else
     {
         LPWSTR dummy;
-        GetFullPathNameW(filename, ARRAY_SIZE(buffer), buffer, &dummy);
+        GetFullPathNameW(filename, sizeof(buffer)/sizeof(buffer[0]), buffer, &dummy);
     }
         
     TRACE("path: %s\n", debugstr_w(buffer));
@@ -870,7 +873,7 @@ static INT PROFILE_GetSection( PROFILESECTION *section, LPCWSTR section_name,
 
     while (section)
     {
-        if (!strcmpiW( section->name, section_name ))
+        if (section->name[0] && !strcmpiW( section->name, section_name ))
         {
             UINT oldlen = len;
             for (key = section->key; key; key = key->next)
@@ -985,6 +988,11 @@ static INT PROFILE_GetString( LPCWSTR section, LPCWSTR key_name,
     if (!def_val) def_val = empty_strW;
     if (key_name)
     {
+	if (!key_name[0])
+        {
+            PROFILE_CopyEntry(buffer, def_val, len, TRUE);
+            return strlenW(buffer);
+        }
         key = PROFILE_Find( &CurProfile->section, section, key_name, FALSE, FALSE);
         PROFILE_CopyEntry( buffer, (key && key->value) ? key->value : def_val,
                            len, TRUE );
@@ -994,7 +1002,7 @@ static INT PROFILE_GetString( LPCWSTR section, LPCWSTR key_name,
         return strlenW( buffer );
     }
     /* no "else" here ! */
-    if (section)
+    if (section && section[0])
     {
         INT ret = PROFILE_GetSection(CurProfile->section, section, buffer, len, FALSE);
         if (!buffer[0]) /* no luck -> def_val */
@@ -1230,8 +1238,9 @@ UINT WINAPI GetPrivateProfileIntW( LPCWSTR section, LPCWSTR entry,
     UNICODE_STRING bufferW;
     ULONG result;
 
-    if (GetPrivateProfileStringW( section, entry, emptystringW, buffer, ARRAY_SIZE( buffer ),
-                                  filename ) == 0)
+    if (GetPrivateProfileStringW( section, entry, emptystringW,
+                                   buffer, sizeof(buffer)/sizeof(WCHAR),
+                                   filename ) == 0)
         return def_val;
 
     /* FIXME: if entry can be found but it's empty, then Win16 is

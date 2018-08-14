@@ -420,7 +420,7 @@ static BOOL UDF_Find_PVD( HANDLE handle, BYTE pvd[] )
     DWORD offset;
     INT locations[] = { 256, -1, -257, 512 };
 
-    for(i=0; i<ARRAY_SIZE(locations); i++)
+    for(i=0; i<sizeof(locations)/sizeof(locations[0]); i++)
     {
         if (!VOLUME_ReadCDBlock(handle, pvd, locations[i]*BLOCK_SIZE))
             return FALSE;
@@ -824,8 +824,7 @@ fill_fs_info:  /* now fill in the information that depends on the file system ty
     default:
         if (fsname) lstrcpynW( fsname, ntfsW, fsname_len );
         if (filename_len) *filename_len = 255;
-        if (flags) *flags = FILE_CASE_PRESERVED_NAMES | FILE_PERSISTENT_ACLS
-                            | FILE_SUPPORTS_REPARSE_POINTS;
+        if (flags) *flags = FILE_CASE_PRESERVED_NAMES | FILE_PERSISTENT_ACLS;
         break;
     }
     ret = TRUE;
@@ -983,7 +982,7 @@ BOOL WINAPI GetVolumeNameForVolumeMountPointA( LPCSTR path, LPSTR volume, DWORD 
 {
     BOOL ret;
     WCHAR volumeW[50], *pathW = NULL;
-    DWORD len = min(ARRAY_SIZE(volumeW), size );
+    DWORD len = min( sizeof(volumeW) / sizeof(WCHAR), size );
 
     TRACE("(%s, %p, %x)\n", debugstr_a(path), volume, size);
 
@@ -1106,7 +1105,7 @@ BOOL WINAPI GetVolumeNameForVolumeMountPointW( LPCWSTR path, LPWSTR volume, DWOR
             debugstr_wn((WCHAR*)((char *)output + o1->DeviceNameOffset),
                             o1->DeviceNameLength/sizeof(WCHAR)));
 
-        if (!strncmpW( p, volumeW, ARRAY_SIZE( volumeW )))
+        if (!strncmpW( p, volumeW, sizeof(volumeW)/sizeof(WCHAR) ))
         {
             /* is there space in the return variable ?? */
             if ((o1->SymbolicLinkNameLength/sizeof(WCHAR))+2 > size)
@@ -1764,7 +1763,7 @@ BOOL WINAPI GetVolumePathNameW(LPCWSTR filename, LPWSTR volumepathname, DWORD bu
                 goto cleanup;
             }
         }
-        else if (GetCurrentDirectoryW(ARRAY_SIZE(cwdW), cwdW ))
+        else if (GetCurrentDirectoryW( sizeof(cwdW)/sizeof(cwdW[0]), cwdW ))
         {
             /* if the path is completely bogus then revert to the drive of the working directory */
             fallbackpathW[0] = cwdW[0];
@@ -1943,12 +1942,12 @@ BOOL WINAPI GetVolumePathNamesForVolumeNameW(LPCWSTR volumename, LPWSTR volumepa
             linkname = (const WCHAR *)((const char *)link + link->MountPoints[j].SymbolicLinkNameOffset);
 
             if (link->MountPoints[j].SymbolicLinkNameLength == sizeof(dosdevicesW) + 2 * sizeof(WCHAR) &&
-                !memicmpW( linkname, dosdevicesW, ARRAY_SIZE( dosdevicesW )))
+                !memicmpW( linkname, dosdevicesW, sizeof(dosdevicesW) / sizeof(WCHAR) ))
             {
                 len += 4;
                 if (volumepathname && len < buflen)
                 {
-                    path[0] = linkname[ARRAY_SIZE( dosdevicesW )];
+                    path[0] = linkname[sizeof(dosdevicesW) / sizeof(WCHAR)];
                     path[1] = ':';
                     path[2] = '\\';
                     path[3] = 0;

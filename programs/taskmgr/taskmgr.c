@@ -77,6 +77,35 @@ static void Draw3dRect(HDC hDC, int x, int y, int cx, int cy, COLORREF clrTopLef
     FillSolidRect2(hDC, x, y + cy, cx, -1, clrBottomRight);
 }
 
+void Font_DrawText(HDC hDC, LPWSTR lpwszText, int x, int y)
+{
+    HDC        hFontDC;
+    HBITMAP    hFontBitmap;
+    HBITMAP    hOldBitmap;
+    int        i;
+
+    hFontDC = CreateCompatibleDC(hDC);
+    hFontBitmap = LoadBitmapW(hInst, MAKEINTRESOURCEW(IDB_FONT));
+    hOldBitmap = SelectObject(hFontDC, hFontBitmap);
+
+    for (i = 0; lpwszText[i]; i++) {
+        if ((lpwszText[i] >= '0') && (lpwszText[i] <= '9')) {
+            BitBlt(hDC, x + (i * 8), y, 8, 11, hFontDC, (lpwszText[i] - '0') * 8, 0, SRCCOPY);
+        }
+        else if (lpwszText[i] == 'K')
+        {
+            BitBlt(hDC, x + (i * 8), y, 8, 11, hFontDC, 80, 0, SRCCOPY);
+        }
+        else if (lpwszText[i] == '%')
+        {
+            BitBlt(hDC, x + (i * 8), y, 8, 11, hFontDC, 88, 0, SRCCOPY);
+        }
+    }
+    SelectObject(hFontDC, hOldBitmap);
+    DeleteObject(hFontBitmap);
+    DeleteDC(hFontDC);
+}
+
 static BOOL OnCreate(HWND hWnd)
 {
     HMENU   hMenu;
@@ -93,9 +122,9 @@ static BOOL OnCreate(HWND hWnd)
     static WCHAR wszProcesses[255];
     static WCHAR wszPerformance[255];
 
-    LoadStringW(hInst, IDS_APPLICATIONS, wszApplications, ARRAY_SIZE(wszApplications));
-    LoadStringW(hInst, IDS_PROCESSES, wszProcesses, ARRAY_SIZE(wszProcesses));
-    LoadStringW(hInst, IDS_PERFORMANCE, wszPerformance, ARRAY_SIZE(wszPerformance));
+    LoadStringW(hInst, IDS_APPLICATIONS, wszApplications, sizeof(wszApplications)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_PROCESSES, wszProcesses, sizeof(wszProcesses)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_PERFORMANCE, wszPerformance, sizeof(wszPerformance)/sizeof(WCHAR));
 
     SendMessageW(hMainWnd, WM_SETICON, ICON_BIG, (LPARAM)LoadIconW(hInst, MAKEINTRESOURCEW(IDI_TASKMANAGER)));
     SendMessageW(hMainWnd, WM_SETICON, ICON_SMALL,
@@ -472,8 +501,8 @@ static void TaskManager_OnExitMenuLoop(HWND hWnd)
     WCHAR wszCPU_Usage[255];
     WCHAR wszProcesses[255];
 
-    LoadStringW(hInst, IDS_STATUS_BAR_CPU_USAGE, wszCPU_Usage, ARRAY_SIZE(wszCPU_Usage));
-    LoadStringW(hInst, IDS_STATUS_BAR_PROCESSES, wszProcesses, ARRAY_SIZE(wszProcesses));
+    LoadStringW(hInst, IDS_STATUS_BAR_CPU_USAGE, wszCPU_Usage, sizeof(wszCPU_Usage)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_STATUS_BAR_PROCESSES, wszProcesses, sizeof(wszProcesses)/sizeof(WCHAR));
 
     bInMenuLoop = FALSE;
     /* Update the status bar pane sizes */
@@ -493,7 +522,7 @@ static void TaskManager_OnMenuSelect(HWND hWnd, UINT nItemID, UINT nFlags, HMENU
 {
     WCHAR wstr[256] = {0};
 
-    LoadStringW(hInst, nItemID, wstr, ARRAY_SIZE(wstr));
+    LoadStringW(hInst, nItemID, wstr, sizeof(wstr)/sizeof(WCHAR));
     SendMessageW(hStatusWnd, SB_SETTEXTW, 0, (LPARAM)wstr);
 }
 
@@ -581,16 +610,16 @@ static void TaskManager_OnTabWndSelChange(void)
     WCHAR wszCPUHistory[255];
     WCHAR wszShowKernelTimes[255];
 
-    LoadStringW(hInst, IDS_VIEW_LARGE, wszLargeIcons, ARRAY_SIZE(wszLargeIcons));
-    LoadStringW(hInst, IDS_VIEW_SMALL, wszSmallIcons, ARRAY_SIZE(wszSmallIcons));
-    LoadStringW(hInst, IDS_VIEW_DETAILS, wszDetails, ARRAY_SIZE(wszDetails));
-    LoadStringW(hInst, IDS_WINDOWS, wszWindows, ARRAY_SIZE(wszWindows));
-    LoadStringW(hInst, IDS_VIEW_SELECTCOLUMNS, wszSelectColumns, ARRAY_SIZE(wszSelectColumns));
-    LoadStringW(hInst, IDS_OPTIONS_SHOW16BITTASKS, wszShow16bTasks, ARRAY_SIZE(wszShow16bTasks));
-    LoadStringW(hInst, IDS_VIEW_CPUHISTORY_ONEGRAPHALL, wszOneGraphAllCPU, ARRAY_SIZE(wszOneGraphAllCPU));
-    LoadStringW(hInst, IDS_VIEW_CPUHISTORY_ONEGRAPHPERCPU, wszOneGraphPerCPU, ARRAY_SIZE(wszOneGraphPerCPU));
-    LoadStringW(hInst, IDS_VIEW_CPUHISTORY, wszCPUHistory, ARRAY_SIZE(wszCPUHistory));
-    LoadStringW(hInst, IDS_VIEW_SHOWKERNELTIMES, wszShowKernelTimes, ARRAY_SIZE(wszShowKernelTimes));
+    LoadStringW(hInst, IDS_VIEW_LARGE, wszLargeIcons, sizeof(wszLargeIcons)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_SMALL, wszSmallIcons, sizeof(wszSmallIcons)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_DETAILS, wszDetails, sizeof(wszDetails)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_WINDOWS, wszWindows, sizeof(wszWindows)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_SELECTCOLUMNS, wszSelectColumns, sizeof(wszSelectColumns)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_OPTIONS_SHOW16BITTASKS, wszShow16bTasks, sizeof(wszShow16bTasks)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_CPUHISTORY_ONEGRAPHALL, wszOneGraphAllCPU, sizeof(wszOneGraphAllCPU)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_CPUHISTORY_ONEGRAPHPERCPU, wszOneGraphPerCPU, sizeof(wszOneGraphPerCPU)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_CPUHISTORY, wszCPUHistory, sizeof(wszCPUHistory)/sizeof(WCHAR));
+    LoadStringW(hInst, IDS_VIEW_SHOWKERNELTIMES, wszShowKernelTimes, sizeof(wszShowKernelTimes)/sizeof(WCHAR));
 
     hMenu = GetMenu(hMainWnd);
     hViewMenu = GetSubMenu(hMenu, 2);

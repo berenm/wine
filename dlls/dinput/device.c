@@ -39,8 +39,6 @@
 #include "device_private.h"
 #include "dinput_private.h"
 
-#define WM_WINE_NOTIFY_ACTIVITY WM_USER
-
 WINE_DEFAULT_DEBUG_CHANNEL(dinput);
 
 static inline IDirectInputDeviceImpl *impl_from_IDirectInputDevice8A(IDirectInputDevice8A *iface)
@@ -937,8 +935,6 @@ void queue_event(LPDIRECTINPUTDEVICE8A iface, int inst_id, DWORD data, DWORD tim
     /* Event is being set regardless of the queue state */
     if (This->hEvent) SetEvent(This->hEvent);
 
-    PostMessageW(GetDesktopWindow(), WM_WINE_NOTIFY_ACTIVITY, 0, 0);
-
     if (!This->queue_len || This->overflow || ofs < 0) return;
 
     next_pos = (This->queue_head + 1) % This->queue_len;
@@ -994,9 +990,9 @@ HRESULT WINAPI IDirectInputDevice2WImpl_Acquire(LPDIRECTINPUTDEVICE8W iface)
     EnterCriticalSection(&This->crit);
     res = This->acquired ? S_FALSE : DI_OK;
     This->acquired = 1;
-    LeaveCriticalSection(&This->crit);
     if (res == DI_OK)
-        check_dinput_hooks(iface, TRUE);
+        check_dinput_hooks(iface);
+    LeaveCriticalSection(&This->crit);
 
     return res;
 }
@@ -1022,9 +1018,9 @@ HRESULT WINAPI IDirectInputDevice2WImpl_Unacquire(LPDIRECTINPUTDEVICE8W iface)
     EnterCriticalSection(&This->crit);
     res = !This->acquired ? DI_NOEFFECT : DI_OK;
     This->acquired = 0;
-    LeaveCriticalSection(&This->crit);
     if (res == DI_OK)
-        check_dinput_hooks(iface, FALSE);
+        check_dinput_hooks(iface);
+    LeaveCriticalSection(&This->crit);
 
     return res;
 }

@@ -1879,16 +1879,12 @@ static LRESULT WINAPI cd_wndproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 clr = GetBkColor(nmlvcd->nmcd.hdc);
                 ok(nmlvcd->clrTextBk == CLR_DEFAULT, "got 0x%x\n", nmlvcd->clrTextBk);
                 ok(nmlvcd->clrText == RGB(0, 255, 0), "got 0x%x\n", nmlvcd->clrText);
-                if (!(GetWindowLongW(nmhdr->hwndFrom, GWL_STYLE) & LVS_SHOWSELALWAYS))
-                {
-                    todo_wine_if(nmlvcd->iSubItem)
-                        ok(clr == c0ffee, "clr=%.8x\n", clr);
-                }
+                todo_wine_if(nmlvcd->iSubItem)
+                    ok(clr == c0ffee, "clr=%.8x\n", clr);
                 return CDRF_NOTIFYPOSTPAINT;
             case CDDS_ITEMPOSTPAINT | CDDS_SUBITEM:
                 clr = GetBkColor(nmlvcd->nmcd.hdc);
-                if (!(GetWindowLongW(nmhdr->hwndFrom, GWL_STYLE) & LVS_SHOWSELALWAYS))
-                    todo_wine ok(clr == c0ffee, "clr=%.8x\n", clr);
+                todo_wine ok(clr == c0ffee, "clr=%.8x\n", clr);
                 ok(nmlvcd->clrTextBk == CLR_DEFAULT, "got 0x%x\n", nmlvcd->clrTextBk);
                 ok(nmlvcd->clrText == RGB(0, 255, 0), "got 0x%x\n", nmlvcd->clrText);
                 return CDRF_DODEFAULT;
@@ -1904,7 +1900,6 @@ static void test_customdraw(void)
 {
     HWND hwnd;
     WNDPROC oldwndproc;
-    LVITEMA item;
 
     hwnd = create_listview_control(LVS_REPORT);
 
@@ -1923,18 +1918,6 @@ static void test_customdraw(void)
     InvalidateRect(hwnd, NULL, TRUE);
     UpdateWindow(hwnd);
     ok_sequence(sequences, PARENT_CD_SEQ_INDEX, parent_report_cd_seq, "parent customdraw, LVS_REPORT", FALSE);
-
-    /* check colors when item is selected */
-    SetWindowLongW(hwnd, GWL_STYLE, GetWindowLongW(hwnd, GWL_STYLE) | LVS_SHOWSELALWAYS);
-    item.mask = LVIF_STATE;
-    item.stateMask = LVIS_SELECTED;
-    item.state = LVIS_SELECTED;
-    SendMessageA(hwnd, LVM_SETITEMSTATE, 0, (LPARAM)&item);
-
-    flush_sequences(sequences, NUM_MSG_SEQUENCES);
-    InvalidateRect(hwnd, NULL, TRUE);
-    UpdateWindow(hwnd);
-    ok_sequence(sequences, PARENT_CD_SEQ_INDEX, parent_report_cd_seq, "parent customdraw, LVS_REPORT, selection", FALSE);
 
     DestroyWindow(hwnd);
 
@@ -5507,7 +5490,7 @@ static void test_header_notification2(void)
     memset(&itemW, 0, sizeof(itemW));
     itemW.mask = HDI_WIDTH | HDI_ORDER | HDI_TEXT;
     itemW.pszText = buffer;
-    itemW.cchTextMax = ARRAY_SIZE(buffer);
+    itemW.cchTextMax = sizeof(buffer);
     ret = SendMessageW(header, HDM_GETITEMW, 0, (LPARAM)&itemW);
     expect(1, ret);
 

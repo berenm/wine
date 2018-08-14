@@ -197,7 +197,7 @@ static const WORD *DIALOG_GetControl32( const WORD *p, DLG_CONTROL_INFO *info,
             TRACE("\n");
             TRACE("  END\n" );
         }
-        info->data = p;
+        info->data = p + 1;
         p += GET_WORD(p) / sizeof(WORD);
     }
     else info->data = NULL;
@@ -216,7 +216,7 @@ static const WORD *DIALOG_GetControl32( const WORD *p, DLG_CONTROL_INFO *info,
 static BOOL DIALOG_CreateControls32( HWND hwnd, LPCSTR template, const DLG_TEMPLATE *dlgTemplate,
                                      HINSTANCE hInst, BOOL unicode )
 {
-    DIALOGINFO *dlgInfo = DIALOG_get_info( hwnd, FALSE );
+    DIALOGINFO *dlgInfo = DIALOG_get_info( hwnd, TRUE );
     DLG_CONTROL_INFO info;
     HWND hwndCtrl, hwndDefButton = 0;
     INT items = dlgTemplate->nbItems;
@@ -691,15 +691,12 @@ static HWND DIALOG_CreateIndirect( HINSTANCE hInst, LPCVOID dlgTemplate,
                         SendMessageW( focus, EM_SETSEL, 0, MAXLONG );
                     SetFocus( focus );
                 }
-                else
-                    SetFocus( hwnd );
             }
         }
 
         if (template.style & WS_VISIBLE && !(GetWindowLongW( hwnd, GWL_STYLE ) & WS_VISIBLE))
         {
            ShowWindow( hwnd, SW_SHOWNORMAL );   /* SW_SHOW doesn't always work */
-            UpdateWindow( hwnd );
         }
         return hwnd;
     }
@@ -1240,16 +1237,8 @@ BOOL WINAPI IsDialogMessageW( HWND hwndDlg, LPMSG msg )
             if (!(dlgCode & DLGC_WANTARROWS))
             {
                 BOOL fPrevious = (msg->wParam == VK_LEFT || msg->wParam == VK_UP);
-                HWND hwndNext = GetNextDlgGroupItem( hwndDlg, msg->hwnd, fPrevious );
-                if (hwndNext && SendMessageW( hwndNext, WM_GETDLGCODE, msg->wParam, (LPARAM)msg ) == (DLGC_BUTTON | DLGC_RADIOBUTTON))
-                {
-                    SetFocus( hwndNext );
-                    if ((GetWindowLongW( hwndNext, GWL_STYLE ) & BS_TYPEMASK) == BS_AUTORADIOBUTTON &&
-                        SendMessageW( hwndNext, BM_GETCHECK, 0, 0 ) != BST_CHECKED)
-                        SendMessageW( hwndNext, BM_CLICK, 1, 0 );
-                }
-                else
-                    SendMessageW( hwndDlg, WM_NEXTDLGCTL, (WPARAM)hwndNext, 1 );
+                HWND hwndNext = GetNextDlgGroupItem (hwndDlg, GetFocus(), fPrevious );
+                SendMessageW( hwndDlg, WM_NEXTDLGCTL, (WPARAM)hwndNext, 1 );
                 return TRUE;
             }
             break;
@@ -1263,11 +1252,10 @@ BOOL WINAPI IsDialogMessageW( HWND hwndDlg, LPMSG msg )
         case VK_RETURN:
             {
                 DWORD dw;
-                HWND hwndFocus = GetFocus();
-                if (IsChild( hwndDlg, hwndFocus ) &&
-                    (SendMessageW( hwndFocus, WM_GETDLGCODE, 0, 0 ) & DLGC_DEFPUSHBUTTON))
+                if ((GetFocus() == msg->hwnd) &&
+                    (SendMessageW (msg->hwnd, WM_GETDLGCODE, 0, 0) & DLGC_DEFPUSHBUTTON))
                 {
-                    SendMessageW( hwndDlg, WM_COMMAND, MAKEWPARAM( GetDlgCtrlID( hwndFocus ), BN_CLICKED ), (LPARAM)hwndFocus );
+                    SendMessageW (hwndDlg, WM_COMMAND, MAKEWPARAM (GetDlgCtrlID(msg->hwnd),BN_CLICKED), (LPARAM)msg->hwnd); 
                 }
                 else if (DC_HASDEFID == HIWORD(dw = SendMessageW (hwndDlg, DM_GETDEFID, 0, 0)))
                 {
@@ -1278,6 +1266,7 @@ BOOL WINAPI IsDialogMessageW( HWND hwndDlg, LPMSG msg )
                 else
                 {
                     SendMessageW( hwndDlg, WM_COMMAND, IDOK, (LPARAM)GetDlgItem( hwndDlg, IDOK ) );
+
                 }
             }
             return TRUE;
