@@ -1818,7 +1818,7 @@ static BOOL GetLinkLocation( LPCWSTR linkfile, DWORD *loc, char **relative )
 
     WINE_TRACE("%s\n", wine_dbgstr_w(filename));
 
-    for( i=0; i<sizeof(locations)/sizeof(locations[0]); i++ )
+    for( i=0; i<ARRAY_SIZE( locations ); i++ )
     {
         if (!SHGetSpecialFolderPathW( 0, buffer, locations[i], FALSE ))
             continue;
@@ -3638,11 +3638,12 @@ static BOOL associations_enabled(void)
     BYTE buf[32];
     DWORD len;
 
-    if (!RegOpenKeyA(HKEY_CURRENT_USER, "Software\\Wine\\MIME-types", &hkey))
+    if ((hkey = open_associations_reg_key()))
     {
         len = sizeof(buf);
-        if (!RegQueryValueExA(hkey, "EnableFileAssociations", NULL, NULL, buf, &len))
+        if (!RegQueryValueExA(hkey, "Enable", NULL, NULL, buf, &len))
             ret = IS_OPTION_TRUE(buf[0]);
+        RegCloseKey( hkey );
     }
 
     return ret;

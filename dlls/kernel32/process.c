@@ -528,13 +528,14 @@ static void set_additional_environment(void)
                                          'P','r','o','f','i','l','e','L','i','s','t',0};
     static const WCHAR profiles_valueW[] = {'P','r','o','f','i','l','e','s','D','i','r','e','c','t','o','r','y',0};
     static const WCHAR all_users_valueW[] = {'A','l','l','U','s','e','r','s','P','r','o','f','i','l','e','\0'};
+    static const WCHAR public_valueW[] = {'P','u','b','l','i','c',0};
     static const WCHAR computernameW[] = {'C','O','M','P','U','T','E','R','N','A','M','E',0};
     static const WCHAR allusersW[] = {'A','L','L','U','S','E','R','S','P','R','O','F','I','L','E',0};
     static const WCHAR programdataW[] = {'P','r','o','g','r','a','m','D','a','t','a',0};
     static const WCHAR publicW[] = {'P','U','B','L','I','C',0};
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW;
-    WCHAR *profile_dir = NULL, *all_users_dir = NULL, *program_data_dir = NULL;
+    WCHAR *profile_dir = NULL, *all_users_dir = NULL, *program_data_dir = NULL, *public_dir = NULL;
     WCHAR buf[MAX_COMPUTERNAME_LENGTH+1];
     HANDLE hkey;
     DWORD len;
@@ -558,6 +559,7 @@ static void set_additional_environment(void)
         profile_dir = get_reg_value( hkey, profiles_valueW );
         all_users_dir = get_reg_value( hkey, all_users_valueW );
         program_data_dir = get_reg_value( hkey, programdataW );
+        public_dir = get_reg_value( hkey, public_valueW );
         NtClose( hkey );
     }
 
@@ -572,7 +574,6 @@ static void set_additional_environment(void)
         if (p > value && p[-1] != '\\') *p++ = '\\';
         strcpyW( p, all_users_dir );
         SetEnvironmentVariableW( allusersW, value );
-        SetEnvironmentVariableW( publicW, value );
         HeapFree( GetProcessHeap(), 0, value );
     }
 
@@ -581,9 +582,15 @@ static void set_additional_environment(void)
         SetEnvironmentVariableW( programdataW, program_data_dir );
     }
 
+    if (public_dir)
+    {
+        SetEnvironmentVariableW( publicW, public_dir );
+    }
+
     HeapFree( GetProcessHeap(), 0, all_users_dir );
     HeapFree( GetProcessHeap(), 0, profile_dir );
     HeapFree( GetProcessHeap(), 0, program_data_dir );
+    HeapFree( GetProcessHeap(), 0, public_dir );
 }
 
 /***********************************************************************
@@ -4390,8 +4397,25 @@ BOOL WINAPI UpdateProcThreadAttribute(struct _PROC_THREAD_ATTRIBUTE_LIST *list,
         }
         break;
 
+    case PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY:
+       if (size != sizeof(DWORD) && size != sizeof(DWORD64))
+       {
+           SetLastError(ERROR_BAD_LENGTH);
+           return FALSE;
+       }
+       break;
+
+    case PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY:
+        if (size != sizeof(DWORD) && size != sizeof(DWORD64) && size != sizeof(DWORD64) * 2)
+        {
+            SetLastError(ERROR_BAD_LENGTH);
+            return FALSE;
+        }
+        break;
+
     default:
         SetLastError(ERROR_NOT_SUPPORTED);
+        FIXME("Unhandled attribute number %lu\n", attr & PROC_THREAD_ATTRIBUTE_NUMBER);
         return FALSE;
     }
 
@@ -4562,4 +4586,14 @@ BOOL WINAPI BaseFlushAppcompatCache(void)
     FIXME(": stub\n");
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
+}
+
+/**********************************************************************
+ *           SetProcessMitigationPolicy     (KERNEL32.@)
+ */
+BOOL WINAPI SetProcessMitigationPolicy(PROCESS_MITIGATION_POLICY policy, void *buffer, SIZE_T length)
+{
+    FIXME("(%d, %p, %lu): stub\n", policy, buffer, length);
+
+    return TRUE;
 }

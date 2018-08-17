@@ -1584,7 +1584,7 @@ DECL_HANDLER(attach_console)
                                    ? current->process->parent_id : req->pid );
     if (!process) return;
 
-    if (process->console && process->console->active )
+    if (process->console && process->console->active)
     {
         reply->std_in = alloc_handle( current->process, process->console, GENERIC_READ, 0 );
         if (!reply->std_in) goto error;
@@ -1595,20 +1595,20 @@ DECL_HANDLER(attach_console)
         reply->std_err = alloc_handle( current->process, process->console->active, GENERIC_WRITE, 0 );
         if (!reply->std_err) goto error;
 
-        current->process->console = (struct console_input*)grab_object( process->console );
+        current->process->console = (struct console_input *)grab_object( process->console );
         current->process->console->num_proc++;
     }
     else
     {
-        set_error( STATUS_INVALID_HANDLE  );
+        set_error( STATUS_INVALID_HANDLE );
     }
 
     release_object( process );
     return;
 
 error:
-    if (reply->std_in) close_handle( current->process, reply->std_in);
-    if (reply->std_out) close_handle( current->process, reply->std_out);
+    if (reply->std_in) close_handle( current->process, reply->std_in );
+    if (reply->std_out) close_handle( current->process, reply->std_out );
     release_object( process );
 }
 

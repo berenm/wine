@@ -209,7 +209,7 @@ NTSTATUS WINAPI PNP_AddDevice(DRIVER_OBJECT *driver, DEVICE_OBJECT *PDO)
     return STATUS_SUCCESS;
 }
 
-NTSTATUS PNP_RemoveDevice(minidriver *minidriver, DEVICE_OBJECT *device, IRP* irp)
+NTSTATUS PNP_RemoveDevice(minidriver *minidriver, DEVICE_OBJECT *device, IRP *irp)
 {
     hid_device *hiddev;
     NTSTATUS rc = STATUS_NOT_SUPPORTED;
@@ -217,7 +217,7 @@ NTSTATUS PNP_RemoveDevice(minidriver *minidriver, DEVICE_OBJECT *device, IRP* ir
     if (irp)
         rc = minidriver->PNPDispatch(device, irp);
     HID_DeleteDevice(&minidriver->minidriver, device);
-    LIST_FOR_EACH_ENTRY(hiddev, &minidriver->device_list, hid_device, entry)
+    LIST_FOR_EACH_ENTRY(hiddev,  &minidriver->device_list, hid_device, entry)
     {
         if (hiddev->device == device)
         {

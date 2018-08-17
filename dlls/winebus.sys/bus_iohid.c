@@ -135,7 +135,7 @@ static void handle_IOHIDDeviceIOHIDReportCallback(void *context,
         uint32_t reportID, uint8_t *report, CFIndex report_length)
 {
     DEVICE_OBJECT *device = (DEVICE_OBJECT*)context;
-    process_hid_report(device, report, report_length, TRUE);
+    process_hid_report(device, report, report_length);
 }
 
 static int compare_platform_device(DEVICE_OBJECT *device, void *platform_dev)
@@ -295,7 +295,7 @@ static void handle_DeviceMatchingCallback(void *context, IOReturn result, void *
     pid = CFNumberToDWORD(IOHIDDeviceGetProperty(IOHIDDevice, CFSTR(kIOHIDProductIDKey)));
     version = CFNumberToDWORD(IOHIDDeviceGetProperty(IOHIDDevice, CFSTR(kIOHIDVersionNumberKey)));
     str = IOHIDDeviceGetProperty(IOHIDDevice, CFSTR(kIOHIDSerialNumberKey));
-    if (str) CFStringToWSTR(str, serial_string, sizeof(serial_string) / sizeof(WCHAR));
+    if (str) CFStringToWSTR(str, serial_string, ARRAY_SIZE(serial_string));
 
     if (IOHIDDeviceConformsTo(IOHIDDevice, kHIDPage_GenericDesktop, kHIDUsage_GD_GamePad) ||
        IOHIDDeviceConformsTo(IOHIDDevice, kHIDPage_GenericDesktop, kHIDUsage_GD_Joystick))

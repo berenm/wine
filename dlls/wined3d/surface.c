@@ -176,6 +176,7 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
 
         default:
             FIXME("Unsupported filter mode %s (%#x).\n", debug_d3dtexturefiltertype(filter), filter);
+            /* fall through */
         case WINED3D_TEXF_NONE:
         case WINED3D_TEXF_POINT:
             gl_filter = GL_NEAREST;
@@ -799,6 +800,25 @@ static void convert_yuy2_r5g6b5(const BYTE *src, BYTE *dst,
     }
 }
 
+static void convert_x8r8g8b8_l8(const BYTE *src, BYTE *dst,
+        DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
+{
+    unsigned int x, y;
+
+    TRACE("Converting %ux%u pixels, pitches %u %u.\n", w, h, pitch_in, pitch_out);
+
+    for (y = 0; y < h; ++y)
+    {
+        const DWORD *src_line = (const DWORD *)(src + y * pitch_in);
+        BYTE *dst_line = (BYTE *)(dst + y * pitch_out);
+
+        for (x = 0; x < w; ++x)
+        {
+            dst_line[x] = src_line[x] & 0x000000ff;
+        }
+    }
+}
+
 static void convert_dxt1_a8r8g8b8(const BYTE *src, BYTE *dst,
         DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
 {
@@ -917,25 +937,6 @@ static void convert_x8r8g8b8_dxt5(const BYTE *src, BYTE *dst,
         DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
 {
     wined3d_dxt5_encode(src, dst, pitch_in, pitch_out, WINED3DFMT_B8G8R8X8_UNORM, w, h);
-}
-
-static void convert_x8r8g8b8_l8(const BYTE *src, BYTE *dst,
-        DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
-{
-    unsigned int x, y;
-
-    TRACE("Converting %ux%u pixels, pitches %u %u.\n", w, h, pitch_in, pitch_out);
-
-    for (y = 0; y < h; ++y)
-    {
-        const DWORD *src_line = (const DWORD *)(src + y * pitch_in);
-        BYTE *dst_line = (BYTE *)(dst + y * pitch_out);
-
-        for (x = 0; x < w; ++x)
-        {
-            dst_line[x] = src_line[x] & 0x000000ff;
-        }
-    }
 }
 
 struct d3dfmt_converter_desc

@@ -121,6 +121,7 @@ C_ASSERT( sizeof(ARENA_LARGE) % LARGE_ALIGNMENT == 0 );
 /* extra size to add at the end of block for tail checking */
 #define HEAP_TAIL_EXTRA_SIZE(flags) \
     ((flags & HEAP_TAIL_CHECKING_ENABLED) || RUNNING_ON_VALGRIND ? ALIGNMENT : 0)
+
 /* size of the blocks on the free lists */
 #define HEAP_FREELIST_SIZE(index) \
     ((DWORD)(((index) * ALIGNMENT) + HEAP_MIN_DATA_SIZE + sizeof(ARENA_INUSE)))

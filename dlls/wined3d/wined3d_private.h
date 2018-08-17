@@ -1886,6 +1886,8 @@ struct wined3d_context
     DWORD last_swizzle_map : 16; /* MAX_ATTRIBS, 16 */
     DWORD last_was_pshader : 1;
     DWORD last_was_vshader : 1;
+    DWORD last_was_diffuse : 1;
+    DWORD last_was_specular : 1;
     DWORD last_was_normal : 1;
     DWORD namedArraysLoaded : 1;
     DWORD last_was_ffp_blit : 1;
@@ -1893,7 +1895,6 @@ struct wined3d_context
     DWORD last_was_ckey : 1;
     DWORD fog_coord : 1;
     DWORD fog_enabled : 1;
-    DWORD num_untracked_materials : 2;  /* Max value 2 */
     DWORD current : 1;
     DWORD destroyed : 1;
     DWORD valid : 1;
@@ -1918,8 +1919,9 @@ struct wined3d_context
     DWORD transform_feedback_paused : 1;
     DWORD shader_update_mask : 6; /* WINED3D_SHADER_TYPE_COUNT, 6 */
     DWORD clip_distance_mask : 8; /* MAX_CLIP_DISTANCES, 8 */
+    DWORD num_untracked_materials : 2;  /* Max value 2 */
     DWORD last_was_dual_blend : 1;
-    DWORD padding : 8;
+    DWORD padding : 6;
 
     DWORD constant_update_mask;
     DWORD numbered_array_mask;
@@ -3117,6 +3119,8 @@ HRESULT resource_init(struct wined3d_resource *resource, struct wined3d_device *
 void resource_unload(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 BOOL wined3d_resource_allocate_sysmem(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 void wined3d_resource_free_sysmem(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
+const struct wined3d_format *wined3d_resource_get_decompress_format(struct wined3d_resource *resource,
+        const struct wined3d_context *context) DECLSPEC_HIDDEN;
 GLbitfield wined3d_resource_gl_map_flags(DWORD d3d_flags) DECLSPEC_HIDDEN;
 GLenum wined3d_resource_gl_legacy_map_flags(DWORD d3d_flags) DECLSPEC_HIDDEN;
 BOOL wined3d_resource_is_offscreen(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
@@ -4218,6 +4222,7 @@ static inline BOOL shader_is_scalar(const struct wined3d_shader_register *reg)
         case WINED3DSPR_DEPTHOUTGE:
         case WINED3DSPR_DEPTHOUTLE:
         case WINED3DSPR_LOOP:       /* aL */
+        case WINED3DSPR_OUTPOINTID:
         case WINED3DSPR_PREDICATE:  /* p0 */
         case WINED3DSPR_PRIMID:     /* primID */
         case WINED3DSPR_SAMPLEMASK: /* oMask */
@@ -4344,6 +4349,7 @@ extern enum wined3d_format_id pixelformat_for_depth(DWORD depth) DECLSPEC_HIDDEN
 #define WINED3DFMT_FLAG_EXTENSION                   0x00000020
 #define WINED3DFMT_FLAG_FBO_ATTACHABLE              0x00000040
 #define WINED3DFMT_FLAG_FBO_ATTACHABLE_SRGB         0x00000080
+#define WINED3DFMT_FLAG_DECOMPRESS                  0x00000100
 #define WINED3DFMT_FLAG_FLOAT                       0x00000200
 #define WINED3DFMT_FLAG_BUMPMAP                     0x00000400
 #define WINED3DFMT_FLAG_SRGB_READ                   0x00000800
@@ -4415,6 +4421,9 @@ struct wined3d_format
             unsigned int dst_row_pitch, unsigned dst_slice_pitch,
             unsigned int width, unsigned int height, unsigned int depth);
     void (*download)(const BYTE *src, BYTE *dst, unsigned int src_row_pitch, unsigned int src_slice_pitch,
+            unsigned int dst_row_pitch, unsigned dst_slice_pitch,
+            unsigned int width, unsigned int height, unsigned int depth);
+    void (*decompress)(const BYTE *src, BYTE *dst, unsigned int src_row_pitch, unsigned int src_slice_pitch,
             unsigned int dst_row_pitch, unsigned dst_slice_pitch,
             unsigned int width, unsigned int height, unsigned int depth);
 

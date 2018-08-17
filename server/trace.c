@@ -4694,8 +4694,8 @@ static void dump_create_esync_request( const struct create_esync_request *req )
 {
     fprintf( stderr, " access=%08x", req->access );
     fprintf( stderr, ", initval=%d", req->initval );
-    fprintf( stderr, ", flags=%d", req->flags );
     fprintf( stderr, ", type=%d", req->type );
+    fprintf( stderr, ", max=%d", req->max );
     dump_varargs_object_attributes( ", objattr=", cur_size );
 }
 
@@ -4735,6 +4735,11 @@ static void dump_get_esync_fd_reply( const struct get_esync_fd_reply *req )
 
 static void dump_get_esync_apc_fd_request( const struct get_esync_apc_fd_request *req )
 {
+}
+
+static void dump_esync_msgwait_request( const struct esync_msgwait_request *req )
+{
+    fprintf( stderr, " in_msgwait=%d", req->in_msgwait );
 }
 
 static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
@@ -5049,6 +5054,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_open_esync_request,
     (dump_func)dump_get_esync_fd_request,
     (dump_func)dump_get_esync_apc_fd_request,
+    (dump_func)dump_esync_msgwait_request,
 };
 
 static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
@@ -5362,6 +5368,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_create_esync_reply,
     (dump_func)dump_open_esync_reply,
     (dump_func)dump_get_esync_fd_reply,
+    NULL,
     NULL,
 };
 
@@ -5677,6 +5684,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "open_esync",
     "get_esync_fd",
     "get_esync_apc_fd",
+    "esync_msgwait",
 };
 
 static const struct
@@ -5745,6 +5753,8 @@ static const struct
     { "INVALID_LOCK_SEQUENCE",       STATUS_INVALID_LOCK_SEQUENCE },
     { "INVALID_OWNER",               STATUS_INVALID_OWNER },
     { "INVALID_PARAMETER",           STATUS_INVALID_PARAMETER },
+    { "INVALID_PARAMETER_4",         STATUS_INVALID_PARAMETER_4 },
+    { "INVALID_PIPE_STATE",          STATUS_INVALID_PIPE_STATE },
     { "INVALID_READ_MODE",           STATUS_INVALID_READ_MODE },
     { "INVALID_SECURITY_DESCR",      STATUS_INVALID_SECURITY_DESCR },
     { "IO_TIMEOUT",                  STATUS_IO_TIMEOUT },
@@ -5782,6 +5792,7 @@ static const struct
     { "PENDING",                     STATUS_PENDING },
     { "PIPE_BROKEN",                 STATUS_PIPE_BROKEN },
     { "PIPE_BUSY",                   STATUS_PIPE_BUSY },
+    { "PIPE_CLOSING",                STATUS_PIPE_CLOSING },
     { "PIPE_CONNECTED",              STATUS_PIPE_CONNECTED },
     { "PIPE_DISCONNECTED",           STATUS_PIPE_DISCONNECTED },
     { "PIPE_LISTENING",              STATUS_PIPE_LISTENING },

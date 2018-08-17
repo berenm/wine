@@ -1170,7 +1170,7 @@ static void on_select_font(HWND hDlg)
 
 static void init_mime_types(HWND hDlg)
 {
-    char *buf = get_reg_key(config_key, keypath("MIME-types"), "EnableFileAssociations", "Y");
+    char *buf = get_reg_key(config_key, keypath("FileOpenAssociations"), "Enable", "Y");
     int state = IS_OPTION_TRUE(*buf) ? BST_CHECKED : BST_UNCHECKED;
 
     CheckDlgButton(hDlg, IDC_ENABLE_FILE_ASSOCIATIONS, state);
@@ -1185,7 +1185,7 @@ static void update_mime_types(HWND hDlg)
     if (IsDlgButtonChecked(hDlg, IDC_ENABLE_FILE_ASSOCIATIONS) != BST_CHECKED)
         state = "N";
 
-    set_reg_key(config_key, keypath("MIME-types"), "EnableFileAssociations", state);
+    set_reg_key(config_key, keypath("FileOpenAssociations"), "Enable", state);
 }
 
 INT_PTR CALLBACK

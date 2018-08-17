@@ -215,7 +215,6 @@ static void test_CreateNamedPipe(int pipemode)
     test_signaled(hnp);
 
     ret = PeekNamedPipe(hnp, NULL, 0, NULL, &readden, NULL);
-    todo_wine
     ok(!ret && GetLastError() == ERROR_BAD_PIPE, "PeekNamedPipe returned %x (%u)\n",
        ret, GetLastError());
 
@@ -1160,7 +1159,7 @@ static DWORD CALLBACK serverThreadMain4(LPVOID arg)
         SetLastError(ERROR_SUCCESS);
         success = WriteFile(hnp, buf, readden, &written, &oWrite);
         err = GetLastError();
-        todo_wine_if (!success && err == ERROR_PIPE_NOT_CONNECTED) ok(!success && err == ERROR_NO_DATA,
+        ok(!success && err == ERROR_NO_DATA,
             "overlapped WriteFile on disconnected pipe returned %u, err=%i\n", success, err);
 
         /* No completion status is queued on immediate error. */
@@ -1459,6 +1458,11 @@ static int test_DisconnectNamedPipe(void)
         ok(DisconnectNamedPipe(hnp), "DisconnectNamedPipe while messages waiting\n");
         ok(WriteFile(hFile, obuf, sizeof(obuf), &written, NULL) == 0
             && GetLastError() == ERROR_PIPE_NOT_CONNECTED, "WriteFile to disconnected pipe\n");
+        ok(WriteFile(hnp, obuf, sizeof(obuf), &written, NULL) == 0
+            && GetLastError() == ERROR_PIPE_NOT_CONNECTED, "WriteFile to disconnected pipe\n");
+        ok(ReadFile(hFile, ibuf, sizeof(ibuf), &readden, NULL) == 0
+            && GetLastError() == ERROR_PIPE_NOT_CONNECTED,
+            "ReadFile from disconnected pipe with bytes waiting\n");
         ok(ReadFile(hnp, ibuf, sizeof(ibuf), &readden, NULL) == 0
             && GetLastError() == ERROR_PIPE_NOT_CONNECTED,
             "ReadFile from disconnected pipe with bytes waiting\n");
@@ -1473,7 +1477,6 @@ static int test_DisconnectNamedPipe(void)
         ok(!ret && GetLastError() == ERROR_PIPE_NOT_CONNECTED, "PeekNamedPipe returned %x (%u)\n",
            ret, GetLastError());
         ret = PeekNamedPipe(hnp, NULL, 0, NULL, &readden, NULL);
-        todo_wine
         ok(!ret && GetLastError() == ERROR_BAD_PIPE, "PeekNamedPipe returned %x (%u)\n",
            ret, GetLastError());
         ok(CloseHandle(hFile), "CloseHandle\n");
@@ -1617,7 +1620,7 @@ static void test_CloseHandle(void)
     SetLastError(0xdeadbeef);
     ret = WriteFile(hfile, testdata, sizeof(testdata), &numbytes, NULL);
     ok(!ret, "WriteFile unexpectedly succeeded\n");
-    todo_wine ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
+    ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
 
     CloseHandle(hfile);
 
@@ -1662,7 +1665,7 @@ static void test_CloseHandle(void)
     SetLastError(0xdeadbeef);
     ret = WriteFile(hfile, testdata, sizeof(testdata), &numbytes, NULL);
     ok(!ret, "WriteFile unexpectedly succeeded\n");
-    todo_wine ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
+    ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
 
     CloseHandle(hfile);
 
@@ -1727,7 +1730,7 @@ static void test_CloseHandle(void)
     SetLastError(0xdeadbeef);
     ret = WriteFile(hpipe, testdata, sizeof(testdata), &numbytes, NULL);
     ok(!ret, "WriteFile unexpectedly succeeded\n");
-    todo_wine ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
+    ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
 
     CloseHandle(hpipe);
 
@@ -1772,7 +1775,7 @@ static void test_CloseHandle(void)
     SetLastError(0xdeadbeef);
     ret = WriteFile(hpipe, testdata, sizeof(testdata), &numbytes, NULL);
     ok(!ret, "WriteFile unexpectedly succeeded\n");
-    todo_wine ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
+    ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
 
     CloseHandle(hpipe);
 }

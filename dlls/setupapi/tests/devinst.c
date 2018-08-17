@@ -28,6 +28,7 @@
 #include "winreg.h"
 #include "guiddef.h"
 #include "setupapi.h"
+#include "cfgmgr32.h"
 
 #include "wine/test.h"
 
@@ -1359,26 +1360,78 @@ static void testSetupDiGetINFClassA(void)
     }
 }
 
-static void testSetupDiGetClassDevsA(void)
+static void test_devnode(void)
 {
-    static GUID displayguid = {0x4d36e968, 0xe325, 0x11ce, {0xbf,0xc1,0x08,0x00,0x2b,0xe1,0x03,0x18}};
-    SP_DEVINFO_DATA devinfo;
-    DISPLAY_DEVICEA disp;
     HDEVINFO set;
-    BOOL ret;
+    SP_DEVINFO_DATA device = { sizeof(SP_DEVINFO_DATA) };
+    char buffer[50];
+    DWORD ret;
 
-    disp.cb = sizeof(disp);
-    ok(EnumDisplayDevicesA(NULL, 0, &disp, 0), "EnumDisplayDevices failed: %08x\n", GetLastError());
+    set = SetupDiGetClassDevsA(&guid, NULL, NULL, DIGCF_DEVICEINTERFACE);
+    ok(set != INVALID_HANDLE_VALUE, "SetupDiGetClassDevs failed: %#x\n", GetLastError());
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0000", &guid, NULL,
+        NULL, 0, &device);
+    ok(ret, "SetupDiCreateDeviceInfo failed: %#x\n", GetLastError());
 
-    SetLastError(0xdeadbeef);
-    set = pSetupDiGetClassDevsA(&displayguid, disp.DeviceID, 0, 0);
-    ok(set != INVALID_HANDLE_VALUE, "SetupDiGetClassDevsA failed: %08x\n", GetLastError());
+    ret = CM_Get_Device_IDA(device.DevInst, buffer, sizeof(buffer), 0);
+    ok(!ret, "got %#x\n", ret);
+    ok(!strcmp(buffer, "ROOT\\LEGACY_BOGUS\\0000"), "got %s\n", buffer);
 
-    devinfo.cbSize = sizeof(devinfo);
-    ret = SetupDiEnumDeviceInfo(set, 0, &devinfo);
-    ok(ret, "SetupDiEnumDeviceInfo failed: %08x\n", GetLastError());
+    SetupDiDestroyDeviceInfoList(set);
+}
 
-    pSetupDiDestroyDeviceInfoList(set);
+static void test_device_interface_key(void)
+{
+    const char keypath[] = "System\\CurrentControlSet\\Control\\DeviceClasses\\"
+        "{6a55b5a4-3f65-11db-b704-0011955c2bdb}\\"
+        "##?#ROOT#LEGACY_BOGUS#0001#{6a55b5a4-3f65-11db-b704-0011955c2bdb}";
+    SP_DEVICE_INTERFACE_DATA iface = { sizeof(iface) };
+    SP_DEVINFO_DATA devinfo = { sizeof(devinfo) };
+    HKEY parent, key, dikey;
+    char buffer[5];
+    HDEVINFO set;
+    LONG sz, ret;
+
+    set = SetupDiGetClassDevsA(NULL, NULL, 0, DIGCF_ALLCLASSES);
+    ok(set != INVALID_HANDLE_VALUE, "SetupDiGetClassDevs failed: %#x\n", GetLastError());
+
+    ret = SetupDiCreateDeviceInfoA(set, "ROOT\\LEGACY_BOGUS\\0001", &guid, NULL, NULL, 0, &devinfo);
+    ok(ret, "SetupDiCreateDeviceInfo failed: %#x\n", GetLastError());
+
+    ret = SetupDiCreateDeviceInterfaceA(set, &devinfo, &guid, NULL, 0, &iface);
+    ok(ret, "SetupDiCreateDeviceInterface failed: %#x\n", GetLastError());
+
+    ret = RegOpenKeyA(HKEY_LOCAL_MACHINE, keypath, &parent);
+    ok(!ret, "failed to open device parent key: %u\n", ret);
+
+    ret = RegOpenKeyA(parent, "#\\Device Parameters", &key);
+    ok(ret == ERROR_FILE_NOT_FOUND, "key shouldn't exist\n");
+
+    dikey = SetupDiCreateDeviceInterfaceRegKeyA(set, &iface, 0, KEY_ALL_ACCESS, NULL, NULL);
+    ok(dikey != INVALID_HANDLE_VALUE, "got error %u\n", GetLastError());
+
+    ret = RegOpenKeyA(parent, "#\\Device Parameters", &key);
+    ok(!ret, "key should exist: %u\n", ret);
+
+    ret = RegSetValueA(key, NULL, REG_SZ, "test", 5);
+    sz = sizeof(buffer);
+    ret = RegQueryValueA(dikey, NULL, buffer, &sz);
+    ok(!ret, "RegQueryValue failed: %u\n", ret);
+    ok(!strcmp(buffer, "test"), "got wrong data %s\n", buffer);
+
+    RegCloseKey(dikey);
+    RegCloseKey(key);
+
+    ret = SetupDiDeleteDeviceInterfaceRegKey(set, &iface, 0);
+    ok(ret, "got error %u\n", GetLastError());
+
+    ret = RegOpenKeyA(parent, "#\\Device Parameters", &key);
+    ok(ret == ERROR_FILE_NOT_FOUND, "key shouldn't exist\n");
+
+    RegCloseKey(parent);
+    SetupDiRemoveDeviceInterface(set, &iface);
+    SetupDiRemoveDevice(set, &devinfo);
+    SetupDiDestroyDeviceInfoList(set);
 }
 
 START_TEST(devinst)
@@ -1418,5 +1471,6 @@ START_TEST(devinst)
     testDeviceRegistryPropertyA();
     testDeviceRegistryPropertyW();
     testSetupDiGetINFClassA();
-    testSetupDiGetClassDevsA();
+    test_devnode();
+    test_device_interface_key();
 }

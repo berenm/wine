@@ -30,11 +30,9 @@
 # include <sys/poll.h>
 #endif
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#ifdef HAVE_SYS_EVENTFD_H
-# include <sys/eventfd.h>
-#endif
 #ifdef HAVE_SYS_MMAN_H
 # include <sys/mman.h>
 #endif
@@ -50,10 +48,6 @@
 
 #include "ntdll_misc.h"
 #include "esync.h"
-
-#ifndef EFD_SEMAPHORE
-#define EFD_SEMAPHORE 1
-#endif
 
 WINE_DEFAULT_DEBUG_CHANNEL(esync);
 
@@ -114,9 +108,28 @@ static void **shm_addrs;
 static int shm_addrs_size;  /* length of the allocated shm_addrs array */
 static long pagesize;
 
+static NTSTATUS create_esync( enum esync_type type, HANDLE *handle,
+    ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr, int initval, int max );
+
 void esync_init(void)
 {
     struct stat st;
+
+    if (!do_esync())
+    {
+        /* make sure the server isn't running with WINEESYNC */
+        HANDLE handle;
+        NTSTATUS ret;
+
+        ret = create_esync( 0, &handle, 0, NULL, 0, 0 );
+        if (ret != STATUS_NOT_IMPLEMENTED)
+        {
+            ERR("Server is running with WINEESYNC but this process is not, please enable WINEESYNC or restart wineserver.\n");
+            exit(1);
+        }
+
+        return;
+    }
 
     if (stat( wine_get_config_dir(), &st ) == -1)
         ERR("Cannot stat %s\n", wine_get_config_dir());
@@ -127,7 +140,14 @@ void esync_init(void)
         sprintf( shm_name, "/wine-%lx-esync", (unsigned long)st.st_ino );
 
     if ((shm_fd = shm_open( shm_name, O_RDWR, 0644 )) == -1)
-        ERR("Failed to initialize shared memory: %s\n", strerror( errno ));
+    {
+        /* probably the server isn't running with WINEESYNC, tell the user and bail */
+        if (errno == ENOENT)
+            ERR("Failed to open esync shared memory file; make sure no stale wineserver instances are running without WINEESYNC.\n");
+        else
+            ERR("Failed to initialize shared memory: %s\n", strerror( errno ));
+        exit(1);
+    }
 
     pagesize = sysconf( _SC_PAGESIZE );
 
@@ -194,7 +214,7 @@ static struct esync *add_to_list( HANDLE handle, enum esync_type type, int fd, v
         if (!entry) esync_list[0] = esync_list_initial_block;
         else
         {
-            void *ptr = wine_anon_mmap( NULL, ESYNC_LIST_BLOCK_SIZE * sizeof(struct esync *),
+            void *ptr = wine_anon_mmap( NULL, ESYNC_LIST_BLOCK_SIZE * sizeof(struct esync),
                                         PROT_READ | PROT_WRITE, 0 );
             if (ptr == MAP_FAILED) return FALSE;
             esync_list[entry] = ptr;
@@ -300,7 +320,7 @@ NTSTATUS esync_close( HANDLE handle )
 }
 
 static NTSTATUS create_esync( enum esync_type type, HANDLE *handle,
-    ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr, int initval, int flags )
+    ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr, int initval, int max )
 {
     NTSTATUS ret;
     data_size_t len;
@@ -319,8 +339,8 @@ static NTSTATUS create_esync( enum esync_type type, HANDLE *handle,
     {
         req->access  = access;
         req->initval = initval;
-        req->flags   = flags;
         req->type    = type;
+        req->max     = max;
         wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
         if (!ret || ret == STATUS_OBJECT_NAME_EXISTS)
@@ -385,60 +405,21 @@ static NTSTATUS open_esync( enum esync_type type, HANDLE *handle,
     return ret;
 }
 
-RTL_CRITICAL_SECTION shm_init_section;
-static RTL_CRITICAL_SECTION_DEBUG critsect_debug =
-{
-    0, 0, &shm_init_section,
-    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": shm_init_section") }
-};
-RTL_CRITICAL_SECTION shm_init_section = { &critsect_debug, -1, 0, 0, 0, 0 };
-
 NTSTATUS esync_create_semaphore(HANDLE *handle, ACCESS_MASK access,
     const OBJECT_ATTRIBUTES *attr, LONG initial, LONG max)
 {
-    NTSTATUS ret;
-
     TRACE("name %s, initial %d, max %d.\n",
         attr ? debugstr_us(attr->ObjectName) : "<no name>", initial, max);
 
-    /* We need this lock to protect against a potential (though unlikely) race:
-     * if a different process tries to open a named object and manages to use
-     * it between the time we get back from the server and the time we
-     * initialize the shared memory, it'll have uninitialized values for the
-     * object's state. That requires us to be REALLY slow, but we're not taking
-     * any chances. Synchronize on the CS here so that we're sure to be ready
-     * before anyone else can open the object. */
-    RtlEnterCriticalSection( &shm_init_section );
-
-    ret = create_esync( ESYNC_SEMAPHORE, handle, access, attr, initial, EFD_SEMAPHORE );
-    if (!ret)
-    {
-        /* Initialize the shared memory portion.
-         * Note we store max here (even though we don't need to) just to keep
-         * it the same size as the mutex's shm portion. */
-        struct esync *obj = get_cached_object( *handle );
-        struct semaphore *semaphore = obj->shm;
-        semaphore->max = max;
-        semaphore->count = initial;
-    }
-
-    RtlLeaveCriticalSection( &shm_init_section );
-
-    return ret;
+    return create_esync( ESYNC_SEMAPHORE, handle, access, attr, initial, max );
 }
 
 NTSTATUS esync_open_semaphore( HANDLE *handle, ACCESS_MASK access,
     const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
-
     TRACE("name %s.\n", debugstr_us(attr->ObjectName));
 
-    RtlEnterCriticalSection( &shm_init_section );
-    ret = open_esync( ESYNC_SEMAPHORE, handle, access, attr );
-    RtlLeaveCriticalSection( &shm_init_section );
-    return ret;
+    return open_esync( ESYNC_SEMAPHORE, handle, access, attr );
 }
 
 NTSTATUS esync_release_semaphore( HANDLE handle, ULONG count, ULONG *prev )
@@ -504,41 +485,20 @@ NTSTATUS esync_create_event( HANDLE *handle, ACCESS_MASK access,
     const OBJECT_ATTRIBUTES *attr, EVENT_TYPE event_type, BOOLEAN initial )
 {
     enum esync_type type = (event_type == SynchronizationEvent ? ESYNC_AUTO_EVENT : ESYNC_MANUAL_EVENT);
-    NTSTATUS ret;
 
     TRACE("name %s, %s-reset, initial %d.\n",
         attr ? debugstr_us(attr->ObjectName) : "<no name>",
         event_type == NotificationEvent ? "manual" : "auto", initial);
 
-    RtlEnterCriticalSection( &shm_init_section );
-
-    ret = create_esync( type, handle, access, attr, initial, 0 );
-
-    if (!ret)
-    {
-        /* Initialize the shared memory portion. */
-        struct esync *obj = get_cached_object( *handle );
-        struct event *event = obj->shm;
-        event->signaled = initial;
-        event->locked = 0;
-    }
-
-    RtlLeaveCriticalSection( &shm_init_section );
-
-    return ret;
+    return create_esync( type, handle, access, attr, initial, 0 );
 }
 
 NTSTATUS esync_open_event( HANDLE *handle, ACCESS_MASK access,
     const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
-
     TRACE("name %s.\n", debugstr_us(attr->ObjectName));
 
-    RtlEnterCriticalSection( &shm_init_section );
-    ret = open_esync( ESYNC_AUTO_EVENT, handle, access, attr ); /* doesn't matter which */
-    RtlLeaveCriticalSection( &shm_init_section );
-    return ret;
+    return open_esync( ESYNC_AUTO_EVENT, handle, access, attr ); /* doesn't matter which */
 }
 
 static inline void small_pause(void)
@@ -625,7 +585,7 @@ NTSTATUS esync_set_event( HANDLE handle )
 
 NTSTATUS esync_reset_event( HANDLE handle )
 {
-    static uint64_t value;
+    uint64_t value;
     struct esync *obj;
     struct event *event;
     NTSTATUS ret;
@@ -654,7 +614,7 @@ NTSTATUS esync_reset_event( HANDLE handle )
 
 NTSTATUS esync_pulse_event( HANDLE handle )
 {
-    static uint64_t value = 1;
+    uint64_t value = 1;
     struct esync *obj;
     NTSTATUS ret;
 
@@ -702,39 +662,18 @@ NTSTATUS esync_query_event( HANDLE handle, EVENT_INFORMATION_CLASS class,
 NTSTATUS esync_create_mutex( HANDLE *handle, ACCESS_MASK access,
     const OBJECT_ATTRIBUTES *attr, BOOLEAN initial )
 {
-    NTSTATUS ret;
-
     TRACE("name %s, initial %d.\n",
         attr ? debugstr_us(attr->ObjectName) : "<no name>", initial);
 
-    RtlEnterCriticalSection( &shm_init_section );
-
-    ret = create_esync( ESYNC_MUTEX, handle, access, attr, initial ? 0 : 1, 0 );
-    if (!ret)
-    {
-        /* Initialize the shared memory portion. */
-        struct esync *obj = get_cached_object( *handle );
-        struct mutex *mutex = obj->shm;
-        mutex->tid = initial ? GetCurrentThreadId() : 0;
-        mutex->count = initial ? 1 : 0;
-    }
-
-    RtlLeaveCriticalSection( &shm_init_section );
-
-    return ret;
+    return create_esync( ESYNC_MUTEX, handle, access, attr, initial ? 0 : 1, 0 );
 }
 
 NTSTATUS esync_open_mutex( HANDLE *handle, ACCESS_MASK access,
     const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
-
     TRACE("name %s.\n", debugstr_us(attr->ObjectName));
 
-    RtlEnterCriticalSection( &shm_init_section );
-    ret = open_esync( ESYNC_MUTEX, handle, access, attr );
-    RtlLeaveCriticalSection( &shm_init_section );
-    return ret;
+    return open_esync( ESYNC_MUTEX, handle, access, attr );
 }
 
 NTSTATUS esync_release_mutex( HANDLE *handle, LONG *prev )
@@ -873,8 +812,8 @@ static void update_grabbed_object( struct esync *obj )
 
 /* A value of STATUS_NOT_IMPLEMENTED returned from this function means that we
  * need to delegate to server_select(). */
-NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
-                             BOOLEAN alertable, const LARGE_INTEGER *timeout )
+static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles,
+    BOOLEAN wait_any, BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
     static const LARGE_INTEGER zero = {0};
 
@@ -937,22 +876,11 @@ NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_an
 
     if (objs[count - 1] && objs[count - 1]->type == ESYNC_QUEUE)
     {
-        select_op_t select_op;
-
         /* Last object in the list is a queue, which means someone is using
          * MsgWaitForMultipleObjects(). We have to wait not only for the server
          * fd (signaled on send_message, etc.) but also the USER driver's fd
          * (signaled on e.g. X11 events.) */
         msgwait = TRUE;
-
-        /* We need to let the server know we are doing a message wait, for two
-         * reasons. First one is WaitForInputIdle(). Second one is checking for
-         * hung queues. Do it like this. */
-        select_op.wait.op = SELECT_WAIT;
-        select_op.wait.handles[0] = wine_server_obj_handle( handles[count - 1] );
-        ret = server_select( &select_op, offsetof( select_op_t, wait.handles[1] ), 0, &zero );
-        if (ret != STATUS_WAIT_0 && ret != STATUS_TIMEOUT)
-            ERR("Unexpected ret %#x\n", ret);
     }
 
     if (has_esync && has_server)
@@ -1321,6 +1249,44 @@ userapc:
      * before we got SIGUSR1. poll() doesn't return EINTR in that case. The
      * right thing to do seems to be to return STATUS_USER_APC anyway. */
     if (ret == STATUS_TIMEOUT) ret = STATUS_USER_APC;
+    return ret;
+}
+
+/* We need to let the server know when we are doing a message wait, and when we
+ * are done with one, so that all of the code surrounding hung queues works.
+ * We also need this for WaitForInputIdle(). */
+static void server_set_msgwait( int in_msgwait )
+{
+    SERVER_START_REQ( esync_msgwait )
+    {
+        req->in_msgwait = in_msgwait;
+        wine_server_call( req );
+    }
+    SERVER_END_REQ;
+}
+
+/* This is a very thin wrapper around the proper implementation above. The
+ * purpose is to make sure the server knows when we are doing a message wait.
+ * This is separated into a wrapper function since there are at least a dozen
+ * exit paths from esync_wait_objects(). */
+NTSTATUS esync_wait_objects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,
+                             BOOLEAN alertable, const LARGE_INTEGER *timeout )
+{
+    BOOL msgwait = FALSE;
+    struct esync *obj;
+    NTSTATUS ret;
+
+    if (!get_object( handles[count - 1], &obj ) && obj->type == ESYNC_QUEUE)
+    {
+        msgwait = TRUE;
+        server_set_msgwait( 1 );
+    }
+
+    ret = __esync_wait_objects( count, handles, wait_any, alertable, timeout );
+
+    if (msgwait)
+        server_set_msgwait( 0 );
+
     return ret;
 }
 
