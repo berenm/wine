@@ -885,8 +885,8 @@ NTSTATUS WINAPI NtCreateThread( HANDLE *handle_ptr, ACCESS_MASK access, OBJECT_A
         entry = (LPTHREAD_START_ROUTINE) context->R0;
         arg = (void *)context->R1;
 #elif defined(__aarch64__)
-        entry = (LPTHREAD_START_ROUTINE) context->u.s.X0;
-        arg = (void *)context->u.s.X1;
+        entry = (LPTHREAD_START_ROUTINE) context->u.X0;
+        arg = (void *)context->u.X1;
 #elif defined(__powerpc__)
         entry = (LPTHREAD_START_ROUTINE) context->Gpr3;
         arg = (void *)context->Gpr4;
@@ -955,7 +955,11 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, const SECURITY_DESCRIPTOR *
         context.Gpr4 = (DWORD)arg;
 #endif
 
+#if defined(__i386__) || defined(__x86_64__)
         return __syscall_NtCreateThread(handle_ptr, (ACCESS_MASK)0, NULL, process, id, &context, NULL, suspended);
+#else
+        return NtCreateThread(handle_ptr, (ACCESS_MASK)0, NULL, process, id, &context, NULL, suspended);
+#endif
     }
     else
     {
@@ -973,7 +977,11 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, const SECURITY_DESCRIPTOR *
             pattr_list = &attr_list;
         }
 
+#if defined(__i386__) || defined(__x86_64__)
         return __syscall_NtCreateThreadEx(handle_ptr, (ACCESS_MASK)0, NULL, process, (LPTHREAD_START_ROUTINE)entry, arg, flags, 0, stack_commit, stack_reserve, pattr_list);
+#else
+        return NtCreateThreadEx(handle_ptr, (ACCESS_MASK)0, NULL, process, (LPTHREAD_START_ROUTINE)entry, arg, flags, 0, stack_commit, stack_reserve, pattr_list);
+#endif
     }
 }
 
