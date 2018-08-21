@@ -57,7 +57,7 @@ int do_esync(void)
     static int do_esync_cached = -1;
 
     if (do_esync_cached == -1)
-        do_esync_cached = (getenv("WINEESYNC") != NULL);
+        do_esync_cached = getenv("WINEESYNC") && atoi(getenv("WINEESYNC"));
 
     return do_esync_cached;
 #else
@@ -627,6 +627,11 @@ NTSTATUS esync_pulse_event( HANDLE handle )
      * used (and publicly deprecated). */
     if (write( obj->fd, &value, sizeof(value) ) == -1)
         return FILE_GetNtStatus();
+
+    /* Try to give other threads a chance to wake up. Hopefully erring on this
+     * side is the better thing to do... */
+    NtYieldExecution();
+
     read( obj->fd, &value, sizeof(value) );
 
     return STATUS_SUCCESS;
