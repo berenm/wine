@@ -632,6 +632,34 @@ static inline void inc_window_paint_count( struct window *win, int incr )
     if (win->thread) inc_queue_paint_count( win->thread, incr );
 }
 
+/* map a point between different DPI scaling levels */
+static void map_dpi_point( struct window *win, int *x, int *y, unsigned int from, unsigned int to )
+{
+    if (!from) from = get_monitor_dpi( win );
+    if (!to) to = get_monitor_dpi( win );
+    if (from == to) return;
+    *x = scale_dpi( *x, from, to );
+    *y = scale_dpi( *y, from, to );
+}
+
+/* map a window rectangle between different DPI scaling levels */
+static void map_dpi_rect( struct window *win, rectangle_t *rect, unsigned int from, unsigned int to )
+{
+    if (!from) from = get_monitor_dpi( win );
+    if (!to) to = get_monitor_dpi( win );
+    if (from == to) return;
+    scale_dpi_rect( rect, from, to );
+}
+
+/* map a region between different DPI scaling levels */
+static void map_dpi_region( struct window *win, struct region *region, unsigned int from, unsigned int to )
+{
+    if (!from) from = get_monitor_dpi( win );
+    if (!to) to = get_monitor_dpi( win );
+    if (from == to) return;
+    scale_region( region, from, to );
+}
+
 /* check if window and all its ancestors are visible */
 static int is_visible( const struct window *win )
 {
@@ -1374,7 +1402,7 @@ static void validate_parents( struct window *child )
 /* add/subtract a region (in client coordinates) to the update region of the window */
 static void redraw_window( struct window *win, struct region *region, int frame, unsigned int flags )
 {
-    struct region *tmp;
+    struct region *child_rgn, *tmp;
     struct window *child;
 
     if (flags & RDW_INVALIDATE)
@@ -1436,11 +1464,19 @@ static void redraw_window( struct window *win, struct region *region, int frame,
     LIST_FOR_EACH_ENTRY( child, &win->children, struct window, entry )
     {
         if (!(child->style & WS_VISIBLE)) continue;
-        if (!rect_in_region( tmp, &child->window_rect )) continue;
-        offset_region( tmp, -child->client_rect.left, -child->client_rect.top );
-        redraw_window( child, tmp, 1, flags );
-        offset_region( tmp, child->client_rect.left, child->client_rect.top );
+        if (!(child_rgn = create_empty_region())) continue;
+        if (copy_region( child_rgn, tmp ))
+        {
+            map_dpi_region( child, child_rgn, win->dpi, child->dpi );
+            if (rect_in_region( child_rgn, &child->window_rect ))
+            {
+                offset_region( child_rgn, -child->client_rect.left, -child->client_rect.top );
+                redraw_window( child, child_rgn, 1, flags );
+            }
+        }
+        free_region( child_rgn );
     }
+
     free_region( tmp );
 }
 
@@ -2363,6 +2399,8 @@ DECL_HANDLER(get_window_rectangles)
         set_error( STATUS_INVALID_PARAMETER );
         break;
     }
+    map_dpi_rect( win, &reply->window, win->dpi, req->dpi );
+    map_dpi_rect( win, &reply->client, win->dpi, req->dpi );
 }
 
 
@@ -2404,38 +2442,30 @@ DECL_HANDLER(set_window_text)
 DECL_HANDLER(get_windows_offset)
 {
     struct window *win;
-    int mirror_from = 0, mirror_to = 0;
+    int x, y, mirror_from = 0, mirror_to = 0;
 
     reply->x = reply->y = 0;
     if (req->from)
     {
         if (!(win = get_window( req->from ))) return;
-        if (win->ex_style & WS_EX_LAYOUTRTL)
-        {
-            mirror_from = 1;
-            reply->x += win->client_rect.right - win->client_rect.left;
-        }
-        while (win && !is_desktop_window(win))
-        {
-            reply->x += win->client_rect.left;
-            reply->y += win->client_rect.top;
-            win = win->parent;
-        }
+        if (win->ex_style & WS_EX_LAYOUTRTL) mirror_from = 1;
+        x = mirror_from ? win->client_rect.right - win->client_rect.left : 0;
+        y = 0;
+        client_to_screen( win, &x, &y );
+        map_dpi_point( win, &x, &y, win->dpi, req->dpi );
+        reply->x += x;
+        reply->y += y;
     }
     if (req->to)
     {
         if (!(win = get_window( req->to ))) return;
-        if (win->ex_style & WS_EX_LAYOUTRTL)
-        {
-            mirror_to = 1;
-            reply->x -= win->client_rect.right - win->client_rect.left;
-        }
-        while (win && !is_desktop_window(win))
-        {
-            reply->x -= win->client_rect.left;
-            reply->y -= win->client_rect.top;
-            win = win->parent;
-        }
+        if (win->ex_style & WS_EX_LAYOUTRTL) mirror_to = 1;
+        x = mirror_to ? win->client_rect.right - win->client_rect.left : 0;
+        y = 0;
+        client_to_screen( win, &x, &y );
+        map_dpi_point( win, &x, &y, win->dpi, req->dpi );
+        reply->x -= x;
+        reply->y -= y;
     }
     if (mirror_from) reply->x = -reply->x;
     reply->mirror = mirror_from ^ mirror_to;

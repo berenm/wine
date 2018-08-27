@@ -69,20 +69,28 @@ SVG_SRCS = \
 	resources/desktop.svg \
 	resources/document.svg \
 	resources/drive.svg \
+	resources/eject.svg \
 	resources/floppy.svg \
 	resources/folder.svg \
 	resources/folder_open.svg \
+	resources/help.svg \
 	resources/ietoolbar.svg \
 	resources/ietoolbar_small.svg \
 	resources/internet.svg \
+	resources/menu.svg \
 	resources/mycomputer.svg \
 	resources/mydocs.svg \
 	resources/netdrive.svg \
 	resources/netdrive2.svg \
 	resources/network.svg \
+	resources/optical_disc.svg \
 	resources/printer.svg \
 	resources/ramdisk.svg \
 	resources/recent.svg \
+	resources/search.svg \
 	resources/shortcut.svg \
+	resources/shut_down.svg \
+	resources/sleep.svg \
 	resources/trash_file.svg \
+	resources/trash_full.svg \
 	resources/window.svg

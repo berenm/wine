@@ -2694,19 +2694,14 @@ static void CRYPT_VerifyChainRevocation(PCERT_CHAIN_CONTEXT chain,
                     revocationPara.pIssuerCert =
                      chain->rgpChain[i]->rgpElement[j + 1]->pCertContext;
                 else
-                    revocationPara.pIssuerCert = certToCheck;
-
+                    revocationPara.pIssuerCert = NULL;
                 ret = CertVerifyRevocation(X509_ASN_ENCODING,
                  CERT_CONTEXT_REVOCATION_TYPE, 1, (void **)&certToCheck,
                  revocationFlags, &revocationPara, &revocationStatus);
 
-                if (!ret && revocationStatus.dwError == CRYPT_E_NO_REVOCATION_CHECK &&
-                    revocationPara.pIssuerCert == certToCheck)
-                {
-                    FIXME("Unable to find CRL for CA certificate\n");
+                if (!ret && chainFlags & CERT_CHAIN_REVOCATION_CHECK_CHAIN
+                    && revocationStatus.dwError == CRYPT_E_NO_REVOCATION_CHECK && revocationPara.pIssuerCert == NULL)
                     ret = TRUE;
-                    revocationStatus.dwError = 0;
-                }
 
                 if (!ret)
                 {
