@@ -1203,7 +1203,6 @@ wine_patch_data[] =
     { "Michael Müller", "server: Implement support for global and local shared memory blocks based on memfd.", 1 },
     { "Michael Müller", "server: Implement token elevation information.", 1 },
     { "Michael Müller", "server: Implement token integrity level.", 1 },
-    { "Michael Müller", "server: Improve handling of hooks for normal (non-injected) hardware messages.", 1 },
     { "Michael Müller", "server: Register types during startup.", 1 },
     { "Michael Müller", "server: Rename ObjectType to Type.", 1 },
     { "Michael Müller", "setupapi: Add spec file stub entry for SetupDiInstallDeviceInterfaces and SetupDiRegisterCoDeviceInstallers.", 1 },
