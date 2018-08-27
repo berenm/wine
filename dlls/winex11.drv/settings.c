@@ -345,6 +345,7 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
     DWORD i, mode, dwBpp = 0;
     DEVMODEW dm;
     BOOL def_mode = TRUE;
+    char bpp_buffer[16], freq_buffer[18];
 
     TRACE("(%s,%p,%p,0x%08x,%p)\n",debugstr_w(devname),devmode,hwnd,flags,lpvoid);
     TRACE("flags=%s\n",_CDS_flags(flags));
@@ -429,10 +430,14 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
 
     if (mode == ENUM_CURRENT_SETTINGS)
     {
-        /* no valid modes found */
-        ERR("No matching mode found %ux%ux%u @%u! (%s)\n",
-            devmode->dmPelsWidth, devmode->dmPelsHeight,
-            devmode->dmBitsPerPel, devmode->dmDisplayFrequency, handler_name);
+        /* no valid modes found, only print the fields we were trying to matching against */
+        bpp_buffer[0] = freq_buffer[0] = 0;
+        if (devmode->dmFields & DM_BITSPERPEL)
+            sprintf(bpp_buffer, "bpp=%u ",  devmode->dmBitsPerPel);
+        if ((devmode->dmFields & DM_DISPLAYFREQUENCY) && (devmode->dmDisplayFrequency != 0))
+            sprintf(freq_buffer, "freq=%u ", devmode->dmDisplayFrequency);
+        ERR("No matching mode found: width=%d height=%d %s%s(%s)\n",
+            devmode->dmPelsWidth, devmode->dmPelsHeight, bpp_buffer, freq_buffer, handler_name);
         return DISP_CHANGE_BADMODE;
     }
 

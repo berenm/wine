@@ -948,8 +948,8 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, const SECURITY_DESCRIPTOR *
         context.R0 = (DWORD)entry;
         context.R1 = (DWORD)arg;
 #elif defined(__aarch64__)
-        context.u.s.X0 = (DWORD_PTR)entry;
-        context.u.s.X1 = (DWORD_PTR)arg;
+        context.u.X0 = (DWORD_PTR)entry;
+        context.u.X1 = (DWORD_PTR)arg;
 #elif defined(__powerpc__)
         context.Gpr3 = (DWORD)entry;
         context.Gpr4 = (DWORD)arg;

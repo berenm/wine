@@ -6017,7 +6017,6 @@ static void test_file_security(HANDLE token)
     ok(file != INVALID_HANDLE_VALUE, "CreateFile error %d\n", GetLastError());
 
     access = get_obj_access(file);
-todo_wine
     ok(access == (FILE_READ_ATTRIBUTES | SYNCHRONIZE), "expected FILE_READ_ATTRIBUTES | SYNCHRONIZE, got %#x\n", access);
 
     bytes = 0xdeadbeef;
@@ -6034,7 +6033,6 @@ todo_wine
     ok(file != INVALID_HANDLE_VALUE, "CreateFile error %d\n", GetLastError());
 
     access = get_obj_access(file);
-todo_wine
     ok(access == (FILE_GENERIC_WRITE | FILE_READ_ATTRIBUTES), "expected FILE_GENERIC_WRITE | FILE_READ_ATTRIBUTES, got %#x\n", access);
 
     bytes = 0xdeadbeef;
@@ -6075,7 +6073,6 @@ todo_wine
     ok(file != INVALID_HANDLE_VALUE, "CreateFile error %d\n", GetLastError());
 
     access = get_obj_access(file);
-todo_wine
     ok(access == (FILE_READ_ATTRIBUTES | SYNCHRONIZE), "expected FILE_READ_ATTRIBUTES | SYNCHRONIZE, got %#x\n", access);
 
     CloseHandle(file);
@@ -6085,7 +6082,6 @@ todo_wine
     ok(file != INVALID_HANDLE_VALUE, "CreateFile error %d\n", GetLastError());
 
     access = get_obj_access(file);
-todo_wine
     ok(access == (FILE_GENERIC_WRITE | FILE_READ_ATTRIBUTES), "expected FILE_GENERIC_WRITE | FILE_READ_ATTRIBUTES, got %#x\n", access);
 
     CloseHandle(file);

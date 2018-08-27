@@ -3767,7 +3767,7 @@ struct get_window_rectangles_request
     struct request_header __header;
     user_handle_t  handle;
     int            relative;
-    char __pad_20[4];
+    int            dpi;
 };
 struct get_window_rectangles_reply
 {
@@ -3818,7 +3818,7 @@ struct get_windows_offset_request
     struct request_header __header;
     user_handle_t  from;
     user_handle_t  to;
-    char __pad_20[4];
+    int            dpi;
 };
 struct get_windows_offset_reply
 {
@@ -6940,6 +6940,6 @@ union generic_reply
     struct esync_msgwait_reply esync_msgwait_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 557
+#define SERVER_PROTOCOL_VERSION 559
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */
