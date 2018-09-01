@@ -141,8 +141,19 @@ static void update_mouse_coords( INPUT *input )
 
     if (input->u.mi.dwFlags & MOUSEEVENTF_ABSOLUTE)
     {
-        input->u.mi.dx = (input->u.mi.dx * GetSystemMetrics( SM_CXSCREEN )) >> 16;
-        input->u.mi.dy = (input->u.mi.dy * GetSystemMetrics( SM_CYSCREEN )) >> 16;
+        DPI_AWARENESS_CONTEXT context = SetThreadDpiAwarenessContext( DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE );
+        if (input->u.mi.dwFlags & MOUSEEVENTF_VIRTUALDESK)
+        {
+            RECT rc = get_virtual_screen_rect();
+            input->u.mi.dx = rc.left + ((input->u.mi.dx * (rc.right - rc.left)) >> 16);
+            input->u.mi.dy = rc.top  + ((input->u.mi.dy * (rc.bottom - rc.top)) >> 16);
+        }
+        else
+        {
+            input->u.mi.dx = (input->u.mi.dx * GetSystemMetrics( SM_CXSCREEN )) >> 16;
+            input->u.mi.dy = (input->u.mi.dy * GetSystemMetrics( SM_CYSCREEN )) >> 16;
+        }
+        SetThreadDpiAwarenessContext( context );
     }
     else
     {
@@ -240,6 +251,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetCursorPos( POINT *pt )
 {
     BOOL ret;
     DWORD last_change;
+    UINT dpi;
 
     if (!pt) return FALSE;
 
@@ -256,6 +268,13 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetCursorPos( POINT *pt )
 
     /* query new position from graphics driver if we haven't updated recently */
     if (ret && GetTickCount() - last_change > 100) ret = USER_Driver->pGetCursorPos( pt );
+    if (ret && (dpi = get_thread_dpi()))
+    {
+        DPI_AWARENESS_CONTEXT context;
+        context = SetThreadDpiAwarenessContext( DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE );
+        *pt = map_dpi_point( *pt, get_monitor_dpi( MonitorFromPoint( *pt, MONITOR_DEFAULTTOPRIMARY )), dpi );
+        SetThreadDpiAwarenessContext( context );
+    }
     return ret;
 }
 
@@ -289,14 +308,19 @@ BOOL WINAPI GetCursorInfo( PCURSORINFO pci )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH SetCursorPos( INT x, INT y )
 {
+    POINT pt = { x, y };
     BOOL ret;
     INT prev_x, prev_y, new_x, new_y;
+    UINT dpi;
+
+    if ((dpi = get_thread_dpi()))
+        pt = map_dpi_point( pt, dpi, get_monitor_dpi( MonitorFromPoint( pt, MONITOR_DEFAULTTOPRIMARY )));
 
     SERVER_START_REQ( set_cursor )
     {
         req->flags = SET_CURSOR_POS;
-        req->x     = x;
-        req->y     = y;
+        req->x     = pt.x;
+        req->y     = pt.y;
         if ((ret = !wine_server_call( req )))
         {
             prev_x = reply->prev_x;

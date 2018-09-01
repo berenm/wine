@@ -606,7 +606,7 @@ static void wined3d_cs_exec_clear(struct wined3d_cs *cs, const void *data)
 void wined3d_cs_emit_clear(struct wined3d_cs *cs, DWORD rect_count, const RECT *rects,
         DWORD flags, const struct wined3d_color *color, float depth, DWORD stencil)
 {
-    unsigned int rt_count = cs->device->adapter->gl_info.limits.buffers;
+    unsigned int rt_count = cs->device->adapter->d3d_info.limits.max_rt_count;
     const struct wined3d_state *state = &cs->device->state;
     const struct wined3d_viewport *vp = &state->viewports[0];
     struct wined3d_rendertarget_view *view;
@@ -857,6 +857,7 @@ void wined3d_cs_emit_dispatch_indirect(struct wined3d_cs *cs,
 
 static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
 {
+    const struct wined3d_d3d_info *d3d_info = &cs->device->adapter->d3d_info;
     const struct wined3d_gl_info *gl_info = &cs->device->adapter->gl_info;
     const struct wined3d_shader *geometry_shader;
     struct wined3d_state *state = &cs->state;
@@ -911,7 +912,7 @@ static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
         if (state->textures[i])
             wined3d_resource_release(&state->textures[i]->resource);
     }
-    for (i = 0; i < gl_info->limits.buffers; ++i)
+    for (i = 0; i < d3d_info->limits.max_rt_count; ++i)
     {
         if (state->fb->render_targets[i])
             wined3d_resource_release(state->fb->render_targets[i]->resource);
@@ -924,7 +925,7 @@ static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
 }
 
 static void acquire_graphics_pipeline_resources(const struct wined3d_state *state,
-        BOOL indexed, const struct wined3d_gl_info *gl_info)
+        BOOL indexed, const struct wined3d_d3d_info *d3d_info)
 {
     unsigned int i;
 
@@ -945,7 +946,7 @@ static void acquire_graphics_pipeline_resources(const struct wined3d_state *stat
         if (state->textures[i])
             wined3d_resource_acquire(&state->textures[i]->resource);
     }
-    for (i = 0; i < gl_info->limits.buffers; ++i)
+    for (i = 0; i < d3d_info->limits.max_rt_count; ++i)
     {
         if (state->fb->render_targets[i])
             wined3d_resource_acquire(state->fb->render_targets[i]->resource);
@@ -961,7 +962,7 @@ void wined3d_cs_emit_draw(struct wined3d_cs *cs, GLenum primitive_type, unsigned
         int base_vertex_idx, unsigned int start_idx, unsigned int index_count,
         unsigned int start_instance, unsigned int instance_count, BOOL indexed)
 {
-    const struct wined3d_gl_info *gl_info = &cs->device->adapter->gl_info;
+    const struct wined3d_d3d_info *d3d_info = &cs->device->adapter->d3d_info;
     const struct wined3d_state *state = &cs->device->state;
     struct wined3d_cs_draw *op;
 
@@ -977,7 +978,7 @@ void wined3d_cs_emit_draw(struct wined3d_cs *cs, GLenum primitive_type, unsigned
     op->parameters.u.direct.instance_count = instance_count;
     op->parameters.indexed = indexed;
 
-    acquire_graphics_pipeline_resources(state, indexed, gl_info);
+    acquire_graphics_pipeline_resources(state, indexed, d3d_info);
 
     cs->ops->submit(cs, WINED3D_CS_QUEUE_DEFAULT);
 }
@@ -985,7 +986,7 @@ void wined3d_cs_emit_draw(struct wined3d_cs *cs, GLenum primitive_type, unsigned
 void wined3d_cs_emit_draw_indirect(struct wined3d_cs *cs, GLenum primitive_type, unsigned int patch_vertex_count,
         struct wined3d_buffer *buffer, unsigned int offset, BOOL indexed)
 {
-    const struct wined3d_gl_info *gl_info = &cs->device->adapter->gl_info;
+    const struct wined3d_d3d_info *d3d_info = &cs->device->adapter->d3d_info;
     const struct wined3d_state *state = &cs->device->state;
     struct wined3d_cs_draw *op;
 
@@ -998,7 +999,7 @@ void wined3d_cs_emit_draw_indirect(struct wined3d_cs *cs, GLenum primitive_type,
     op->parameters.u.indirect.offset = offset;
     op->parameters.indexed = indexed;
 
-    acquire_graphics_pipeline_resources(state, indexed, gl_info);
+    acquire_graphics_pipeline_resources(state, indexed, d3d_info);
     wined3d_resource_acquire(&buffer->resource);
 
     cs->ops->submit(cs, WINED3D_CS_QUEUE_DEFAULT);

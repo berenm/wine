@@ -1690,10 +1690,13 @@ BOOL WINAPI TranslateMDISysAccel( HWND hwndClient, LPMSG msg )
  */
 void WINAPI CalcChildScroll( HWND hwnd, INT scroll )
 {
+    DPI_AWARENESS_CONTEXT context;
     SCROLLINFO info;
     RECT childRect, clientRect;
     HWND *list;
     DWORD style;
+
+    context = SetThreadDpiAwarenessContext( GetWindowDpiAwarenessContext( hwnd ));
 
     GetClientRect( hwnd, &clientRect );
     SetRectEmpty( &childRect );
@@ -1750,6 +1753,7 @@ void WINAPI CalcChildScroll( HWND hwnd, INT scroll )
                         }
 			break;
     }
+    SetThreadDpiAwarenessContext( context );
 }
 
 
@@ -1759,10 +1763,12 @@ void WINAPI CalcChildScroll( HWND hwnd, INT scroll )
 void WINAPI ScrollChildren(HWND hWnd, UINT uMsg, WPARAM wParam,
                              LPARAM lParam)
 {
+    DPI_AWARENESS_CONTEXT context;
     INT newPos = -1;
     INT curPos, length, minPos, maxPos, shift;
     RECT rect;
 
+    context = SetThreadDpiAwarenessContext( GetWindowDpiAwarenessContext( hWnd ));
     GetClientRect( hWnd, &rect );
 
     switch(uMsg)
@@ -1780,7 +1786,7 @@ void WINAPI ScrollChildren(HWND hWnd, UINT uMsg, WPARAM wParam,
 	shift = GetSystemMetrics(SM_CXVSCROLL);
         break;
     default:
-        return;
+        goto done;
     }
 
     switch( wParam )
@@ -1803,7 +1809,7 @@ void WINAPI ScrollChildren(HWND hWnd, UINT uMsg, WPARAM wParam,
 			break;
 
 	case SB_THUMBTRACK:
-			return;
+			goto done;
 
 	case SB_TOP:
 			newPos = minPos;
@@ -1813,7 +1819,7 @@ void WINAPI ScrollChildren(HWND hWnd, UINT uMsg, WPARAM wParam,
 			break;
 	case SB_ENDSCROLL:
 			CalcChildScroll(hWnd,(uMsg == WM_VSCROLL)?SB_VERT:SB_HORZ);
-			return;
+			goto done;
     }
 
     if( newPos > maxPos )
@@ -1830,6 +1836,8 @@ void WINAPI ScrollChildren(HWND hWnd, UINT uMsg, WPARAM wParam,
     else
 	ScrollWindowEx(hWnd ,curPos - newPos, 0, NULL, NULL, 0, NULL,
 			SW_INVALIDATE | SW_ERASE | SW_SCROLLCHILDREN );
+done:
+    SetThreadDpiAwarenessContext( context );
 }
 
 
