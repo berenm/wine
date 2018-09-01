@@ -631,7 +631,6 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
     {
         RECT rect;
         SetRect( &rect, pt.x, pt.y, pt.x + 1, pt.y + 1 );
-        MapWindowPoints( 0, hwnd, (POINT *)&rect, 2 );
 
         SERVER_START_REQ( update_window_zorder )
         {
@@ -1793,20 +1792,18 @@ static BOOL X11DRV_RawMotion( XGenericEventCookie *xev )
         }
     }
 
-    // accumulate motion
+    /* Accumulate the *double* dx/dy motions so sub-pixel motions wont be lost
+     * when sent/cast to *LONG* input.u.mi.dx/dy.
+     */
     x_rel->accum += dx;
     y_rel->accum += dy;
-    // test if large enough to cast to integer input.u.mi.dx/dy
-    if (abs(x_rel->accum) < 1.0 && abs(y_rel->accum) < 1.0)
+    if (fabs(x_rel->accum) < 1.0 && fabs(y_rel->accum) < 1.0)
     {
         TRACE( "accumulating raw motion (event %f,%f, accum %f,%f)\n", dx, dy, x_rel->accum, y_rel->accum );
         return TRUE;
     }
-
-    // cast to integer
     input.u.mi.dx = x_rel->accum;
     input.u.mi.dy = y_rel->accum;
-    // remove integer part from accumulator
     x_rel->accum -= input.u.mi.dx;
     y_rel->accum -= input.u.mi.dy;
 

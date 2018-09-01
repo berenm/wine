@@ -1544,8 +1544,8 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
   CMD_LIST *curPosition = *cmdList;
   int myDepth = (*cmdList)->bracketDepth;
 
-  WINE_TRACE("cmdList(%p), firstCmd(%s), doIt(%d)\n", cmdList, wine_dbgstr_w(firstcmd),
-             executecmds);
+  WINE_TRACE("cmdList(%p), firstCmd(%s), doIt(%d), isIF(%d)\n", cmdList,
+                wine_dbgstr_w(firstcmd), executecmds, isIF);
 
   /* Skip leading whitespace between condition and the command */
   while (firstcmd && *firstcmd && (*firstcmd==' ' || *firstcmd=='\t')) firstcmd++;
@@ -1592,7 +1592,8 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
       } else if ((*cmdList)->bracketDepth > myDepth) {
         if (processThese) {
           *cmdList = WCMD_process_commands(*cmdList, TRUE, FALSE);
-          WINE_TRACE("Back from processing commands, (next = %p)\n", *cmdList);
+        } else {
+          WINE_TRACE("Skipping command %p due to stack depth\n", *cmdList);
         }
         if (curPosition == *cmdList) *cmdList = (*cmdList)->nextcommand;
 
@@ -1626,9 +1627,16 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
               processThese = TRUE;
           }
           if (curPosition == *cmdList) *cmdList = (*cmdList)->nextcommand;
+
+        /* If we were in an IF statement and we didnt find an else and yet we get back to
+           the same bracket depth as the IF, then the IF statement is over. This is required
+           to handle nested ifs properly                                                     */
+        } else if (isIF && (*cmdList)->bracketDepth == myDepth) {
+          WINE_TRACE("Found end of this nested IF statement, ending this if\n");
+          break;
         } else if (!processThese) {
           if (curPosition == *cmdList) *cmdList = (*cmdList)->nextcommand;
-          WINE_TRACE("Ignore the next command as well (next = %p)\n", *cmdList);
+          WINE_TRACE("Skipping this command, as in not process mode (next = %p)\n", *cmdList);
         } else {
           WINE_TRACE("Found end of this IF statement (next = %p)\n", *cmdList);
           break;
@@ -2065,7 +2073,7 @@ static HANDLE WCMD_forf_getinputhandle(BOOL usebackq, WCHAR *itemstr, BOOL iscmd
   static const WCHAR redirOutW[]  = {'>','%','s','\0'};
   static const WCHAR cmdW[]       = {'C','M','D','\0'};
   static const WCHAR cmdslashcW[] = {'C','M','D','.','E','X','E',' ',
-                                     '/','C',' ','"','%','s','"','\0'};
+                                     '/','C',' ','%','s','\0'};
 
   /* Remove leading and trailing character */
   if ((iscmd && (itemstr[0] == '`' && usebackq)) ||
@@ -2853,7 +2861,14 @@ void WCMD_if (WCHAR *p, CMD_LIST **cmdList)
   }
   else if (!lstrcmpiW (condition, existW)) {
     WIN32_FIND_DATAW fd;
-    HANDLE hff = FindFirstFileW(WCMD_parameter(p, 1+negate, NULL, FALSE, FALSE), &fd);
+    HANDLE hff;
+    WCHAR *param = WCMD_parameter(p, 1+negate, NULL, FALSE, FALSE);
+    int    len = strlenW(param);
+
+    /* FindFirstFile does not like a directory path ending in '\', append a '.' */
+    if (len && param[len-1] == '\\') strcatW(param, dotW);
+
+    hff = FindFirstFileW(param, &fd);
     test = (hff != INVALID_HANDLE_VALUE );
     if (test) FindClose(hff);
 

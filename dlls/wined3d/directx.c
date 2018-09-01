@@ -73,7 +73,7 @@ UINT64 adapter_adjust_memory(struct wined3d_adapter *adapter, INT64 amount)
 
 static void wined3d_adapter_cleanup(struct wined3d_adapter *adapter)
 {
-    heap_free(adapter->gl_info.formats);
+    heap_free(adapter->formats);
     heap_free(adapter->cfgs);
 }
 
@@ -2201,7 +2201,7 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     caps->AdapterOrdinalInGroup             = 0;
     caps->NumberOfAdaptersInGroup           = 1;
 
-    caps->NumSimultaneousRTs = gl_info->limits.buffers;
+    caps->NumSimultaneousRTs = d3d_info->limits.max_rt_count;
 
     caps->StretchRectFilterCaps               = WINED3DPTFILTERCAPS_MINFPOINT  |
                                                 WINED3DPTFILTERCAPS_MAGFPOINT  |
@@ -2514,6 +2514,9 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int o
     }
     TRACE("Allocated LUID %08x:%08x for adapter %p.\n",
             adapter->luid.HighPart, adapter->luid.LowPart, adapter);
+
+    adapter->formats = NULL;
+    adapter->format_count = 0;
 
     if (wined3d_creation_flags & WINED3D_NO3D)
         return wined3d_adapter_no3d_init(adapter);

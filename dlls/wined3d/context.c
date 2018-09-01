@@ -608,7 +608,7 @@ static struct fbo_entry *context_find_fbo_entry(struct wined3d_context *context,
         }
         else if (depth_stencil->resource->type == WINED3D_RTYPE_TEXTURE_2D)
         {
-            wined3d_texture_set_compatible_renderbuffer(ds_texture, ds_level, &render_targets[0]);
+            wined3d_texture_set_compatible_renderbuffer(ds_texture, context, ds_level, &render_targets[0]);
         }
     }
 
@@ -3690,7 +3690,7 @@ static void context_update_stream_info(struct wined3d_context *context, const st
 
     if (use_vs(state))
     {
-        if (state->vertex_declaration->half_float_conv_needed)
+        if (state->vertex_declaration->have_half_floats && !gl_info->supported[ARB_HALF_FLOAT_VERTEX])
         {
             TRACE("Using immediate mode draw with vertex shaders for FLOAT16 conversion.\n");
             context->use_immediate_mode_draw = TRUE;
