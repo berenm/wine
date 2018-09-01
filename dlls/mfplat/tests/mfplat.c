@@ -266,6 +266,101 @@ static void test_MFSample(void)
     IMFSample_Release(sample);
 }
 
+static void test_MFCreateMFByteStreamOnStream(void)
+{
+    IMFByteStream *bytestream;
+    IStream *stream;
+    HRESULT hr;
+
+    hr = CreateStreamOnHGlobal(NULL, TRUE, &stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = MFCreateMFByteStreamOnStream(stream, &bytestream );
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    IStream_Release(stream);
+    IMFByteStream_Release(bytestream);
+}
+
+static void test_MFCreateMemoryBuffer(void)
+{
+    IMFMediaBuffer *buffer;
+    HRESULT hr;
+    DWORD length, max;
+    BYTE data;
+
+    hr = MFCreateMemoryBuffer(1024, NULL);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+
+    hr = MFCreateMemoryBuffer(0, &buffer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    if(buffer)
+    {
+        hr = IMFMediaBuffer_GetMaxLength(buffer, &length);
+        ok(hr == S_OK, "got 0x%08x\n", hr);
+        ok(length == 0, "got %u\n", length);
+
+        IMFMediaBuffer_Release(buffer);
+    }
+
+    hr = MFCreateMemoryBuffer(1024, &buffer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_GetMaxLength(buffer, NULL);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_GetMaxLength(buffer, &length);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(length == 1024, "got %u\n", length);
+
+    hr = IMFMediaBuffer_SetCurrentLength(buffer, 1025);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_SetCurrentLength(buffer, 10);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer, NULL);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer, &length);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(length == 10, "got %u\n", length);
+
+    length = 0;
+    max = 0;
+    hr = IMFMediaBuffer_Lock(buffer, NULL, &length, &max);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+    ok(length == 0, "got %u\n", length);
+    ok(max == 0, "got %u\n", length);
+
+    hr = IMFMediaBuffer_Lock(buffer, (BYTE**)&data, &max, &length);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(length == 10, "got %u\n", length);
+    ok(max == 1024, "got %u\n", max);
+
+    /* Attempt to lock the bufer twice */
+    hr = IMFMediaBuffer_Lock(buffer, (BYTE**)&data, &max, &length);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_Lock(buffer, (BYTE**)&data, NULL, NULL);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    /* Extra Unlock */
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    IMFMediaBuffer_Release(buffer);
+}
+
 START_TEST(mfplat)
 {
     CoInitialize(NULL);
@@ -277,6 +372,8 @@ START_TEST(mfplat)
     test_MFCreateMediaType();
     test_MFCreateAttributes();
     test_MFSample();
+    test_MFCreateMFByteStreamOnStream();
+    test_MFCreateMemoryBuffer();
 
     CoUninitialize();
 }

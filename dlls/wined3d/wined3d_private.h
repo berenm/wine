@@ -165,6 +165,7 @@ struct wined3d_d3d_limits
     unsigned int ffp_vertex_blend_matrices;
     unsigned int active_light_count;
 
+    unsigned int max_rt_count;
     float pointsize_max;
 };
 
@@ -2607,9 +2608,6 @@ struct wined3d_gl_info
     HGLRC (WINAPI *p_wglCreateContextAttribsARB)(HDC dc, HGLRC share, const GLint *attribs);
     struct opengl_funcs gl_ops;
     struct wined3d_fbo_ops fbo_ops;
-
-    struct wined3d_format *formats;
-    unsigned int format_count;
 };
 
 /* The driver names reflect the lowest GPU supported
@@ -2689,6 +2687,9 @@ struct wined3d_adapter
     UINT64 vram_bytes;
     UINT64 vram_bytes_used;
     LUID luid;
+
+    struct wined3d_format *formats;
+    unsigned int format_count;
 
     const struct wined3d_vertex_pipe_ops *vertex_pipe;
     const struct fragment_pipeline *fragment_pipe;
@@ -3401,7 +3402,7 @@ BOOL wined3d_texture_prepare_location(struct wined3d_texture *texture, unsigned 
         struct wined3d_context *context, DWORD location) DECLSPEC_HIDDEN;
 void wined3d_texture_prepare_texture(struct wined3d_texture *texture,
         struct wined3d_context *context, BOOL srgb) DECLSPEC_HIDDEN;
-void wined3d_texture_set_compatible_renderbuffer(struct wined3d_texture *texture,
+void wined3d_texture_set_compatible_renderbuffer(struct wined3d_texture *texture, struct wined3d_context *context,
         unsigned int level, const struct wined3d_rendertarget_info *rt) DECLSPEC_HIDDEN;
 void wined3d_texture_set_map_binding(struct wined3d_texture *texture, DWORD map_binding) DECLSPEC_HIDDEN;
 void wined3d_texture_set_swapchain(struct wined3d_texture *texture,
@@ -3499,10 +3500,10 @@ struct wined3d_vertex_declaration
     struct wined3d_device *device;
 
     struct wined3d_vertex_declaration_element *elements;
-    UINT element_count;
+    unsigned int element_count;
 
     BOOL position_transformed;
-    BOOL half_float_conv_needed;
+    BOOL have_half_floats;
 };
 
 struct wined3d_saved_states
