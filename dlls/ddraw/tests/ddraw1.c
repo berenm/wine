@@ -22,7 +22,8 @@
 #include "wine/test.h"
 #include <limits.h>
 #include <math.h>
-#include "d3d.h"
+#include "ddrawi.h"
+#include "d3dhal.h"
 
 static BOOL is_ddraw64 = sizeof(DWORD) != sizeof(DWORD *);
 static DEVMODEW registry_mode;
@@ -11738,6 +11739,163 @@ static void test_viewport(void)
     DestroyWindow(window);
 }
 
+static void test_find_device(void)
+{
+    D3DFINDDEVICESEARCH search = {0};
+    D3DFINDDEVICERESULT result = {0};
+    IDirect3DDevice *device;
+    IDirectDraw *ddraw;
+    IDirect3D *d3d;
+    unsigned int i;
+    HWND window;
+    HRESULT hr;
+
+    struct
+    {
+        DWORD size;
+        GUID guid;
+        D3DDEVICEDESC_V1 hw_desc;
+        D3DDEVICEDESC_V1 sw_desc;
+    } result_v1;
+
+    struct
+    {
+        DWORD size;
+        GUID guid;
+        D3DDEVICEDESC_V2 hw_desc;
+        D3DDEVICEDESC_V2 sw_desc;
+    } result_v2;
+
+    static const struct
+    {
+        const GUID *guid;
+        HRESULT hr;
+    }
+    tests[] =
+    {
+        {&IID_IDirect3D,             DDERR_NOTFOUND},
+        {&IID_IDirect3DRampDevice,   D3D_OK},
+        {&IID_IDirect3DRGBDevice,    D3D_OK},
+        {&IID_IDirect3DMMXDevice,    DDERR_NOTFOUND},
+        {&IID_IDirect3DRefDevice,    DDERR_NOTFOUND},
+        {&IID_IDirect3DTnLHalDevice, DDERR_NOTFOUND},
+        {&IID_IDirect3DNullDevice,   DDERR_NOTFOUND},
+    };
+
+    ddraw = create_ddraw();
+    ok(!!ddraw, "Failed to create a ddraw object.\n");
+
+    if (FAILED(IDirectDraw_QueryInterface(ddraw, &IID_IDirect3D, (void **)&d3d)))
+    {
+        skip("D3D interface is not available, skipping test.\n");
+        IDirectDraw_Release(ddraw);
+        return;
+    }
+
+    result.dwSize = sizeof(result);
+    search.dwSize = sizeof(search);
+    hr = IDirect3D_FindDevice(d3d, NULL, NULL);
+    ok(hr == DDERR_INVALIDPARAMS, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3D_FindDevice(d3d, NULL, &result);
+    ok(hr == DDERR_INVALIDPARAMS, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3D_FindDevice(d3d, &search, NULL);
+    ok(hr == DDERR_INVALIDPARAMS, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3D_FindDevice(d3d, &search, &result);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(result.dwSize == sizeof(result), "Got unexpected result size %u.\n", result.dwSize);
+    ok(result.ddHwDesc.dwSize == sizeof(result_v1.hw_desc),
+            "Got unexpected HW desc size %u.\n", result.ddHwDesc.dwSize);
+    ok(result.ddSwDesc.dwSize == sizeof(result_v1.sw_desc),
+            "Got unexpected SW desc size %u.\n", result.ddSwDesc.dwSize);
+
+    memset(&search, 0, sizeof(search));
+    memset(&result, 0, sizeof(result));
+    hr = IDirect3D_FindDevice(d3d, &search, &result);
+    ok(hr == DDERR_INVALIDPARAMS, "Got unexpected hr %#x.\n", hr);
+
+    search.dwSize = sizeof(search) + 1;
+    result.dwSize = sizeof(result) + 1;
+    hr = IDirect3D_FindDevice(d3d, &search, &result);
+    ok(hr == DDERR_INVALIDPARAMS, "Got unexpected hr %#x.\n", hr);
+
+    search.dwSize = sizeof(search);
+
+    memset(&result_v1, 0, sizeof(result_v1));
+    result_v1.size = sizeof(result_v1);
+    hr = IDirect3D_FindDevice(d3d, &search, (D3DFINDDEVICERESULT *)&result_v1);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(result_v1.hw_desc.dwSize == sizeof(result_v1.hw_desc),
+            "Got unexpected HW desc size %u.\n", result_v1.hw_desc.dwSize);
+    ok(result_v1.sw_desc.dwSize == sizeof(result_v1.sw_desc),
+            "Got unexpected SW desc size %u.\n", result_v1.sw_desc.dwSize);
+
+    memset(&result_v2, 0, sizeof(result_v2));
+    result_v2.size = sizeof(result_v2);
+    hr = IDirect3D_FindDevice(d3d, &search, (D3DFINDDEVICERESULT *)&result_v2);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(result_v2.hw_desc.dwSize == sizeof(result_v1.hw_desc),
+            "Got unexpected HW desc size %u.\n", result_v2.hw_desc.dwSize);
+    ok(result_v2.sw_desc.dwSize == sizeof(result_v1.sw_desc),
+            "Got unexpected SW desc size %u.\n", result_v2.sw_desc.dwSize);
+
+    for (i = 0; i < ARRAY_SIZE(tests); ++i)
+    {
+        memset(&search, 0, sizeof(search));
+        search.dwSize = sizeof(search);
+        search.dwFlags = D3DFDS_GUID;
+        search.guid = *tests[i].guid;
+
+        memset(&result, 0, sizeof(result));
+        result.dwSize = sizeof(result);
+
+        hr = IDirect3D_FindDevice(d3d, &search, &result);
+        ok(hr == tests[i].hr, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(result.dwSize == sizeof(result), "Test %u: Got unexpected result size %u.\n", i, result.dwSize);
+        if (SUCCEEDED(hr))
+        {
+            ok(result.ddHwDesc.dwSize == sizeof(result_v1.hw_desc),
+                    "Test %u: Got unexpected HW desc size %u.\n", i, result.ddHwDesc.dwSize);
+            ok(result.ddSwDesc.dwSize == sizeof(result_v1.sw_desc),
+                    "Test %u: Got unexpected SW desc size %u.\n", i, result.ddSwDesc.dwSize);
+        }
+        else
+        {
+            ok(!result.ddHwDesc.dwSize,
+                    "Test %u: Got unexpected HW desc size %u.\n", i, result.ddHwDesc.dwSize);
+            ok(!result.ddSwDesc.dwSize,
+                    "Test %u: Got unexpected SW desc size %u.\n", i, result.ddSwDesc.dwSize);
+        }
+    }
+
+    /* The HAL device can only be enumerated if hardware acceleration is present. */
+    search.dwSize = sizeof(search);
+    search.dwFlags = D3DFDS_GUID;
+    search.guid = IID_IDirect3DHALDevice;
+    result.dwSize = sizeof(result);
+    hr = IDirect3D_FindDevice(d3d, &search, &result);
+
+    window = create_window();
+    device = create_device(ddraw, window, DDSCL_NORMAL);
+    if (hr == D3D_OK)
+        ok(!!device, "Failed to create a 3D device.\n");
+    else
+        ok(!device, "Succeeded to create a 3D device.\n");
+    if (device)
+        IDirect3DDevice_Release(device);
+    DestroyWindow(window);
+
+    /* Curiously the colour model criteria seem to be ignored. */
+    search.dwSize = sizeof(search);
+    search.dwFlags = D3DFDS_COLORMODEL;
+    search.dcmColorModel = 0xdeadbeef;
+    result.dwSize = sizeof(result);
+    hr = IDirect3D_FindDevice(d3d, &search, &result);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    IDirect3D_Release(d3d);
+    IDirectDraw_Release(ddraw);
+}
+
 START_TEST(ddraw1)
 {
     DDDEVICEIDENTIFIER identifier;
@@ -11843,4 +12001,5 @@ START_TEST(ddraw1)
     test_caps();
     test_execute_data();
     test_viewport();
+    test_find_device();
 }

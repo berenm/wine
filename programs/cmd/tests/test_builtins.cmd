@@ -1427,6 +1427,12 @@ for /L %%i in (2,2,1) do (
   echo %%i
   echo FAILED
 )
+echo --- rems inside for loops
+for /f %%i IN ("hello") DO (
+   REM foo|echo ERROR unexpected execution 1
+   @REM foo|echo ERROR unexpected execution 2
+   @     REM foo|echo ERROR unexpected execution 3
+)
 echo --- ifs inside for loops
 for %%i in (test) do (
     echo a1
@@ -1702,7 +1708,10 @@ mkdir foobar & cd foobar
 echo ------ string argument
 rem NT4 does not support usebackq
 for /F %%i in ("a b c") do echo %%i
+for /F %%i in (  "a b c"    ) do echo X%%iX
 for /f usebackq %%i in ('a b c') do echo %%i>output_file
+if not exist output_file (echo no output) else (type output_file & del output_file)
+for /f usebackq %%i in (   'a b c'   ) do echo X%%iX>output_file
 if not exist output_file (echo no output) else (type output_file & del output_file)
 for /f %%i in ("a ") do echo %%i
 for /f usebackq %%i in ('a ') do echo %%i>output_file
@@ -1755,9 +1764,11 @@ for /f "usebackq" %%i in (`echo.Passed2`) do echo %%i
 for /f usebackq %%i in (`echo.Passed3`) do echo %%i
 for /f "usebackq" %%i in (`"c:\windows\system32\cmd.exe" /C echo Passed4`) do echo %%i
 for /f "usebackq" %%i in (`""c:\windows\system32\cmd.exe" /C echo Passed5"`) do echo %%i
+for /f %%i in (  'echo.Passed6'  ) do echo %%i
+for /f "usebackq" %%i in (   `echo.Passed7` ) do echo %%i
 goto :ContinueFORF
 :SkipFORFcmdNT4
-for /l %%i in (1,1,5) do echo Missing functionality - Broken%%i
+for /l %%i in (1,1,7) do echo Missing functionality - Broken%%i
 :ContinueFORF
 rem FIXME: Rest not testable right now in wine: not implemented and would need
 rem preliminary grep-like program implementation (e.g. like findstr or fc) even
@@ -1835,11 +1846,12 @@ for /f "tokens=1,2,3*" %%i in ("a b c d e f g") do echo h=%%h i=%%i j=%%j k=%%k 
 for /f "tokens=1,1,3*" %%i in ("a b c d e f g") do echo h=%%h i=%%i j=%%j k=%%k l=%%l m=%%m n=%%n o=%%o
 for /f "tokens=2,2,3*" %%i in ("a b c d e f g") do echo h=%%h i=%%i j=%%j k=%%k l=%%l m=%%m n=%%n o=%%o
 for /f "tokens=3,2,3*" %%i in ("a b c d e f g") do echo h=%%h i=%%i j=%%j k=%%k l=%%l m=%%m n=%%n o=%%o
-rem Special case tokens=*
+rem Special case tokens=* or tokens=n,*
 echo 3.14>testfile
 FOR /F "tokens=*"  %%A IN (testfile) DO @echo 1:%%A,%%B
 FOR /F "tokens=1*" %%A IN (testfile) DO @echo 2:%%A,%%B
 FOR /F "tokens=2*" %%A IN (testfile) DO @echo 3:%%A,%%B
+FOR /F "tokens=1,* delims=." %%A IN (testfile) DO @echo 4:%%A,%%B
 del testfile
 cd ..
 rd /s/q foobar

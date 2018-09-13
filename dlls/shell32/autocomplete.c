@@ -93,6 +93,32 @@ static inline IAutoCompleteImpl *impl_from_IAutoCompleteDropDown(IAutoCompleteDr
     return CONTAINING_RECORD(iface, IAutoCompleteImpl, IAutoCompleteDropDown_iface);
 }
 
+static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *str, size_t str_len)
+{
+    /* Replace the first %s directly without using snprintf, to avoid
+       exploits since the format string can be retrieved from the registry */
+    WCHAR *base = dst;
+    UINT args = 0;
+    while (*qc != '\0')
+    {
+        if (qc[0] == '%')
+        {
+            if (args < 1 && qc[1] == 's')
+            {
+                memcpy(dst, str, str_len * sizeof(WCHAR));
+                dst += str_len;
+                qc += 2;
+                args++;
+                continue;
+            }
+            qc += (qc[1] == '%');
+        }
+        *dst++ = *qc++;
+    }
+    *dst = '\0';
+    return dst - base;
+}
+
 static void destroy_autocomplete_object(IAutoCompleteImpl *ac)
 {
     ac->hwndEdit = NULL;
@@ -109,9 +135,8 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
     IAutoCompleteImpl *This = GetPropW(hwnd, autocomplete_propertyW);
     HRESULT hr;
     WCHAR hwndText[255];
-    WCHAR *hwndQCText;
     RECT r;
-    BOOL control, filled, displayall = FALSE;
+    BOOL displayall = FALSE;
     int cpt, height, sel;
 
     if (!This->enabled) return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
@@ -119,7 +144,8 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
     switch (uMsg)
     {
         case CB_SHOWDROPDOWN:
-            ShowWindow(This->hwndListBox, SW_HIDE);
+            if (This->options & ACO_AUTOSUGGEST)
+                ShowWindow(This->hwndListBox, SW_HIDE);
             break;
         case WM_KILLFOCUS:
             if ((This->options & ACO_AUTOSUGGEST) && ((HWND)wParam != This->hwndListBox))
@@ -136,16 +162,22 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             switch(wParam) {
                 case VK_RETURN:
                     /* If quickComplete is set and control is pressed, replace the string */
-                    control = GetKeyState(VK_CONTROL) & 0x8000;
-                    if (control && This->quickComplete) {
-                        hwndQCText = heap_alloc((lstrlenW(This->quickComplete)+lstrlenW(hwndText))*sizeof(WCHAR));
-                        sel = sprintfW(hwndQCText, This->quickComplete, hwndText);
-                        SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)hwndQCText);
-                        SendMessageW(hwnd, EM_SETSEL, 0, sel);
-                        heap_free(hwndQCText);
+                    if (This->quickComplete && (GetKeyState(VK_CONTROL) & 0x8000))
+                    {
+                        WCHAR *buf;
+                        size_t len = strlenW(hwndText);
+                        size_t sz = strlenW(This->quickComplete) + 1 + len;
+                        if ((buf = heap_alloc(sz * sizeof(WCHAR))))
+                        {
+                            len = format_quick_complete(buf, This->quickComplete, hwndText, len);
+                            SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)buf);
+                            SendMessageW(hwnd, EM_SETSEL, 0, len);
+                            heap_free(buf);
+                        }
                     }
 
-                    ShowWindow(This->hwndListBox, SW_HIDE);
+                    if (This->options & ACO_AUTOSUGGEST)
+                        ShowWindow(This->hwndListBox, SW_HIDE);
                     return 0;
                 case VK_LEFT:
                 case VK_RIGHT:
@@ -180,14 +212,17 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                                 int len;
 
                                 len = SendMessageW(This->hwndListBox, LB_GETTEXTLEN, sel, 0);
-                                msg = heap_alloc((len + 1)*sizeof(WCHAR));
-                                SendMessageW(This->hwndListBox, LB_GETTEXT, sel, (LPARAM)msg);
+                                if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
+                                    return 0;
+                                len = SendMessageW(This->hwndListBox, LB_GETTEXT, sel, (LPARAM)msg);
                                 SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)msg);
-                                SendMessageW(hwnd, EM_SETSEL, lstrlenW(msg), lstrlenW(msg));
+                                SendMessageW(hwnd, EM_SETSEL, len, len);
                                 heap_free(msg);
                             } else {
+                                UINT len;
                                 SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)This->txtbackup);
-                                SendMessageW(hwnd, EM_SETSEL, lstrlenW(This->txtbackup), lstrlenW(This->txtbackup));
+                                len = strlenW(This->txtbackup);
+                                SendMessageW(hwnd, EM_SETSEL, len, len);
                             }
                         }
                         return 0;
@@ -199,19 +234,7 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                         ShowWindow(This->hwndListBox, SW_HIDE);
                         return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
                     }
-                    if (This->options & ACO_AUTOAPPEND) {
-                        DWORD b;
-                        SendMessageW(hwnd, EM_GETSEL, (WPARAM)&b, 0);
-                        if (b>1) {
-                            hwndText[b-1] = '\0';
-                        } else {
-                            hwndText[0] = '\0';
-                            SetWindowTextW(hwnd, hwndText);
-                        }
-                    }
                     break;
-                default:
-                    ;
             }
 
             SendMessageW(This->hwndListBox, LB_RESETCONTENT, 0, 0);
@@ -226,7 +249,6 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                 break;
 
             IEnumString_Reset(This->enumstr);
-            filled = FALSE;
             for(cpt = 0;;) {
                 LPOLESTR strs = NULL;
                 ULONG fetched;
@@ -236,7 +258,7 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                     break;
 
                 if (!strncmpiW(hwndText, strs, len)) {
-                    if (!filled && (This->options & ACO_AUTOAPPEND)) {
+                    if (cpt == 0 && (This->options & ACO_AUTOAPPEND)) {
                         WCHAR buffW[255];
 
                         strcpyW(buffW, hwndText);
@@ -249,19 +271,17 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                         }
                     }
 
-                    if (This->options & ACO_AUTOSUGGEST) {
+                    if (This->options & ACO_AUTOSUGGEST)
                         SendMessageW(This->hwndListBox, LB_ADDSTRING, 0, (LPARAM)strs);
-                        cpt++;
-                    }
 
-                    filled = TRUE;
+                    cpt++;
                 }
 
                 CoTaskMemFree(strs);
             }
 
             if (This->options & ACO_AUTOSUGGEST) {
-                if (filled) {
+                if (cpt) {
                     height = SendMessageW(This->hwndListBox, LB_GETITEMHEIGHT, 0, 0);
                     SendMessageW(This->hwndListBox, LB_CARETOFF, 0, 0);
                     GetWindowRect(hwnd, &r);
@@ -289,7 +309,6 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
         }
         default:
             return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
-
     }
 
     return 0;
@@ -311,10 +330,11 @@ static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             if (sel < 0)
                 break;
             len = SendMessageW(This->hwndListBox, LB_GETTEXTLEN, sel, 0);
-            msg = heap_alloc((len + 1)*sizeof(WCHAR));
-            SendMessageW(hwnd, LB_GETTEXT, sel, (LPARAM)msg);
+            if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
+                break;
+            len = SendMessageW(hwnd, LB_GETTEXT, sel, (LPARAM)msg);
             SendMessageW(This->hwndEdit, WM_SETTEXT, 0, (LPARAM)msg);
-            SendMessageW(This->hwndEdit, EM_SETSEL, 0, lstrlenW(msg));
+            SendMessageW(This->hwndEdit, EM_SETSEL, 0, len);
             ShowWindow(hwnd, SW_HIDE);
             heap_free(msg);
             break;
@@ -340,6 +360,8 @@ static void create_listbox(IAutoCompleteImpl *This)
         This->wpOrigLBoxProc = (WNDPROC) SetWindowLongPtrW( This->hwndListBox, GWLP_WNDPROC, (LONG_PTR) ACLBoxSubclassProc);
         SetWindowLongPtrW( This->hwndListBox, GWLP_USERDATA, (LONG_PTR)This);
     }
+    else
+        This->options &= ~ACO_AUTOSUGGEST;
 }
 
 /**************************************************************************
@@ -486,40 +508,57 @@ static HRESULT WINAPI IAutoComplete2_fnInit(
     if (This->options & ACO_AUTOSUGGEST)
         create_listbox(This);
 
-    if (pwzsRegKeyPath) {
-	WCHAR *key;
-	WCHAR result[MAX_PATH];
-	WCHAR *value;
-	HKEY hKey = 0;
-	LONG res;
-	LONG len;
+    if (pwzsRegKeyPath)
+    {
+        static const HKEY roots[] = { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE };
+        WCHAR *key, *value;
+        DWORD type, sz;
+        BYTE *qc;
+        HKEY hKey;
+        LSTATUS res;
+        size_t len;
+        UINT i;
 
-	/* pwszRegKeyPath contains the key as well as the value, so we split */
-	key = heap_alloc((lstrlenW(pwzsRegKeyPath)+1)*sizeof(WCHAR));
-	strcpyW(key, pwzsRegKeyPath);
-	value = strrchrW(key, '\\');
-	*value = 0;
-	value++;
-	/* Now value contains the value and buffer the key */
-	res = RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &hKey);
-	if (res != ERROR_SUCCESS) {
-	    /* if the key is not found, MSDN states we must seek in HKEY_LOCAL_MACHINE */
-	    res = RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &hKey);  
-	}
-	if (res == ERROR_SUCCESS) {
-	    res = RegQueryValueW(hKey, value, result, &len);
-	    if (res == ERROR_SUCCESS) {
-		This->quickComplete = heap_alloc(len*sizeof(WCHAR));
-		strcpyW(This->quickComplete, result);
-	    }
-	    RegCloseKey(hKey);
-	}
-	heap_free(key);
+        /* pwszRegKeyPath contains the key as well as the value, so split it */
+        value = strrchrW(pwzsRegKeyPath, '\\');
+        len = value - pwzsRegKeyPath;
+
+        if (value && (key = heap_alloc((len+1) * sizeof(*key))) != NULL)
+        {
+            memcpy(key, pwzsRegKeyPath, len * sizeof(*key));
+            key[len] = '\0';
+            value++;
+
+            for (i = 0; i < ARRAY_SIZE(roots); i++)
+            {
+                if (RegOpenKeyExW(roots[i], key, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+                    continue;
+                sz = MAX_PATH * sizeof(WCHAR);
+
+                while ((qc = heap_alloc(sz)) != NULL)
+                {
+                    res = RegQueryValueExW(hKey, value, NULL, &type, qc, &sz);
+                    if (res == ERROR_SUCCESS && type == REG_SZ)
+                    {
+                        This->quickComplete = heap_realloc(qc, sz);
+                        i = ARRAY_SIZE(roots);
+                        break;
+                    }
+                    heap_free(qc);
+                    if (res != ERROR_MORE_DATA || type != REG_SZ)
+                        break;
+                }
+                RegCloseKey(hKey);
+            }
+            heap_free(key);
+        }
     }
 
-    if ((pwszQuickComplete) && (!This->quickComplete)) {
-	This->quickComplete = heap_alloc((lstrlenW(pwszQuickComplete)+1)*sizeof(WCHAR));
-	lstrcpyW(This->quickComplete, pwszQuickComplete);
+    if (!This->quickComplete && pwszQuickComplete)
+    {
+        size_t len = strlenW(pwszQuickComplete)+1;
+        if ((This->quickComplete = heap_alloc(len * sizeof(WCHAR))) != NULL)
+            memcpy(This->quickComplete, pwszQuickComplete, len * sizeof(WCHAR));
     }
 
     return S_OK;

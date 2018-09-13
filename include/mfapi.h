@@ -67,8 +67,8 @@ HRESULT WINAPI MFCancelWorkItem(MFWORKITEM_KEY key);
 HRESULT WINAPI MFCreateAttributes(IMFAttributes **attributes, UINT32 size);
 HRESULT WINAPI MFCreateEventQueue(IMFMediaEventQueue **queue);
 HRESULT WINAPI MFCreateMediaType(IMFMediaType **type);
-HRESULT WINAPI MFCreateMemoryBuffer(DWORD max_length, IMFMediaBuffer **buffer);
 HRESULT WINAPI MFCreateSample(IMFSample **sample);
+HRESULT WINAPI MFCreateMemoryBuffer(DWORD max_length, IMFMediaBuffer **buffer);
 HRESULT WINAPI MFGetTimerPeriodicity(DWORD *periodicity);
 HRESULT WINAPI MFTEnum(GUID category, UINT32 flags, MFT_REGISTER_TYPE_INFO *input_type,
                        MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes,

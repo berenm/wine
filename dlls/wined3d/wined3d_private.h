@@ -4419,6 +4419,7 @@ extern enum wined3d_format_id pixelformat_for_depth(DWORD depth) DECLSPEC_HIDDEN
 #define WINED3DFMT_FLAG_BLOCKS_NO_VERIFY            0x00100000
 #define WINED3DFMT_FLAG_INTEGER                     0x00200000
 #define WINED3DFMT_FLAG_GEN_MIPMAP                  0x00400000
+#define WINED3DFMT_FLAG_NORMALISED                  0x00800000
 
 struct wined3d_rational
 {
@@ -4438,6 +4439,7 @@ struct wined3d_format
     enum wined3d_format_id id;
 
     D3DDDIFORMAT ddi_format;
+    unsigned int component_count;
     DWORD red_size;
     DWORD green_size;
     DWORD blue_size;
@@ -4455,11 +4457,8 @@ struct wined3d_format
     UINT block_byte_count;
 
     enum wined3d_ffp_emit_idx emit_idx;
-    GLint component_count;
     GLenum gl_vtx_type;
     GLint gl_vtx_format;
-    GLboolean gl_normalized;
-    unsigned int attribute_size;
 
     GLint glInternal;
     GLint glGammaInternal;

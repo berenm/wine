@@ -31,6 +31,7 @@
 #include "mfapi.h"
 #include "mfidl.h"
 #include "mferror.h"
+
 #include "wine/heap.h"
 #include "wine/debug.h"
 #include "wine/unicode.h"
@@ -669,7 +670,7 @@ HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **byt
 
     TRACE("(%p, %p): stub\n", stream, bytestream);
 
-    object = HeapAlloc( GetProcessHeap(), 0, sizeof(*object) );
+    object = heap_alloc( sizeof(*object) );
     if(!object)
         return E_OUTOFMEMORY;
 
@@ -1341,7 +1342,6 @@ typedef struct _mfmediatype
 {
     mfattributes attributes;
     IMFMediaType IMFMediaType_iface;
-    LONG ref;
 } mfmediatype;
 
 static inline mfmediatype *impl_from_IMFMediaType(IMFMediaType *iface)
@@ -1375,7 +1375,7 @@ static HRESULT WINAPI mediatype_QueryInterface(IMFMediaType *iface, REFIID riid,
 static ULONG WINAPI mediatype_AddRef(IMFMediaType *iface)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
-    ULONG ref = InterlockedIncrement(&This->ref);
+    ULONG ref = InterlockedIncrement(&This->attributes.ref);
 
     TRACE("(%p) ref=%u\n", This, ref);
 
@@ -1385,7 +1385,7 @@ static ULONG WINAPI mediatype_AddRef(IMFMediaType *iface)
 static ULONG WINAPI mediatype_Release(IMFMediaType *iface)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
-    ULONG ref = InterlockedDecrement(&This->ref);
+    ULONG ref = InterlockedDecrement(&This->attributes.ref);
 
     TRACE("(%p) ref=%u\n", This, ref);
 
@@ -1687,9 +1687,8 @@ HRESULT WINAPI MFCreateMediaType(IMFMediaType **type)
     if(!object)
         return E_OUTOFMEMORY;
 
-    object->ref = 1;
-    object->IMFMediaType_iface.lpVtbl = &mediatype_vtbl;
     init_attribute_object(&object->attributes, 0);
+    object->IMFMediaType_iface.lpVtbl = &mediatype_vtbl;
 
     *type = &object->IMFMediaType_iface;
 
@@ -2177,6 +2176,182 @@ HRESULT WINAPI MFCreateStreamDescriptor(DWORD identifier, DWORD count,
     return S_OK;
 }
 
+
+typedef struct _mfbuffer
+{
+    IMFMediaBuffer IMFMediaBuffer_iface;
+    LONG ref;
+
+    BYTE *buffer;
+    DWORD max_length;
+    DWORD current;
+} mfbuffer;
+
+static inline mfbuffer *impl_from_IMFMediaBuffer(IMFMediaBuffer *iface)
+{
+    return CONTAINING_RECORD(iface, mfbuffer, IMFMediaBuffer_iface);
+}
+
+static HRESULT WINAPI mfbuffer_QueryInterface(IMFMediaBuffer *iface, REFIID riid, void **out)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
+
+    if(IsEqualGUID(riid, &IID_IUnknown) ||
+       IsEqualGUID(riid, &IID_IMFMediaBuffer))
+    {
+        *out = &This->IMFMediaBuffer_iface;
+    }
+    else
+    {
+        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
+        *out = NULL;
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown*)*out);
+    return S_OK;
+}
+
+static ULONG WINAPI mfbuffer_AddRef(IMFMediaBuffer *iface)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+    ULONG ref = InterlockedIncrement(&This->ref);
+
+    TRACE("(%p) ref=%u\n", This, ref);
+
+    return ref;
+}
+
+static ULONG WINAPI mfbuffer_Release(IMFMediaBuffer *iface)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+    ULONG ref = InterlockedDecrement(&This->ref);
+
+    TRACE("(%p) ref=%u\n", This, ref);
+
+    if (!ref)
+    {
+        heap_free(This->buffer);
+        heap_free(This);
+    }
+
+    return ref;
+}
+
+static HRESULT WINAPI mfbuffer_Lock(IMFMediaBuffer *iface, BYTE **buffer, DWORD *max, DWORD *current)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("%p, %p %p, %p\n", This, buffer, max, current);
+
+    if(!buffer)
+        return E_INVALIDARG;
+
+    *buffer = This->buffer;
+    if(max)
+        *max = This->max_length;
+    if(current)
+        *current = This->current;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI mfbuffer_Unlock(IMFMediaBuffer *iface)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("%p\n", This);
+
+    return S_OK;
+}
+
+static HRESULT WINAPI mfbuffer_GetCurrentLength(IMFMediaBuffer *iface, DWORD *current)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("%p\n", This);
+
+    if(!current)
+        return E_INVALIDARG;
+
+    *current = This->current;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI mfbuffer_SetCurrentLength(IMFMediaBuffer *iface, DWORD current)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("%p, %u\n", This, current);
+
+    if(current > This->max_length)
+        return E_INVALIDARG;
+
+    This->current = current;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI mfbuffer_GetMaxLength(IMFMediaBuffer *iface, DWORD *max)
+{
+    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("%p, %p\n", This, max);
+
+    if(!max)
+        return E_INVALIDARG;
+
+    *max = This->max_length;
+
+    return S_OK;
+}
+
+static const IMFMediaBufferVtbl mfbuffer_vtbl =
+{
+    mfbuffer_QueryInterface,
+    mfbuffer_AddRef,
+    mfbuffer_Release,
+    mfbuffer_Lock,
+    mfbuffer_Unlock,
+    mfbuffer_GetCurrentLength,
+    mfbuffer_SetCurrentLength,
+    mfbuffer_GetMaxLength
+};
+
+HRESULT WINAPI MFCreateMemoryBuffer(DWORD max_length, IMFMediaBuffer **buffer)
+{
+    mfbuffer *object;
+    BYTE *bytes;
+
+    TRACE("%u, %p\n", max_length, buffer);
+
+    if(!buffer)
+        return E_INVALIDARG;
+
+    object = heap_alloc( sizeof(*object) );
+    if(!object)
+        return E_OUTOFMEMORY;
+
+    bytes = heap_alloc( max_length );
+    if(!bytes)
+    {
+        heap_free(object);
+        return E_OUTOFMEMORY;
+    }
+
+    object->ref = 1;
+    object->max_length = max_length;
+    object->current = 0;
+    object->buffer = bytes;
+    object->IMFMediaBuffer_iface.lpVtbl = &mfbuffer_vtbl;
+    *buffer = &object->IMFMediaBuffer_iface;
+
+    return S_OK;
+}
+
 typedef struct _mfsample
 {
     mfattributes attributes;
@@ -2618,182 +2793,6 @@ HRESULT WINAPI MFCreateSample(IMFSample **sample)
     object->IMFSample_iface.lpVtbl = &mfsample_vtbl;
     init_attribute_object(&object->attributes, 0);
     *sample = &object->IMFSample_iface;
-
-    return S_OK;
-}
-
-
-typedef struct _mfbuffer
-{
-    IMFMediaBuffer IMFMediaBuffer_iface;
-    LONG ref;
-
-    BYTE *buffer;
-    DWORD max_length;
-    DWORD current;
-} mfbuffer;
-
-static inline mfbuffer *impl_from_IMFMediaBuffer(IMFMediaBuffer *iface)
-{
-    return CONTAINING_RECORD(iface, mfbuffer, IMFMediaBuffer_iface);
-}
-
-static HRESULT WINAPI mfbuffer_QueryInterface(IMFMediaBuffer *iface, REFIID riid, void **out)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-
-    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
-
-    if(IsEqualGUID(riid, &IID_IUnknown) ||
-       IsEqualGUID(riid, &IID_IMFMediaBuffer))
-    {
-        *out = &This->IMFMediaBuffer_iface;
-    }
-    else
-    {
-        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
-        *out = NULL;
-        return E_NOINTERFACE;
-    }
-
-    IUnknown_AddRef((IUnknown*)*out);
-    return S_OK;
-}
-
-static ULONG WINAPI mfbuffer_AddRef(IMFMediaBuffer *iface)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-    ULONG ref = InterlockedIncrement(&This->ref);
-
-    TRACE("(%p) ref=%u\n", This, ref);
-
-    return ref;
-}
-
-static ULONG WINAPI mfbuffer_Release(IMFMediaBuffer *iface)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-    ULONG ref = InterlockedDecrement(&This->ref);
-
-    TRACE("(%p) ref=%u\n", This, ref);
-
-    if (!ref)
-    {
-        heap_free(This->buffer);
-        heap_free(This);
-    }
-
-    return ref;
-}
-
-static HRESULT WINAPI mfbuffer_Lock(IMFMediaBuffer *iface, BYTE **buffer, DWORD *max, DWORD *current)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-
-    TRACE("%p, %p %p, %p\n", This, buffer, max, current);
-
-    if(!buffer)
-        return E_INVALIDARG;
-
-    *buffer = This->buffer;
-    if(max)
-        *max = This->max_length;
-    if(current)
-        *current = This->current;
-
-    return S_OK;
-}
-
-static HRESULT WINAPI mfbuffer_Unlock(IMFMediaBuffer *iface)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-
-    TRACE("%p\n", This);
-
-    return S_OK;
-}
-
-static HRESULT WINAPI mfbuffer_GetCurrentLength(IMFMediaBuffer *iface, DWORD *current)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-
-    TRACE("%p\n", This);
-
-    if(!current)
-        return E_INVALIDARG;
-
-    *current = This->current;
-
-    return S_OK;
-}
-
-static HRESULT WINAPI mfbuffer_SetCurrentLength(IMFMediaBuffer *iface, DWORD current)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-
-    TRACE("%p, %u\n", This, current);
-
-    if(current > This->max_length)
-        return E_INVALIDARG;
-
-    This->current = current;
-
-    return S_OK;
-}
-
-static HRESULT WINAPI mfbuffer_GetMaxLength(IMFMediaBuffer *iface, DWORD *max)
-{
-    mfbuffer *This = impl_from_IMFMediaBuffer(iface);
-
-    TRACE("%p, %p\n", This, max);
-
-    if(!max)
-        return E_INVALIDARG;
-
-    *max = This->max_length;
-
-    return S_OK;
-}
-
-static const IMFMediaBufferVtbl mfbuffer_vtbl =
-{
-    mfbuffer_QueryInterface,
-    mfbuffer_AddRef,
-    mfbuffer_Release,
-    mfbuffer_Lock,
-    mfbuffer_Unlock,
-    mfbuffer_GetCurrentLength,
-    mfbuffer_SetCurrentLength,
-    mfbuffer_GetMaxLength
-};
-
-HRESULT WINAPI MFCreateMemoryBuffer(DWORD max_length, IMFMediaBuffer **buffer)
-{
-    mfbuffer *object;
-    BYTE *bytes;
-
-    TRACE("%u, %p\n", max_length, buffer);
-
-    if(!buffer)
-        return E_INVALIDARG;
-
-    object = heap_alloc( sizeof(*object) );
-    if(!object)
-        return E_OUTOFMEMORY;
-
-    bytes = heap_alloc( max_length );
-    if(!bytes)
-    {
-        heap_free(object);
-        return E_OUTOFMEMORY;
-    }
-
-    object->ref = 1;
-    object->max_length = max_length;
-    object->current = 0;
-    object->buffer = bytes;
-    object->IMFMediaBuffer_iface.lpVtbl = &mfbuffer_vtbl;
-    *buffer = &object->IMFMediaBuffer_iface;
 
     return S_OK;
 }

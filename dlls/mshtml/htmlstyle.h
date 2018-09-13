@@ -25,6 +25,7 @@ struct HTMLStyle {
     IHTMLStyle5 IHTMLStyle5_iface;
     IHTMLStyle6 IHTMLStyle6_iface;
     IHTMLCSSStyleDeclaration IHTMLCSSStyleDeclaration_iface;
+    IHTMLCSSStyleDeclaration2 IHTMLCSSStyleDeclaration2_iface;
 
     LONG ref;
 
@@ -36,6 +37,7 @@ struct HTMLStyle {
 typedef enum {
     STYLEID_BACKGROUND,
     STYLEID_BACKGROUND_ATTACHMENT,
+    STYLEID_BACKGROUND_CLIP,
     STYLEID_BACKGROUND_COLOR,
     STYLEID_BACKGROUND_IMAGE,
     STYLEID_BACKGROUND_POSITION,
@@ -93,6 +95,7 @@ typedef enum {
     STYLEID_MAX_WIDTH,
     STYLEID_MIN_HEIGHT,
     STYLEID_MIN_WIDTH,
+    STYLEID_OPACITY,
     STYLEID_OUTLINE,
     STYLEID_OVERFLOW,
     STYLEID_OVERFLOW_X,

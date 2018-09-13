@@ -30,6 +30,7 @@
 #include "winnls.h"
 #include "shlwapi.h"
 #include "wine/debug.h"
+#include "wine/exception.h"
 #include "wine/unicode.h"
 #include "msi.h"
 #include "msiquery.h"
@@ -529,7 +530,16 @@ UINT WINAPI MsiGetSummaryInformationW( MSIHANDLE hDatabase,
             if (!(remote = msi_get_remote(hDatabase)))
                 return ERROR_INVALID_HANDLE;
 
-            ret = remote_DatabaseGetSummaryInformation(remote, uiUpdateCount, &remote_suminfo);
+            __TRY
+            {
+                ret = remote_DatabaseGetSummaryInformation(remote, uiUpdateCount, &remote_suminfo);
+            }
+            __EXCEPT(rpc_filter)
+            {
+                ret = GetExceptionCode();
+            }
+            __ENDTRY
+
             if (!ret)
                 *pHandle = alloc_msi_remote_handle(remote_suminfo);
 
@@ -591,7 +601,25 @@ UINT WINAPI MsiSummaryInfoGetPropertyCount(MSIHANDLE hSummaryInfo, PUINT pCount)
 
     si = msihandle2msiinfo( hSummaryInfo, MSIHANDLETYPE_SUMMARYINFO );
     if( !si )
-        return ERROR_INVALID_HANDLE;
+    {
+        MSIHANDLE remote;
+        UINT ret;
+
+        if (!(remote = msi_get_remote( hSummaryInfo )))
+            return ERROR_INVALID_HANDLE;
+
+        __TRY
+        {
+            ret = remote_SummaryInfoGetPropertyCount( remote, pCount );
+        }
+        __EXCEPT(rpc_filter)
+        {
+            ret = GetExceptionCode();
+        }
+        __ENDTRY
+
+        return ret;
+    }
 
     if( pCount )
         *pCount = get_property_count( si->property );
@@ -714,7 +742,29 @@ UINT WINAPI MsiSummaryInfoGetPropertyA(
     }
 
     if (!(si = msihandle2msiinfo( handle, MSIHANDLETYPE_SUMMARYINFO )))
-        return ERROR_INVALID_HANDLE;
+    {
+        MSIHANDLE remote;
+        WCHAR *buf = NULL;
+
+        if (!(remote = msi_get_remote( handle )))
+            return ERROR_INVALID_HANDLE;
+
+        __TRY
+        {
+            r = remote_SummaryInfoGetProperty( remote, uiProperty, puiDataType, piValue, pftValue, &buf );
+        }
+        __EXCEPT(rpc_filter)
+        {
+            r = GetExceptionCode();
+        }
+        __ENDTRY
+
+        if (!r)
+            r = msi_strncpyWtoA( buf, -1, szValueBuf, pcchValueBuf, TRUE );
+
+        midl_user_free( buf );
+        return r;
+    }
 
     str.unicode = FALSE;
     str.str.a = szValueBuf;
@@ -742,7 +792,29 @@ UINT WINAPI MsiSummaryInfoGetPropertyW(
     }
 
     if (!(si = msihandle2msiinfo( handle, MSIHANDLETYPE_SUMMARYINFO )))
-        return ERROR_INVALID_HANDLE;
+    {
+        MSIHANDLE remote;
+        WCHAR *buf = NULL;
+
+        if (!(remote = msi_get_remote( handle )))
+            return ERROR_INVALID_HANDLE;
+
+        __TRY
+        {
+            r = remote_SummaryInfoGetProperty( remote, uiProperty, puiDataType, piValue, pftValue, &buf );
+        }
+        __EXCEPT(rpc_filter)
+        {
+            r = GetExceptionCode();
+        }
+        __ENDTRY
+
+        if (!r)
+            r = msi_strncpyW( buf, -1, szValueBuf, pcchValueBuf );
+
+        midl_user_free( buf );
+        return r;
+    }
 
     str.unicode = TRUE;
     str.str.w = szValueBuf;
@@ -827,7 +899,17 @@ UINT WINAPI MsiSummaryInfoSetPropertyW( MSIHANDLE handle, UINT uiProperty, UINT 
         return ERROR_INVALID_PARAMETER;
 
     if (!(si = msihandle2msiinfo( handle, MSIHANDLETYPE_SUMMARYINFO )))
+    {
+        MSIHANDLE remote;
+
+        if ((remote = msi_get_remote( handle )))
+        {
+            WARN("MsiSummaryInfoSetProperty not allowed during a custom action!\n");
+            return ERROR_FUNCTION_FAILED;
+        }
+
         return ERROR_INVALID_HANDLE;
+    }
 
     str.unicode = TRUE;
     str.str.w = szValue;
@@ -858,7 +940,17 @@ UINT WINAPI MsiSummaryInfoSetPropertyA( MSIHANDLE handle, UINT uiProperty, UINT 
         return ERROR_INVALID_PARAMETER;
 
     if (!(si = msihandle2msiinfo( handle, MSIHANDLETYPE_SUMMARYINFO )))
+    {
+        MSIHANDLE remote;
+
+        if ((remote = msi_get_remote( handle )))
+        {
+            WARN("MsiSummaryInfoSetProperty not allowed during a custom action!\n");
+            return ERROR_FUNCTION_FAILED;
+        }
+
         return ERROR_INVALID_HANDLE;
+    }
 
     str.unicode = FALSE;
     str.str.a = szValue;
@@ -1207,5 +1299,28 @@ UINT msi_load_suminfo_properties( MSIPACKAGE *package )
     package->WordCount = count;
 
     msiobj_release( &si->hdr );
+    return r;
+}
+
+UINT __cdecl s_remote_SummaryInfoGetPropertyCount( MSIHANDLE suminfo, UINT *count )
+{
+    return MsiSummaryInfoGetPropertyCount( suminfo, count );
+}
+
+UINT __cdecl s_remote_SummaryInfoGetProperty( MSIHANDLE suminfo, UINT property, UINT *type,
+                                              INT *value, FILETIME *ft, LPWSTR *buf )
+{
+    WCHAR empty[1];
+    DWORD size = 0;
+    UINT r;
+
+    r = MsiSummaryInfoGetPropertyW( suminfo, property, type, value, ft, empty, &size );
+    if (r == ERROR_MORE_DATA)
+    {
+        size++;
+        *buf = midl_user_allocate( size * sizeof(WCHAR) );
+        if (!*buf) return ERROR_OUTOFMEMORY;
+        r = MsiSummaryInfoGetPropertyW( suminfo, property, type, value, ft, *buf, &size );
+    }
     return r;
 }
