@@ -39,7 +39,7 @@
 
 #include "comctl32.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(listbox2);
+WINE_DEFAULT_DEBUG_CHANNEL(listbox);
 
 /* Items array granularity */
 #define LB_ARRAY_GRANULARITY 16
@@ -1257,12 +1257,19 @@ static LRESULT LISTBOX_SetHorizontalExtent( LB_DESCR *descr, INT extent )
 /***********************************************************************
  *           LISTBOX_SetColumnWidth
  */
-static LRESULT LISTBOX_SetColumnWidth( LB_DESCR *descr, INT width)
+static LRESULT LISTBOX_SetColumnWidth( LB_DESCR *descr, INT column_width)
 {
-    if (width == descr->column_width) return LB_OKAY;
-    TRACE("[%p]: new column width = %d\n", descr->self, width );
-    descr->column_width = width;
-    LISTBOX_UpdatePage( descr );
+    RECT rect;
+
+    TRACE("[%p]: new column width = %d\n", descr->self, column_width);
+
+    GetClientRect(descr->self, &rect);
+    descr->width = rect.right - rect.left;
+    descr->height = rect.bottom - rect.top;
+    descr->column_width = column_width;
+
+    LISTBOX_UpdatePage(descr);
+    LISTBOX_UpdateScroll(descr);
     return LB_OKAY;
 }
 

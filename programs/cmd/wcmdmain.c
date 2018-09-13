@@ -335,7 +335,7 @@ void WCMD_print_error (void) {
  *
  */
 
-static void WCMD_show_prompt (void) {
+static void WCMD_show_prompt (BOOL newLine) {
 
   int status;
   WCHAR out_string[MAX_PATH], curdir[MAX_PATH], prompt_string[MAX_PATH];
@@ -350,8 +350,10 @@ static void WCMD_show_prompt (void) {
   }
   p = prompt_string;
   q = out_string;
-  *q++ = '\r';
-  *q++ = '\n';
+  if (newLine) {
+    *q++ = '\r';
+    *q++ = '\n';
+  }
   *q = '\0';
   while (*p != '\0') {
     if (*p != '$') {
@@ -1886,7 +1888,7 @@ WCHAR *WCMD_ReadAndParseLine(const WCHAR *optionalcmd, CMD_LIST **output, HANDLE
       const DWORD len = ARRAY_SIZE(echoDot);
       DWORD curr_size = strlenW(curPos);
       DWORD min_len = (curr_size < len ? curr_size : len);
-      WCMD_show_prompt();
+      WCMD_show_prompt(TRUE);
       WCMD_output_asis(curPos);
       /* I don't know why Windows puts a space here but it does */
       /* Except for lines starting with 'echo.', 'echo:' or 'echo/'. Ask MS why */
@@ -2306,12 +2308,21 @@ WCHAR *WCMD_ReadAndParseLine(const WCHAR *optionalcmd, CMD_LIST **output, HANDLE
 
         } while (*extraData == 0x00);
         curPos = extraSpace;
-        if (context) handleExpansion(extraSpace, FALSE, FALSE);
+
+        /* Skip preceding whitespace */
+        while (*curPos == ' ' || *curPos == '\t') curPos++;
+
+        /* Replace env vars if in a batch context */
+        if (context) handleExpansion(curPos, FALSE, FALSE);
+
         /* Continue to echo commands IF echo is on and in batch program */
-        if (context && echo_mode && extraSpace[0] && (extraSpace[0] != '@')) {
+        if (context && echo_mode && *curPos && *curPos != '@') {
           WCMD_output_asis(extraSpace);
           WCMD_output_asis(newlineW);
         }
+
+        /* Skip repeated 'no echo' characters and whitespace */
+        while (*curPos == '@' || *curPos == ' ' || *curPos == '\t') curPos++;
       }
     }
 
@@ -2395,6 +2406,7 @@ int wmain (int argc, WCHAR *argvW[])
   WCHAR  *argPos  = NULL;
   WCHAR string[1024];
   WCHAR envvar[4];
+  BOOL promptNewLine = TRUE;
   BOOL opt_q;
   int opt_t = 0;
   static const WCHAR offW[] = {'O','F','F','\0'};
@@ -2759,11 +2771,12 @@ int wmain (int argc, WCHAR *argvW[])
 
     /* Read until EOF (which for std input is never, but if redirect
        in place, may occur                                          */
-    if (echo_mode) WCMD_show_prompt();
+    if (echo_mode) WCMD_show_prompt(promptNewLine);
     if (!WCMD_ReadAndParseLine(NULL, &toExecute, GetStdHandle(STD_INPUT_HANDLE)))
       break;
     WCMD_process_commands(toExecute, FALSE, FALSE);
     WCMD_free_commands(toExecute);
+    promptNewLine = !!toExecute;
     toExecute = NULL;
   }
   return 0;

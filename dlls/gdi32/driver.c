@@ -380,7 +380,7 @@ static INT nulldrv_GetDeviceCaps( PHYSDEV dev, INT cap )
     case SCALINGFACTORY:  return 0;
     case VREFRESH:        return GetDeviceCaps( dev->hdc, TECHNOLOGY ) == DT_RASDISPLAY ? 1 : 0;
     case DESKTOPHORZRES:
-        if (pGetSystemMetrics)
+        if (GetDeviceCaps( dev->hdc, TECHNOLOGY ) == DT_RASDISPLAY && pGetSystemMetrics)
         {
             DPI_AWARENESS_CONTEXT context;
             UINT ret;
@@ -391,7 +391,7 @@ static INT nulldrv_GetDeviceCaps( PHYSDEV dev, INT cap )
         }
         return GetDeviceCaps( dev->hdc, HORZRES );
     case DESKTOPVERTRES:
-        if (pGetSystemMetrics)
+        if (GetDeviceCaps( dev->hdc, TECHNOLOGY ) == DT_RASDISPLAY && pGetSystemMetrics)
         {
             DPI_AWARENESS_CONTEXT context;
             UINT ret;

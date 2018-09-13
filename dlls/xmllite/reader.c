@@ -1019,9 +1019,9 @@ static void readerinput_switchencoding(xmlreaderinput *readerinput, xml_encoding
     encoded_buffer *src = &readerinput->buffer->encoded;
     encoded_buffer *dest = &readerinput->buffer->utf16;
     int len, dest_len;
+    UINT cp = ~0u;
     HRESULT hr;
     WCHAR *ptr;
-    UINT cp;
 
     hr = get_code_page(enc, &cp);
     if (FAILED(hr)) return;
@@ -1524,7 +1524,7 @@ static inline BOOL is_namestartchar(WCHAR ch)
 }
 
 /* [4 NS] NCName ::= Name - (Char* ':' Char*) */
-static inline BOOL is_ncnamechar(WCHAR ch)
+BOOL is_ncnamechar(WCHAR ch)
 {
     return (ch >= 'A' && ch <= 'Z') ||
            (ch == '_') || (ch >= 'a' && ch <= 'z') ||
