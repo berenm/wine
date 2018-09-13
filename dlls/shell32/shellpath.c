@@ -951,7 +951,8 @@ static const WCHAR Videos_Sample_VideosW[] = {'V','i','d','e','o','s','\\','S','
 static const WCHAR WindowsW[] = {'W','i','n','d','o','w','s',0};
 static const WCHAR Windows_Sidebar_GadgetsW[] = {'W','i','n','d','o','w','s',' ','S','i','d','e','b','a','r','\\','G','a','d','g','e','t','s',0};
 static const WCHAR DefaultW[] = {'.','D','e','f','a','u','l','t','\0'};
-static const WCHAR AllUsersProfileW[] = {'%','P','U','B','L','I','C','%',0};
+static const WCHAR AllUsersProfileW[] = {'%','A','L','L','U','S','E','R','S','P','R','O','F','I','L','E','%','\0'};
+static const WCHAR PublicProfileW[] = {'%','P','U','B','L','I','C','%',0};
 static const WCHAR UserProfileW[] = {'%','U','S','E','R','P','R','O','F','I','L','E','%','\0'};
 static const WCHAR ProgramDataVarW[] = {'%','P','r','o','g','r','a','m','D','a','t','a','%','\0'};
 static const WCHAR SystemDriveW[] = {'%','S','y','s','t','e','m','D','r','i','v','e','%','\0'};
@@ -3474,7 +3475,7 @@ static HRESULT _SHGetDefaultValue(BYTE folder, LPWSTR pszPath)
                 strcpyW(pszPath, UserProfileW);
                 break;
             case CSIDL_Type_AllUsers:
-                strcpyW(pszPath, AllUsersProfileW);
+                strcpyW(pszPath, PublicProfileW);
                 break;
             case CSIDL_Type_ProgramData:
                 strcpyW(pszPath, ProgramDataVarW);
@@ -3792,8 +3793,7 @@ static HRESULT _SHExpandEnvironmentStrings(LPCWSTR szSrc, LPWSTR szDest)
 
         /* get the system drive */
         GetSystemDirectoryW(def_val, MAX_PATH);
-        if (def_val[1] == ':') strcpyW( def_val + 3, szDefaultProfileDirW );
-        else FIXME("non-drive system paths unsupported\n");
+        strcpyW( def_val + 3, szDefaultProfileDirW );
 
         hr = _SHGetProfilesValue(key, ProfilesDirectoryW, szProfilesPrefix, def_val );
     }
@@ -3807,12 +3807,22 @@ static HRESULT _SHExpandEnvironmentStrings(LPCWSTR szSrc, LPWSTR szDest)
             WCHAR szAllUsers[MAX_PATH], def_val[MAX_PATH];
 
             GetSystemDirectoryW(def_val, MAX_PATH);
-            if (def_val[1] == ':') strcpyW( def_val + 3, UsersPublicW );
-            else FIXME("non-drive system paths unsupported\n");
+            strcpyW( def_val + 3, UsersPublicW );
 
             hr = _SHGetProfilesValue(key, PublicW, szAllUsers, def_val);
             PathAppendW(szDest, szAllUsers);
             PathAppendW(szDest, szTemp + strlenW(AllUsersProfileW));
+        }
+        else if (!strncmpiW(szTemp, PublicProfileW, strlenW(PublicProfileW)))
+        {
+            WCHAR szAllUsers[MAX_PATH], def_val[MAX_PATH];
+
+            GetSystemDirectoryW(def_val, MAX_PATH);
+            strcpyW( def_val + 3, UsersPublicW );
+
+            hr = _SHGetProfilesValue(key, PublicW, szAllUsers, def_val);
+            PathAppendW(szDest, szAllUsers);
+            PathAppendW(szDest, szTemp + strlenW(PublicProfileW));
         }
         else if (!strncmpiW(szTemp, ProgramDataVarW, strlenW(ProgramDataVarW)))
         {
@@ -3833,8 +3843,7 @@ static HRESULT _SHExpandEnvironmentStrings(LPCWSTR szSrc, LPWSTR szDest)
             if (!in_registry)
             {
                 GetSystemDirectoryW(def_val, MAX_PATH);
-                if (def_val[1] == ':') strcpyW( def_val + 3, ProgramDataW );
-                else FIXME("non-drive system paths unsupported\n");
+                strcpyW( def_val + 3, ProgramDataW );
             }
 
             hr = _SHGetProfilesValue(key, ProgramDataW, szProgramData, def_val);
@@ -3854,35 +3863,19 @@ static HRESULT _SHExpandEnvironmentStrings(LPCWSTR szSrc, LPWSTR szDest)
         else if (!strncmpiW(szTemp, SystemDriveW, strlenW(SystemDriveW)))
         {
             GetSystemDirectoryW(szDest, MAX_PATH);
-            if (szDest[1] != ':')
-            {
-                FIXME("non-drive system paths unsupported\n");
-                hr = E_FAIL;
-            }
-            else
-            {
-                strcpyW(szDest + 3, szTemp + strlenW(SystemDriveW) + 1);
-                hr = S_OK;
-            }
+            strcpyW(szDest + 3, szTemp + strlenW(SystemDriveW) + 1);
         }
         else
         {
-            DWORD ret = ExpandEnvironmentStringsW(szSrc, szDest, MAX_PATH);
+            DWORD ret = ExpandEnvironmentStringsW(szTemp, szDest, MAX_PATH);
 
             if (ret > MAX_PATH)
                 hr = E_NOT_SUFFICIENT_BUFFER;
             else if (ret == 0)
                 hr = HRESULT_FROM_WIN32(GetLastError());
-            else
-                hr = S_OK;
+            else if (!strcmpW( szTemp, szDest )) break;  /* nothing expanded */
         }
-        if (SUCCEEDED(hr) && szDest[0] == '%')
-            strcpyW(szTemp, szDest);
-        else
-        {
-            /* terminate loop */
-            szTemp[0] = '\0';
-        }
+        if (SUCCEEDED(hr)) strcpyW(szTemp, szDest);
     }
 end:
     if (key)

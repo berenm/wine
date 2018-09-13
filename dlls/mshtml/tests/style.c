@@ -355,7 +355,9 @@ static void _test_text_decoration(unsigned line, IHTMLStyle *style, const char *
 
 static void test_set_csstext(IHTMLStyle *style)
 {
+    IHTMLCSSStyleDeclaration *css_style;
     VARIANT v;
+    BSTR str;
     HRESULT hres;
 
     test_style_set_csstext(style, "background-color: black;");
@@ -365,6 +367,34 @@ static void test_set_csstext(IHTMLStyle *style)
     ok(V_VT(&v) == VT_BSTR, "type failed: %d\n", V_VT(&v));
     ok(!strcmp_wa(V_BSTR(&v), "black"), "str=%s\n", wine_dbgstr_w(V_BSTR(&v)));
     VariantClear(&v);
+
+    hres = IHTMLStyle_QueryInterface(style, &IID_IHTMLCSSStyleDeclaration, (void**)&css_style);
+    ok(hres == S_OK || broken(!is_ie9plus && hres == E_NOINTERFACE),
+       "Could not get IHTMLCSSStyleDeclaration interface: %08x\n", hres);
+    if(FAILED(hres))
+        return;
+
+    str = a2bstr("float: left;");
+    hres = IHTMLCSSStyleDeclaration_put_cssText(css_style, str);
+    ok(hres == S_OK, "put_cssText failed: %08x\n", hres);
+    SysFreeString(str);
+
+    hres = IHTMLCSSStyleDeclaration_get_cssFloat(css_style, &str);
+    ok(hres == S_OK, "get_cssFloat failed: %08x\n", hres);
+    ok(!strcmp_wa(str, "left"), "cssFloat = %s\n", wine_dbgstr_w(str));
+    SysFreeString(str);
+
+    hres = IHTMLCSSStyleDeclaration_get_cssText(css_style, &str);
+    ok(hres == S_OK, "get_cssText failed: %08x\n", hres);
+    todo_wine_if(compat_mode < COMPAT_IE9)
+    ok(!strcmp_wa(str, compat_mode >= COMPAT_IE9 ? "float: left;" : "FLOAT: left"),
+       "cssFloat = %s\n", wine_dbgstr_w(str));
+    SysFreeString(str);
+
+    hres = IHTMLCSSStyleDeclaration_put_cssText(css_style, NULL);
+    ok(hres == S_OK, "put_cssText failed: %08x\n", hres);
+
+    IHTMLCSSStyleDeclaration_Release(css_style);
 }
 
 static void test_style2(IHTMLStyle2 *style2)
@@ -488,7 +518,7 @@ static void test_style2(IHTMLStyle2 *style2)
     SysFreeString(str);
 }
 
-static void test_style3(IHTMLStyle3 *style3)
+static void test_style3(IHTMLStyle3 *style3, IHTMLCSSStyleDeclaration *css_style)
 {
     VARIANT v;
     BSTR str;
@@ -521,6 +551,7 @@ static void test_style3(IHTMLStyle3 *style3)
     V_BSTR(&v) = a2bstr("100%");
     hres = IHTMLStyle3_put_zoom(style3, v);
     ok(hres == S_OK, "put_zoom failed: %08x\n", hres);
+    VariantClear(&v);
 
     V_VT(&v) = VT_ERROR;
     hres = IHTMLStyle3_get_zoom(style3, &v);
@@ -528,6 +559,13 @@ static void test_style3(IHTMLStyle3 *style3)
     ok(V_VT(&v) == VT_BSTR, "V_VT(zoom) = %d\n", V_VT(&v));
     ok(!strcmp_wa(V_BSTR(&v), "100%"), "V_BSTR(zoom) = %s\n", wine_dbgstr_w(V_BSTR(&v)));
     VariantClear(&v);
+
+    if(css_style) {
+        hres = IHTMLCSSStyleDeclaration_get_zoom(css_style, &v);
+        ok(hres == S_OK, "get_zoom failed: %08x\n", hres);
+        test_var_bstr(&v, "100%");
+        VariantClear(&v);
+    }
 
     V_VT(&v) = VT_I4;
     V_I4(&v) = 1;
@@ -540,6 +578,19 @@ static void test_style3(IHTMLStyle3 *style3)
     ok(V_VT(&v) == VT_BSTR, "V_VT(zoom) = %d\n", V_VT(&v));
     ok(!strcmp_wa(V_BSTR(&v), "1"), "V_BSTR(zoom) = %s\n", wine_dbgstr_w(V_BSTR(&v)));
     VariantClear(&v);
+
+    if(css_style) {
+        V_VT(&v) = VT_BSTR;
+        V_BSTR(&v) = a2bstr("100%");
+        hres = IHTMLCSSStyleDeclaration_put_zoom(css_style, v);
+        ok(hres == S_OK, "put_zoom failed: %08x\n", hres);
+        VariantClear(&v);
+
+        hres = IHTMLCSSStyleDeclaration_get_zoom(css_style, &v);
+        ok(hres == S_OK, "get_zoom failed: %08x\n", hres);
+        test_var_bstr(&v, "100%");
+        VariantClear(&v);
+    }
 }
 
 static void test_style4(IHTMLStyle4 *style4)
@@ -736,9 +787,56 @@ static void test_style6(IHTMLStyle6 *style)
     SysFreeString(str);
 }
 
+static void test_css_style_declaration(IHTMLCSSStyleDeclaration *css_style)
+{
+    VARIANT v;
+    BSTR str;
+    HRESULT hres;
+
+    hres = IHTMLCSSStyleDeclaration_get_backgroundClip(css_style, &str);
+    ok(hres == S_OK, "get_backgroundClip failed: %08x\n", hres);
+    ok(!str, "backgroundClip = %s\n", wine_dbgstr_w(str));
+
+    str = a2bstr("border-box");
+    hres = IHTMLCSSStyleDeclaration_put_backgroundClip(css_style, str);
+    ok(hres == S_OK, "put_backgroundClip failed: %08x\n", hres);
+    SysFreeString(str);
+
+    hres = IHTMLCSSStyleDeclaration_get_backgroundClip(css_style, &str);
+    ok(hres == S_OK, "get_backgroundClip failed: %08x\n", hres);
+    ok(!strcmp_wa(str, "border-box"), "backgroundClip = %s\n", wine_dbgstr_w(str));
+    SysFreeString(str);
+
+    hres = IHTMLCSSStyleDeclaration_get_opacity(css_style, &v);
+    ok(hres == S_OK, "get_opacity failed: %08x\n", hres);
+    test_var_bstr(&v, NULL);
+
+    V_VT(&v) = VT_I4;
+    V_I4(&v) = 0;
+    hres = IHTMLCSSStyleDeclaration_put_opacity(css_style, v);
+    ok(hres == S_OK, "put_opacity failed: %08x\n", hres);
+
+    hres = IHTMLCSSStyleDeclaration_get_opacity(css_style, &v);
+    ok(hres == S_OK, "get_opacity failed: %08x\n", hres);
+    test_var_bstr(&v, "0");
+    VariantClear(&v);
+
+    V_VT(&v) = VT_BSTR;
+    V_BSTR(&v) = a2bstr("1");
+    hres = IHTMLCSSStyleDeclaration_put_opacity(css_style, v);
+    ok(hres == S_OK, "put_opacity failed: %08x\n", hres);
+    VariantClear(&v);
+
+    hres = IHTMLCSSStyleDeclaration_get_opacity(css_style, &v);
+    ok(hres == S_OK, "get_opacity failed: %08x\n", hres);
+    test_var_bstr(&v, "1");
+    VariantClear(&v);
+}
+
 static void test_body_style(IHTMLStyle *style)
 {
     IHTMLCSSStyleDeclaration *css_style;
+    IHTMLCSSStyleDeclaration2 *css_style2 = NULL;
     IHTMLStyle2 *style2;
     IHTMLStyle3 *style3;
     IHTMLStyle4 *style4;
@@ -757,6 +855,12 @@ static void test_body_style(IHTMLStyle *style)
     hres = IHTMLStyle_QueryInterface(style, &IID_IHTMLCSSStyleDeclaration, (void**)&css_style);
     ok(hres == S_OK || broken(!is_ie9plus && hres == E_NOINTERFACE),
        "Could not get IHTMLCSSStyleDeclaration interface: %08x\n", hres);
+
+    if(css_style) {
+        hres = IHTMLStyle_QueryInterface(style, &IID_IHTMLCSSStyleDeclaration2, (void**)&css_style2);
+        ok(hres == S_OK || broken(hres == E_NOINTERFACE),
+           "Could not get IHTMLCSSStyleDeclaration2 interface: %08x\n", hres);
+    }
 
     test_style_csstext(style, NULL);
 
@@ -1770,6 +1874,14 @@ static void test_body_style(IHTMLStyle *style)
     ok(hres == S_OK, "put_filter failed: %08x\n", hres);
     SysFreeString(str);
 
+    hres = IHTMLStyle_put_filter(style, NULL);
+    ok(hres == S_OK, "put_filter failed: %08x\n", hres);
+
+    str = (void*)0xdeadbeef;
+    hres = IHTMLStyle_get_filter(style, &str);
+    ok(hres == S_OK, "get_filter failed: %08x\n", hres);
+    ok(!str, "filter != NULL\n");
+
     V_VT(&v) = VT_EMPTY;
     hres = IHTMLStyle_get_zIndex(style, &v);
     ok(hres == S_OK, "get_zIndex failed: %08x\n", hres);
@@ -2779,6 +2891,43 @@ static void test_body_style(IHTMLStyle *style)
     hres = IHTMLStyle_get_styleFloat(style, &str);
     ok(hres == S_OK, "get_styleFloat failed: %08x\n", hres);
     ok(!strcmp_wa(str, "left"), "styleFloat = %s\n", wine_dbgstr_w(str));
+    SysFreeString(str);
+
+    if(css_style) {
+        str = NULL;
+        hres = IHTMLCSSStyleDeclaration_get_cssFloat(css_style, &str);
+        ok(hres == S_OK, "get_cssFloat failed: %08x\n", hres);
+        ok(!strcmp_wa(str, "left"), "cssFloat = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
+
+        str = NULL;
+        hres = IHTMLCSSStyleDeclaration_get_styleFloat(css_style, &str);
+        ok(hres == S_OK, "get_styleFloat failed: %08x\n", hres);
+        ok(!strcmp_wa(str, "left"), "styleFloat = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
+
+        str = a2bstr("right");
+        hres = IHTMLCSSStyleDeclaration_put_cssFloat(css_style, str);
+        ok(hres == S_OK, "put_styleFloat failed: %08x\n", hres);
+        SysFreeString(str);
+
+        str = NULL;
+        hres = IHTMLCSSStyleDeclaration_get_cssFloat(css_style, &str);
+        ok(hres == S_OK, "get_cssFloat failed: %08x\n", hres);
+        ok(!strcmp_wa(str, "right"), "styleFloat = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
+
+        str = a2bstr("left");
+        hres = IHTMLCSSStyleDeclaration_put_styleFloat(css_style, str);
+        ok(hres == S_OK, "put_styleFloat failed: %08x\n", hres);
+        SysFreeString(str);
+
+        str = NULL;
+        hres = IHTMLCSSStyleDeclaration_get_cssFloat(css_style, &str);
+        ok(hres == S_OK, "get_cssFloat failed: %08x\n", hres);
+        ok(!strcmp_wa(str, "left"), "styleFloat = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
+    }
 
     hres = IHTMLStyle_QueryInterface(style, &IID_IHTMLStyle2, (void**)&style2);
     ok(hres == S_OK, "Could not get IHTMLStyle2 iface: %08x\n", hres);
@@ -2790,7 +2939,7 @@ static void test_body_style(IHTMLStyle *style)
     hres = IHTMLStyle_QueryInterface(style, &IID_IHTMLStyle3, (void**)&style3);
     ok(hres == S_OK, "Could not get IHTMLStyle3 iface: %08x\n", hres);
     if(SUCCEEDED(hres)) {
-        test_style3(style3);
+        test_style3(style3, css_style);
         IHTMLStyle3_Release(style3);
     }
 
@@ -2817,6 +2966,11 @@ static void test_body_style(IHTMLStyle *style)
         win_skip("IHTMLStyle6 not available\n");
     }
 
+    if(compat_mode >= COMPAT_IE9)
+        test_css_style_declaration(css_style);
+
+    if(css_style2)
+        IHTMLCSSStyleDeclaration2_Release(css_style2);
     if(css_style)
         IHTMLCSSStyleDeclaration_Release(css_style);
 }

@@ -9,7 +9,7 @@
 @ stdcall -norelay ExInterlockedPushEntrySList (ptr ptr ptr) NTOSKRNL_ExInterlockedPushEntrySList
 @ stub ExReInitializeRundownProtection
 @ stdcall -norelay ExReleaseFastMutexUnsafe(ptr)
-@ stub ExReleaseResourceLite
+@ stdcall ExReleaseResourceLite(ptr)
 @ stub ExReleaseRundownProtection
 @ stub ExReleaseRundownProtectionEx
 @ stub ExRundownCompleted
@@ -669,7 +669,7 @@
 @ stub MmCanFileBeTruncated
 @ stub MmCommitSessionMappedView
 @ stub MmCreateMdl
-@ stub MmCreateSection
+@ stdcall MmCreateSection(ptr long ptr ptr long long long ptr)
 @ stub MmDisableModifiedWriteOfSection
 @ stub MmFlushImageSection
 @ stub MmForceSectionClosed

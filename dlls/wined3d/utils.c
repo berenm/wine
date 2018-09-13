@@ -123,8 +123,6 @@ static const struct wined3d_format_channels formats[] =
     {WINED3DFMT_R5G5_SNORM_L6_UNORM,        5,  5,  0,  0,   0,  5,  0,  0,    2,   0,     0},
     {WINED3DFMT_R8G8_SNORM_L8X8_UNORM,      8,  8,  0,  0,   0,  8,  0,  0,    4,   0,     0},
     {WINED3DFMT_R10G11B11_SNORM,           10, 11, 11,  0,   0, 10, 21,  0,    4,   0,     0},
-    {WINED3DFMT_R10G10B10X2_UINT,          10, 10, 10,  0,   0, 10, 20,  0,    4,   0,     0},
-    {WINED3DFMT_R10G10B10X2_SNORM,         10, 10, 10,  0,   0, 10, 20,  0,    4,   0,     0},
     {WINED3DFMT_R10G10B10_SNORM_A2_UNORM,  10, 10, 10,  2,   0, 10, 20, 30,    4,   0,     0},
     /* Depth stencil formats */
     {WINED3DFMT_D16_LOCKABLE,               0,  0,  0,  0,   0,  0,  0,  0,    2,  16,     0},
@@ -155,6 +153,7 @@ static const struct wined3d_format_channels formats[] =
     {WINED3DFMT_R32G32_TYPELESS,           32, 32,  0,  0,   0, 32,  0,  0,    8,   0,     0},
     {WINED3DFMT_R32G8X24_TYPELESS,          0,  0,  0,  0,   0,  0,  0,  0,    8,  32,     8},
     {WINED3DFMT_R10G10B10A2_TYPELESS,      10, 10, 10,  2,   0, 10, 20, 30,    4,   0,     0},
+    {WINED3DFMT_R10G10B10X2_TYPELESS,      10, 10, 10,  0,   0, 10, 20,  0,    4,   0,     0},
     {WINED3DFMT_R8G8B8A8_TYPELESS,          8,  8,  8,  8,   0,  8, 16, 24,    4,   0,     0},
     {WINED3DFMT_R16G16_TYPELESS,           16, 16,  0,  0,   0, 16,  0,  0,    4,   0,     0},
     {WINED3DFMT_R32_TYPELESS,              32,  0,  0,  0,   0,  0,  0,  0,    4,   0,     0},
@@ -227,6 +226,8 @@ static const struct wined3d_typed_format_info typed_formats[] =
     {WINED3DFMT_R10G10B10A2_SNORM,        WINED3DFMT_R10G10B10A2_TYPELESS,  "iiii"},
     {WINED3DFMT_R10G10B10A2_UINT,         WINED3DFMT_R10G10B10A2_TYPELESS,  "UUUU"},
     {WINED3DFMT_R10G10B10A2_UNORM,        WINED3DFMT_R10G10B10A2_TYPELESS,  "uuuu"},
+    {WINED3DFMT_R10G10B10X2_SNORM,        WINED3DFMT_R10G10B10X2_TYPELESS,  "iiiX"},
+    {WINED3DFMT_R10G10B10X2_UINT,         WINED3DFMT_R10G10B10X2_TYPELESS,  "UUUX"},
     {WINED3DFMT_R8G8B8A8_UINT,            WINED3DFMT_R8G8B8A8_TYPELESS,     "UUUU"},
     {WINED3DFMT_R8G8B8A8_SINT,            WINED3DFMT_R8G8B8A8_TYPELESS,     "IIII"},
     {WINED3DFMT_R8G8B8A8_SNORM,           WINED3DFMT_R8G8B8A8_TYPELESS,     "iiii"},
@@ -599,49 +600,47 @@ struct wined3d_format_vertex_info
 {
     enum wined3d_format_id id;
     enum wined3d_ffp_emit_idx emit_idx;
-    unsigned int component_count;
     GLenum gl_vtx_type;
-    GLboolean gl_normalized;
     enum wined3d_gl_extension extension;
 };
 
 static const struct wined3d_format_vertex_info format_vertex_info[] =
 {
-    {WINED3DFMT_R32_FLOAT,          WINED3D_FFP_EMIT_FLOAT1,    1, GL_FLOAT,                       GL_FALSE},
-    {WINED3DFMT_R32G32_FLOAT,       WINED3D_FFP_EMIT_FLOAT2,    2, GL_FLOAT,                       GL_FALSE},
-    {WINED3DFMT_R32G32B32_FLOAT,    WINED3D_FFP_EMIT_FLOAT3,    3, GL_FLOAT,                       GL_FALSE},
-    {WINED3DFMT_R32G32B32A32_FLOAT, WINED3D_FFP_EMIT_FLOAT4,    4, GL_FLOAT,                       GL_FALSE},
-    {WINED3DFMT_B8G8R8A8_UNORM,     WINED3D_FFP_EMIT_D3DCOLOR,  4, GL_UNSIGNED_BYTE,               GL_TRUE },
-    {WINED3DFMT_R8G8B8A8_UINT,      WINED3D_FFP_EMIT_UBYTE4,    4, GL_UNSIGNED_BYTE,               GL_FALSE},
-    {WINED3DFMT_R16G16_UINT,        WINED3D_FFP_EMIT_INVALID,   2, GL_UNSIGNED_SHORT,              GL_FALSE},
-    {WINED3DFMT_R16G16_SINT,        WINED3D_FFP_EMIT_SHORT2,    2, GL_SHORT,                       GL_FALSE},
-    {WINED3DFMT_R16G16B16A16_SINT,  WINED3D_FFP_EMIT_SHORT4,    4, GL_SHORT,                       GL_FALSE},
-    {WINED3DFMT_R8G8B8A8_UNORM,     WINED3D_FFP_EMIT_UBYTE4N,   4, GL_UNSIGNED_BYTE,               GL_TRUE },
-    {WINED3DFMT_R16G16_SNORM,       WINED3D_FFP_EMIT_SHORT2N,   2, GL_SHORT,                       GL_TRUE },
-    {WINED3DFMT_R16G16B16A16_SNORM, WINED3D_FFP_EMIT_SHORT4N,   4, GL_SHORT,                       GL_TRUE },
-    {WINED3DFMT_R16G16_UNORM,       WINED3D_FFP_EMIT_USHORT2N,  2, GL_UNSIGNED_SHORT,              GL_TRUE },
-    {WINED3DFMT_R16G16B16A16_UNORM, WINED3D_FFP_EMIT_USHORT4N,  4, GL_UNSIGNED_SHORT,              GL_TRUE },
-    {WINED3DFMT_R10G10B10X2_UINT,   WINED3D_FFP_EMIT_UDEC3,     3, GL_UNSIGNED_SHORT,              GL_FALSE},
-    {WINED3DFMT_R10G10B10X2_SNORM,  WINED3D_FFP_EMIT_DEC3N,     3, GL_SHORT,                       GL_TRUE },
-    {WINED3DFMT_R10G10B10A2_UNORM,  WINED3D_FFP_EMIT_INVALID,   4, GL_UNSIGNED_INT_2_10_10_10_REV, GL_TRUE,
+    {WINED3DFMT_R32_FLOAT,          WINED3D_FFP_EMIT_FLOAT1,    GL_FLOAT},
+    {WINED3DFMT_R32G32_FLOAT,       WINED3D_FFP_EMIT_FLOAT2,    GL_FLOAT},
+    {WINED3DFMT_R32G32B32_FLOAT,    WINED3D_FFP_EMIT_FLOAT3,    GL_FLOAT},
+    {WINED3DFMT_R32G32B32A32_FLOAT, WINED3D_FFP_EMIT_FLOAT4,    GL_FLOAT},
+    {WINED3DFMT_B8G8R8A8_UNORM,     WINED3D_FFP_EMIT_D3DCOLOR,  GL_UNSIGNED_BYTE},
+    {WINED3DFMT_R8G8B8A8_UINT,      WINED3D_FFP_EMIT_UBYTE4,    GL_UNSIGNED_BYTE},
+    {WINED3DFMT_R16G16_UINT,        WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_SHORT},
+    {WINED3DFMT_R16G16_SINT,        WINED3D_FFP_EMIT_SHORT2,    GL_SHORT},
+    {WINED3DFMT_R16G16B16A16_SINT,  WINED3D_FFP_EMIT_SHORT4,    GL_SHORT},
+    {WINED3DFMT_R8G8B8A8_UNORM,     WINED3D_FFP_EMIT_UBYTE4N,   GL_UNSIGNED_BYTE},
+    {WINED3DFMT_R16G16_SNORM,       WINED3D_FFP_EMIT_SHORT2N,   GL_SHORT},
+    {WINED3DFMT_R16G16B16A16_SNORM, WINED3D_FFP_EMIT_SHORT4N,   GL_SHORT},
+    {WINED3DFMT_R16G16_UNORM,       WINED3D_FFP_EMIT_USHORT2N,  GL_UNSIGNED_SHORT},
+    {WINED3DFMT_R16G16B16A16_UNORM, WINED3D_FFP_EMIT_USHORT4N,  GL_UNSIGNED_SHORT},
+    {WINED3DFMT_R10G10B10X2_UINT,   WINED3D_FFP_EMIT_UDEC3,     GL_UNSIGNED_SHORT},
+    {WINED3DFMT_R10G10B10X2_SNORM,  WINED3D_FFP_EMIT_DEC3N,     GL_SHORT},
+    {WINED3DFMT_R10G10B10A2_UNORM,  WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_INT_2_10_10_10_REV,
             ARB_VERTEX_TYPE_2_10_10_10_REV},
-    {WINED3DFMT_R16G16_FLOAT,       WINED3D_FFP_EMIT_FLOAT16_2, 2, GL_HALF_FLOAT,                  GL_FALSE},
-    {WINED3DFMT_R16G16B16A16_FLOAT, WINED3D_FFP_EMIT_FLOAT16_4, 4, GL_HALF_FLOAT,                  GL_FALSE},
-    {WINED3DFMT_R8G8B8A8_SNORM,     WINED3D_FFP_EMIT_INVALID,   4, GL_BYTE,                        GL_TRUE },
-    {WINED3DFMT_R8G8B8A8_SINT,      WINED3D_FFP_EMIT_INVALID,   4, GL_BYTE,                        GL_FALSE},
-    {WINED3DFMT_R16G16B16A16_UINT,  WINED3D_FFP_EMIT_INVALID,   4, GL_UNSIGNED_SHORT,              GL_FALSE},
-    {WINED3DFMT_R8_UNORM,           WINED3D_FFP_EMIT_INVALID,   1, GL_UNSIGNED_BYTE,               GL_TRUE},
-    {WINED3DFMT_R8_UINT,            WINED3D_FFP_EMIT_INVALID,   1, GL_UNSIGNED_BYTE,               GL_FALSE},
-    {WINED3DFMT_R8_SINT,            WINED3D_FFP_EMIT_INVALID,   1, GL_BYTE,                        GL_FALSE},
-    {WINED3DFMT_R16_UINT,           WINED3D_FFP_EMIT_INVALID,   1, GL_UNSIGNED_SHORT,              GL_FALSE},
-    {WINED3DFMT_R16_SINT,           WINED3D_FFP_EMIT_INVALID,   1, GL_SHORT,                       GL_FALSE},
-    {WINED3DFMT_R32_UINT,           WINED3D_FFP_EMIT_INVALID,   1, GL_UNSIGNED_INT,                GL_FALSE},
-    {WINED3DFMT_R32_SINT,           WINED3D_FFP_EMIT_INVALID,   1, GL_INT,                         GL_FALSE},
-    {WINED3DFMT_R32G32_UINT,        WINED3D_FFP_EMIT_INVALID,   2, GL_UNSIGNED_INT,                GL_FALSE},
-    {WINED3DFMT_R32G32_SINT,        WINED3D_FFP_EMIT_INVALID,   2, GL_INT,                         GL_FALSE},
-    {WINED3DFMT_R32G32B32_UINT,     WINED3D_FFP_EMIT_INVALID,   3, GL_UNSIGNED_INT,                GL_FALSE},
-    {WINED3DFMT_R32G32B32A32_UINT,  WINED3D_FFP_EMIT_INVALID,   4, GL_UNSIGNED_INT,                GL_FALSE},
-    {WINED3DFMT_R32G32B32A32_SINT,  WINED3D_FFP_EMIT_INVALID,   4, GL_INT,                         GL_FALSE},
+    {WINED3DFMT_R16G16_FLOAT,       WINED3D_FFP_EMIT_FLOAT16_2, GL_HALF_FLOAT},
+    {WINED3DFMT_R16G16B16A16_FLOAT, WINED3D_FFP_EMIT_FLOAT16_4, GL_HALF_FLOAT},
+    {WINED3DFMT_R8G8B8A8_SNORM,     WINED3D_FFP_EMIT_INVALID,   GL_BYTE},
+    {WINED3DFMT_R8G8B8A8_SINT,      WINED3D_FFP_EMIT_INVALID,   GL_BYTE},
+    {WINED3DFMT_R16G16B16A16_UINT,  WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_SHORT},
+    {WINED3DFMT_R8_UNORM,           WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_BYTE},
+    {WINED3DFMT_R8_UINT,            WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_BYTE},
+    {WINED3DFMT_R8_SINT,            WINED3D_FFP_EMIT_INVALID,   GL_BYTE},
+    {WINED3DFMT_R16_UINT,           WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_SHORT},
+    {WINED3DFMT_R16_SINT,           WINED3D_FFP_EMIT_INVALID,   GL_SHORT},
+    {WINED3DFMT_R32_UINT,           WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_INT},
+    {WINED3DFMT_R32_SINT,           WINED3D_FFP_EMIT_INVALID,   GL_INT},
+    {WINED3DFMT_R32G32_UINT,        WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_INT},
+    {WINED3DFMT_R32G32_SINT,        WINED3D_FFP_EMIT_INVALID,   GL_INT},
+    {WINED3DFMT_R32G32B32_UINT,     WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_INT},
+    {WINED3DFMT_R32G32B32A32_UINT,  WINED3D_FFP_EMIT_INVALID,   GL_UNSIGNED_INT},
+    {WINED3DFMT_R32G32B32A32_SINT,  WINED3D_FFP_EMIT_INVALID,   GL_INT},
 };
 
 struct wined3d_format_texture_info
@@ -1531,7 +1530,8 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             ARB_TEXTURE_RG,             NULL},
     {WINED3DFMT_A8_UNORM,               GL_ALPHA8,                        GL_ALPHA8,                              0,
             GL_ALPHA,                   GL_UNSIGNED_BYTE,                 0,
-            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING
+            | WINED3DFMT_FLAG_RENDERTARGET,
             WINED3D_GL_LEGACY_CONTEXT,  NULL},
     {WINED3DFMT_B4G4R4X4_UNORM,         GL_RGB4,                          GL_RGB4,                                0,
             GL_BGRA,                    GL_UNSIGNED_SHORT_4_4_4_4_REV,    0,
@@ -2037,6 +2037,7 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
     for (i = 0; i < ARRAY_SIZE(typed_formats); ++i)
     {
         const struct wined3d_format *typeless_format;
+        unsigned int component_count = 0;
         DWORD flags = 0;
 
         if (!(format = get_format_internal(adapter, typed_formats[i].id)))
@@ -2065,10 +2066,15 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
         for (j = 0; j < strlen(typed_formats[i].channels); ++j)
         {
             enum wined3d_channel_type channel_type = map_channel_type(typed_formats[i].channels[j]);
+
+            if (channel_type == WINED3D_CHANNEL_TYPE_UNORM || channel_type == WINED3D_CHANNEL_TYPE_SNORM)
+                flags |= WINED3DFMT_FLAG_NORMALISED;
             if (channel_type == WINED3D_CHANNEL_TYPE_UINT || channel_type == WINED3D_CHANNEL_TYPE_SINT)
                 flags |= WINED3DFMT_FLAG_INTEGER;
             if (channel_type == WINED3D_CHANNEL_TYPE_FLOAT)
                 flags |= WINED3DFMT_FLAG_FLOAT;
+            if (channel_type != WINED3D_CHANNEL_TYPE_UNUSED)
+                ++component_count;
 
             if (channel_type == WINED3D_CHANNEL_TYPE_DEPTH && !format->depth_size)
             {
@@ -2077,6 +2083,7 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
             }
         }
 
+        format->component_count = component_count;
         format_set_flag(format, flags);
     }
 
@@ -3664,34 +3671,6 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
     format->flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
 }
 
-static unsigned int calculate_vertex_attribute_size(GLenum type, unsigned int component_count)
-{
-    switch (type)
-    {
-        case GL_HALF_FLOAT:
-            return component_count * sizeof(GLhalfNV);
-        case GL_FLOAT:
-            return component_count * sizeof(GLfloat);
-        case GL_BYTE:
-            return component_count * sizeof(GLbyte);
-        case GL_UNSIGNED_BYTE:
-            return component_count * sizeof(GLubyte);
-        case GL_SHORT:
-            return component_count * sizeof(GLshort);
-        case GL_UNSIGNED_SHORT:
-            return component_count * sizeof(GLushort);
-        case GL_INT:
-            return component_count * sizeof(GLint);
-        case GL_UNSIGNED_INT:
-            return component_count * sizeof(GLuint);
-        case GL_UNSIGNED_INT_2_10_10_10_REV:
-            return sizeof(GLuint);
-        default:
-            FIXME("Unhandled GL type %#x.\n", type);
-            return 0;
-    }
-}
-
 static BOOL init_format_vertex_info(const struct wined3d_adapter *adapter,
         struct wined3d_gl_info *gl_info)
 {
@@ -3707,17 +3686,8 @@ static BOOL init_format_vertex_info(const struct wined3d_adapter *adapter,
             continue;
 
         format->emit_idx = format_vertex_info[i].emit_idx;
-        format->component_count = format_vertex_info[i].component_count;
         format->gl_vtx_type = format_vertex_info[i].gl_vtx_type;
-        format->gl_vtx_format = format_vertex_info[i].component_count;
-        format->gl_normalized = format_vertex_info[i].gl_normalized;
-        if (!(format->attribute_size = calculate_vertex_attribute_size(format->gl_vtx_type,
-                format->component_count)))
-        {
-            ERR("Invalid attribute size for vertex format %s (%#x).\n",
-                    debug_d3dformat(format_vertex_info[i].id), format_vertex_info[i].id);
-            return FALSE;
-        }
+        format->gl_vtx_format = format->component_count;
     }
 
     return TRUE;
