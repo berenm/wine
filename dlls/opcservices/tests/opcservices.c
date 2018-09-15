@@ -75,6 +75,7 @@ static void test_package(void)
     hr = IOpcPackage_GetPartSet(package, &partset2);
     ok(SUCCEEDED(hr), "Failed to create a part set, hr %#x.\n", hr);
     ok(partset == partset2, "Expected same part set instance.\n");
+    IOpcPartSet_Release(partset2);
 
     /* CreatePart */
     hr = IOpcFactory_CreatePartUri(factory, uriW, &part_uri);
@@ -161,6 +162,7 @@ todo_wine {
     IOpcRelationshipSet_Release(relset);
     IOpcRelationshipSet_Release(relset2);
 
+    IOpcPartSet_Release(partset);
     IOpcPackage_Release(package);
 
     /* Root uri */
@@ -322,6 +324,8 @@ static void test_relationship(void)
     hr = IOpcRelationshipSet_CreateRelationship(rels, NULL, typeW, target_uri2, OPC_URI_TARGET_MODE_INTERNAL, &rel);
 todo_wine
     ok(hr == OPC_E_INVALID_RELATIONSHIP_TARGET, "Unexpected hr %#x.\n", hr);
+    if (hr == S_OK)
+        IOpcRelationship_Release(rel);
 
     hr = IOpcRelationshipSet_CreateRelationship(rels, NULL, typeW, target_uri, OPC_URI_TARGET_MODE_INTERNAL, &rel);
     ok(SUCCEEDED(hr), "Failed to create relationship, hr %#x.\n", hr);
@@ -518,7 +522,7 @@ static void test_rel_part_uri(void)
             IOpcPartUri *rel_uri2;
             IOpcUri *source_uri2;
             IUnknown *unk = NULL;
-            BOOL ret;
+            BOOL ret = FALSE;
             BSTR str;
 
             hr = IOpcPartUri_GetSourceUri(rel_uri, &source_uri);
@@ -587,6 +591,330 @@ static void test_rel_part_uri(void)
     IOpcFactory_Release(factory);
 }
 
+static void test_part_enumerator(void)
+{
+    static const WCHAR typeW[] = {'t','y','p','e','/','s','u','b','t','y','p','e',0};
+    static const WCHAR uriW[] = {'/','u','r','i',0};
+    IOpcPartEnumerator *partenum, *partenum2;
+    IOpcPart *part, *part2;
+    IOpcPartUri *part_uri;
+    IOpcPackage *package;
+    IOpcFactory *factory;
+    IOpcPartSet *parts;
+    HRESULT hr;
+    BOOL ret;
+
+    factory = create_factory();
+
+    hr = IOpcFactory_CreatePackage(factory, &package);
+    ok(SUCCEEDED(hr) || broken(hr == E_NOTIMPL) /* Vista */, "Failed to create a package, hr %#x.\n", hr);
+    if (FAILED(hr))
+    {
+        IOpcFactory_Release(factory);
+        return;
+    }
+
+    hr = IOpcPackage_GetPartSet(package, &parts);
+    ok(SUCCEEDED(hr), "Failed to get part set, hr %#x.\n", hr);
+
+    hr = IOpcPartSet_GetEnumerator(parts, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcPartSet_GetEnumerator(parts, &partenum);
+    ok(SUCCEEDED(hr), "Failed to get enumerator, hr %#x.\n", hr);
+
+    hr = IOpcPartSet_GetEnumerator(parts, &partenum2);
+    ok(SUCCEEDED(hr), "Failed to get enumerator, hr %#x.\n", hr);
+    ok(partenum != partenum2, "Unexpected instance.\n");
+    IOpcPartEnumerator_Release(partenum2);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcPartEnumerator_MoveNext(partenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    ret = TRUE;
+    hr = IOpcPartEnumerator_MoveNext(partenum, &ret);
+    ok(hr == S_OK, "Failed to move, hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    ret = TRUE;
+    hr = IOpcPartEnumerator_MovePrevious(partenum, &ret);
+    ok(hr == S_OK, "Failed to move, hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcFactory_CreatePartUri(factory, uriW, &part_uri);
+    ok(SUCCEEDED(hr), "Failed to create part uri, hr %#x.\n", hr);
+
+    hr = IOpcPartSet_CreatePart(parts, part_uri, typeW, OPC_COMPRESSION_NONE, &part);
+    ok(SUCCEEDED(hr), "Failed to create a part, hr %#x.\n", hr);
+    IOpcPartUri_Release(part_uri);
+
+    part2 = (void *)0xdeadbeef;
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(part2 == NULL, "Unexpected instance.\n");
+
+    hr = IOpcPartEnumerator_MoveNext(partenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    ret = 123;
+    hr = IOpcPartEnumerator_MoveNext(partenum, &ret);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(ret == 123, "Unexpected result %d.\n", ret);
+
+    hr = IOpcPartEnumerator_MovePrevious(partenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    ret = 123;
+    hr = IOpcPartEnumerator_MovePrevious(partenum, &ret);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(ret == 123, "Unexpected result %d.\n", ret);
+
+    hr = IOpcPartEnumerator_Clone(partenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    partenum2 = (void *)0xdeadbeef;
+    hr = IOpcPartEnumerator_Clone(partenum, &partenum2);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(partenum2 == NULL, "Unexpected instance.\n");
+
+    IOpcPartEnumerator_Release(partenum);
+
+    hr = IOpcPartSet_GetEnumerator(parts, &partenum);
+    ok(SUCCEEDED(hr), "Failed to get enumerator, hr %#x.\n", hr);
+
+    part2 = (void *)0xdeadbeef;
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+    ok(part2 == NULL, "Unexpected instance.\n");
+
+    hr = IOpcPartEnumerator_MoveNext(partenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(part2 == part, "Unexpected instance.\n");
+    IOpcPart_Release(part2);
+
+    hr = IOpcPartEnumerator_MoveNext(partenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    part2 = (void *)0xdeadbeef;
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+    ok(part2 == NULL, "Unexpected instance.\n");
+
+    hr = IOpcPartEnumerator_MovePrevious(partenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(part2 == part, "Unexpected instance.\n");
+    IOpcPart_Release(part2);
+
+    hr = IOpcPartEnumerator_MovePrevious(partenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcPartEnumerator_Clone(partenum, &partenum2);
+    ok(SUCCEEDED(hr), "Clone failed, hr %#x.\n", hr);
+
+    hr = IOpcPartEnumerator_MoveNext(partenum2, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum2, &part2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IOpcPart_Release(part2);
+
+    hr = IOpcPartEnumerator_GetCurrent(partenum, &part2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+
+    IOpcPartEnumerator_Release(partenum2);
+
+    IOpcPartEnumerator_Release(partenum);
+
+    IOpcPart_Release(part);
+
+    IOpcPartSet_Release(parts);
+
+    IOpcPackage_Release(package);
+    IOpcFactory_Release(factory);
+}
+
+static void test_rels_enumerator(void)
+{
+    static const WCHAR typeW[] = {'t','y','p','e','/','s','u','b','t','y','p','e',0};
+    static const WCHAR targetW[] = {'t','a','r','g','e','t',0};
+    IOpcRelationshipEnumerator *relsenum, *relsenum2;
+    IOpcRelationship *rel, *rel2;
+    IOpcPackage *package;
+    IOpcFactory *factory;
+    IOpcRelationshipSet *rels;
+    IUri *target_uri;
+    HRESULT hr;
+    BOOL ret;
+
+    factory = create_factory();
+
+    hr = IOpcFactory_CreatePackage(factory, &package);
+    ok(SUCCEEDED(hr) || broken(hr == E_NOTIMPL) /* Vista */, "Failed to create a package, hr %#x.\n", hr);
+    if (FAILED(hr))
+    {
+        IOpcFactory_Release(factory);
+        return;
+    }
+
+    hr = IOpcPackage_GetRelationshipSet(package, &rels);
+    ok(SUCCEEDED(hr), "Failed to get part set, hr %#x.\n", hr);
+
+    hr = IOpcRelationshipSet_GetEnumerator(rels, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcRelationshipSet_GetEnumerator(rels, &relsenum);
+    ok(SUCCEEDED(hr), "Failed to get enumerator, hr %#x.\n", hr);
+
+    hr = IOpcRelationshipSet_GetEnumerator(rels, &relsenum2);
+    ok(SUCCEEDED(hr), "Failed to get enumerator, hr %#x.\n", hr);
+    ok(relsenum != relsenum2, "Unexpected instance.\n");
+    IOpcRelationshipEnumerator_Release(relsenum2);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    ret = TRUE;
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum, &ret);
+    ok(hr == S_OK, "Failed to move, hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    ret = TRUE;
+    hr = IOpcRelationshipEnumerator_MovePrevious(relsenum, &ret);
+    ok(hr == S_OK, "Failed to move, hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    hr = CreateUri(targetW, Uri_CREATE_ALLOW_RELATIVE, 0, &target_uri);
+    ok(SUCCEEDED(hr), "Failed to create target uri, hr %#x.\n", hr);
+
+    hr = IOpcRelationshipSet_CreateRelationship(rels, NULL, typeW, target_uri, OPC_URI_TARGET_MODE_INTERNAL, &rel);
+    ok(SUCCEEDED(hr), "Failed to create relationship, hr %#x.\n", hr);
+
+    IUri_Release(target_uri);
+
+    rel2 = (void *)0xdeadbeef;
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(rel2 == NULL, "Unexpected instance.\n");
+
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    ret = 123;
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum, &ret);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(ret == 123, "Unexpected result %d.\n", ret);
+
+    hr = IOpcRelationshipEnumerator_MovePrevious(relsenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    ret = 123;
+    hr = IOpcRelationshipEnumerator_MovePrevious(relsenum, &ret);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(ret == 123, "Unexpected result %d.\n", ret);
+
+    hr = IOpcRelationshipEnumerator_Clone(relsenum, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    relsenum2 = (void *)0xdeadbeef;
+    hr = IOpcRelationshipEnumerator_Clone(relsenum, &relsenum2);
+    ok(hr == OPC_E_ENUM_COLLECTION_CHANGED, "Unexpected hr %#x.\n", hr);
+    ok(relsenum2 == NULL, "Unexpected instance.\n");
+
+    IOpcRelationshipEnumerator_Release(relsenum);
+
+    hr = IOpcRelationshipSet_GetEnumerator(rels, &relsenum);
+    ok(SUCCEEDED(hr), "Failed to get enumerator, hr %#x.\n", hr);
+
+    rel2 = (void *)0xdeadbeef;
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+    ok(rel2 == NULL, "Unexpected instance.\n");
+
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(rel2 == rel, "Unexpected instance.\n");
+    IOpcRelationship_Release(rel2);
+
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    rel2 = (void *)0xdeadbeef;
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+    ok(rel2 == NULL, "Unexpected instance.\n");
+
+    hr = IOpcRelationshipEnumerator_MovePrevious(relsenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(rel2 == rel, "Unexpected instance.\n");
+    IOpcRelationship_Release(rel2);
+
+    hr = IOpcRelationshipEnumerator_MovePrevious(relsenum, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+
+    hr = IOpcRelationshipEnumerator_Clone(relsenum, &relsenum2);
+    ok(SUCCEEDED(hr), "Clone failed, hr %#x.\n", hr);
+
+    hr = IOpcRelationshipEnumerator_MoveNext(relsenum2, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(ret, "Unexpected result %d.\n", ret);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum2, &rel2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IOpcRelationship_Release(rel2);
+
+    hr = IOpcRelationshipEnumerator_GetCurrent(relsenum, &rel2);
+    ok(hr == OPC_E_ENUM_INVALID_POSITION, "Unexpected hr %#x.\n", hr);
+
+    IOpcRelationshipEnumerator_Release(relsenum2);
+
+    IOpcRelationshipEnumerator_Release(relsenum);
+
+    IOpcRelationship_Release(rel);
+
+    IOpcRelationshipSet_Release(rels);
+
+    IOpcPackage_Release(package);
+    IOpcFactory_Release(factory);
+}
 START_TEST(opcservices)
 {
     IOpcFactory *factory;
@@ -605,6 +933,8 @@ START_TEST(opcservices)
     test_file_stream();
     test_relationship();
     test_rel_part_uri();
+    test_part_enumerator();
+    test_rels_enumerator();
 
     IOpcFactory_Release(factory);
 

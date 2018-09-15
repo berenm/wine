@@ -843,17 +843,13 @@ static void create_buffer_heap(struct wined3d_device *device, struct wined3d_con
 {
     const struct wined3d_gl_info *gl_info = &device->adapter->gl_info;
     BOOL use_pba = FALSE;
-    char *env_pba_disable;
+    char *env_pba_enable;
 
     if (!gl_info->supported[ARB_BUFFER_STORAGE])
     {
         FIXME_(d3d_perf)("Not using PBA, ARB_buffer_storage unsupported.\n");
     }
-    else if ((env_pba_disable = getenv("PBA_DISABLE")) && *env_pba_disable != '0')
-    {
-        FIXME("Not using PBA, envvar 'PBA_DISABLE' set.\n");
-    }
-    else
+    else if ((env_pba_enable = getenv("PBA_ENABLE")) && *env_pba_enable != '0')
     {
         //(Firerat) is it worth initialising an int for vram?
         unsigned int vram_mb = device->adapter->vram_bytes / 1048576;
@@ -926,6 +922,10 @@ static void create_buffer_heap(struct wined3d_device *device, struct wined3d_con
         FIXME("Initialized PBA (geo_heap_size: %ld, cb_heap_size: %ld, ub_align: %d)\n", geo_heap_size, cb_heap_size, ub_alignment);
 
         use_pba = TRUE;
+    }
+    else
+    {
+        FIXME("Not using PBA, envvar 'PBA_ENABLE' not set.\n");
     }
 
 fail:
