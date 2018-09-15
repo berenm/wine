@@ -1857,7 +1857,6 @@ typedef struct _mfdescriptor
 {
     mfattributes attributes;
     IMFStreamDescriptor IMFStreamDescriptor_iface;
-    LONG ref;
 } mfdescriptor;
 
 static inline mfdescriptor *impl_from_IMFStreamDescriptor(IMFStreamDescriptor *iface)
@@ -1891,7 +1890,7 @@ static HRESULT WINAPI mfdescriptor_QueryInterface(IMFStreamDescriptor *iface, RE
 static ULONG WINAPI mfdescriptor_AddRef(IMFStreamDescriptor *iface)
 {
     mfdescriptor *This = impl_from_IMFStreamDescriptor(iface);
-    ULONG ref = InterlockedIncrement(&This->ref);
+    ULONG ref = InterlockedIncrement(&This->attributes.ref);
 
     TRACE("(%p) ref=%u\n", This, ref);
 
@@ -1901,13 +1900,13 @@ static ULONG WINAPI mfdescriptor_AddRef(IMFStreamDescriptor *iface)
 static ULONG WINAPI mfdescriptor_Release(IMFStreamDescriptor *iface)
 {
     mfdescriptor *This = impl_from_IMFStreamDescriptor(iface);
-    ULONG ref = InterlockedDecrement(&This->ref);
+    ULONG ref = InterlockedDecrement(&This->attributes.ref);
 
     TRACE("(%p) ref=%u\n", This, ref);
 
     if (!ref)
     {
-        HeapFree(GetProcessHeap(), 0, This);
+        heap_free(This);
     }
 
     return ref;
@@ -2164,13 +2163,12 @@ HRESULT WINAPI MFCreateStreamDescriptor(DWORD identifier, DWORD count,
 
     TRACE("%d, %d, %p, %p\n", identifier, count, types, descriptor);
 
-    object = HeapAlloc( GetProcessHeap(), 0, sizeof(*object) );
+    object = heap_alloc(sizeof(*object));
     if(!object)
         return E_OUTOFMEMORY;
 
-    object->ref = 1;
-    object->IMFStreamDescriptor_iface.lpVtbl = &mfdescriptor_vtbl;
     init_attribute_object(&object->attributes, 0);
+    object->IMFStreamDescriptor_iface.lpVtbl = &mfdescriptor_vtbl;
     *descriptor = &object->IMFStreamDescriptor_iface;
 
     return S_OK;
@@ -2356,7 +2354,6 @@ typedef struct _mfsample
 {
     mfattributes attributes;
     IMFSample IMFSample_iface;
-    LONG ref;
 } mfsample;
 
 static inline mfsample *impl_from_IMFSample(IMFSample *iface)
@@ -2390,7 +2387,7 @@ static HRESULT WINAPI mfsample_QueryInterface(IMFSample *iface, REFIID riid, voi
 static ULONG WINAPI mfsample_AddRef(IMFSample *iface)
 {
     mfsample *This = impl_from_IMFSample(iface);
-    ULONG ref = InterlockedIncrement(&This->ref);
+    ULONG ref = InterlockedIncrement(&This->attributes.ref);
 
     TRACE("(%p) ref=%u\n", This, ref);
 
@@ -2400,13 +2397,13 @@ static ULONG WINAPI mfsample_AddRef(IMFSample *iface)
 static ULONG WINAPI mfsample_Release(IMFSample *iface)
 {
     mfsample *This = impl_from_IMFSample(iface);
-    ULONG ref = InterlockedDecrement(&This->ref);
+    ULONG ref = InterlockedDecrement(&This->attributes.ref);
 
     TRACE("(%p) ref=%u\n", This, ref);
 
     if (!ref)
     {
-        HeapFree(GetProcessHeap(), 0, This);
+        heap_free(This);
     }
 
     return ref;
@@ -2785,13 +2782,12 @@ HRESULT WINAPI MFCreateSample(IMFSample **sample)
 
     TRACE("%p\n", sample);
 
-    object = HeapAlloc( GetProcessHeap(), 0, sizeof(*object) );
+    object = heap_alloc(sizeof(*object));
     if(!object)
         return E_OUTOFMEMORY;
 
-    object->ref = 1;
-    object->IMFSample_iface.lpVtbl = &mfsample_vtbl;
     init_attribute_object(&object->attributes, 0);
+    object->IMFSample_iface.lpVtbl = &mfsample_vtbl;
     *sample = &object->IMFSample_iface;
 
     return S_OK;

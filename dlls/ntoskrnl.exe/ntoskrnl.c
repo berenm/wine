@@ -1354,7 +1354,7 @@ NTSTATUS WINAPI IoSetDeviceInterfaceState( UNICODE_STRING *name, BOOLEAN enable 
     if (!guid_from_string( (refstr ? refstr : name->Buffer + namelen) - 38, &class ))
         return STATUS_INVALID_PARAMETER;
 
-    len = strlenW(DeviceClassesW) + 38 + 1 + namelen + 2;
+    len = strlenW(DeviceClassesW) + 38 + 1 + namelen + 2 + 1;
 
     if (!(path = heap_alloc( len * sizeof(WCHAR) )))
         return STATUS_NO_MEMORY;
@@ -2073,6 +2073,16 @@ NTSTATUS WINAPI ExInitializeZone(PZONE_HEADER Zone,
 {
     FIXME( "stub: %p, %u, %p, %u\n", Zone, BlockSize, InitialSegment, InitialSegmentSize );
     return STATUS_NOT_IMPLEMENTED;
+}
+
+/***********************************************************************
+*           FsRtlIsNameInExpression   (NTOSKRNL.EXE.@)
+*/
+BOOLEAN WINAPI FsRtlIsNameInExpression(PUNICODE_STRING expression, PUNICODE_STRING name,
+                                       BOOLEAN ignore, PWCH upcase)
+{
+    FIXME("stub: %p %p %d %p\n", expression, name, ignore, upcase);
+    return FALSE;
 }
 
 /***********************************************************************
