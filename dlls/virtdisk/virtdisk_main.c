@@ -49,14 +49,16 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, void *reserved)
 
 DWORD WINAPI GetStorageDependencyInformation(HANDLE obj, GET_STORAGE_DEPENDENCY_FLAG flags, ULONG size, STORAGE_DEPENDENCY_INFO *info, ULONG *used)
 {
+    ULONG temp_size = sizeof(STORAGE_DEPENDENCY_INFO);
+
     FIXME("(%p, 0x%x, %u, %p, %p): stub\n", obj, flags, size, info, used);
 
-    if (used) *used = sizeof(STORAGE_DEPENDENCY_INFO);
+    if (used) *used = temp_size;
 
     if (!info || !size)
         return ERROR_INVALID_PARAMETER;
 
-    if (size < sizeof(STORAGE_DEPENDENCY_INFO))
+    if (size < temp_size)
         return ERROR_INSUFFICIENT_BUFFER;
 
     info->NumberEntries = 0;

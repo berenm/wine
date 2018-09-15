@@ -520,6 +520,7 @@ BOOL WINAPI ApiSetQueryApiSetPresence(const UNICODE_STRING *namespace, BOOLEAN *
 {
     FIXME("(%s, %p) stub!\n", debugstr_us(namespace), present);
 
-    *present = TRUE;
+    if(present)
+        *present = TRUE;
     return TRUE;
 }
