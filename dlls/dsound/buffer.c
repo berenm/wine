@@ -984,38 +984,33 @@ static const IDirectSoundBuffer8Vtbl dsbvt =
 	IDirectSoundBufferImpl_GetObjectInPath
 };
 
-HRESULT IDirectSoundBufferImpl_Create(
-	DirectSoundDevice * device,
-	IDirectSoundBufferImpl **pdsb,
-	LPCDSBUFFERDESC dsbd)
+HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *dsbd,
+        IDirectSoundBuffer **buffer)
 {
 	IDirectSoundBufferImpl *dsb;
 	LPWAVEFORMATEX wfex = dsbd->lpwfxFormat;
 	HRESULT err = DS_OK;
 	DWORD capf = 0;
-	TRACE("(%p,%p,%p)\n",device,pdsb,dsbd);
+
+        TRACE("(%p,%p,%p)\n", device, dsbd, buffer);
 
 	if (dsbd->dwBufferBytes < DSBSIZE_MIN || dsbd->dwBufferBytes > DSBSIZE_MAX) {
 		WARN("invalid parameter: dsbd->dwBufferBytes = %d\n", dsbd->dwBufferBytes);
-		*pdsb = NULL;
 		return DSERR_INVALIDPARAM; /* FIXME: which error? */
 	}
 
 	dsb = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(*dsb));
 
-	if (dsb == 0) {
-		WARN("out of memory\n");
-		*pdsb = NULL;
+        if (!dsb)
 		return DSERR_OUTOFMEMORY;
-	}
 
 	TRACE("Created buffer at %p\n", dsb);
 
-	dsb->ref = 0;
+        dsb->ref = 1;
         dsb->refn = 0;
         dsb->ref3D = 0;
         dsb->refiks = 0;
-	dsb->numIfaces = 0;
+        dsb->numIfaces = 1;
 	dsb->device = device;
 	dsb->IDirectSoundBuffer8_iface.lpVtbl = &dsbvt;
         dsb->IDirectSoundNotify_iface.lpVtbl = &dsnvt;
@@ -1026,9 +1021,8 @@ HRESULT IDirectSoundBufferImpl_Create(
 	CopyMemory(&dsb->dsbd, dsbd, dsbd->dwSize);
 
 	dsb->pwfx = DSOUND_CopyFormat(wfex);
-	if (dsb->pwfx == NULL) {
-		HeapFree(GetProcessHeap(),0,dsb);
-		*pdsb = NULL;
+        if (!dsb->pwfx) {
+                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
 		return DSERR_OUTOFMEMORY;
 	}
 
@@ -1053,22 +1047,16 @@ HRESULT IDirectSoundBufferImpl_Create(
 
 	/* Allocate an empty buffer */
 	dsb->buffer = HeapAlloc(GetProcessHeap(),0,sizeof(*(dsb->buffer)));
-	if (dsb->buffer == NULL) {
-		WARN("out of memory\n");
-		HeapFree(GetProcessHeap(),0,dsb->pwfx);
-		HeapFree(GetProcessHeap(),0,dsb);
-		*pdsb = NULL;
+        if (!dsb->buffer) {
+                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
 		return DSERR_OUTOFMEMORY;
 	}
 
 	/* Allocate system memory for buffer */
 	dsb->buffer->memory = HeapAlloc(GetProcessHeap(),0,dsb->buflen);
-	if (dsb->buffer->memory == NULL) {
+        if (!dsb->buffer->memory) {
 		WARN("out of memory\n");
-		HeapFree(GetProcessHeap(),0,dsb->pwfx);
-		HeapFree(GetProcessHeap(),0,dsb->buffer);
-		HeapFree(GetProcessHeap(),0,dsb);
-		*pdsb = NULL;
+                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
 		return DSERR_OUTOFMEMORY;
 	}
 
@@ -1115,24 +1103,16 @@ HRESULT IDirectSoundBufferImpl_Create(
 		DSOUND_RecalcVolPan(&(dsb->volpan));
 
 	RtlInitializeResource(&dsb->lock);
+	if (dsb->device->eax.using_eax)
+		init_eax_buffer(dsb);
 
-	/* register buffer if not primary */
-	if (!(dsbd->dwFlags & DSBCAPS_PRIMARYBUFFER)) {
-        init_eax_buffer(dsb);
+        /* register buffer */
+        err = DirectSoundDevice_AddBuffer(device, dsb);
+        if (err == DS_OK)
+                *buffer = (IDirectSoundBuffer*)&dsb->IDirectSoundBuffer8_iface;
+        else
+                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
 
-		err = DirectSoundDevice_AddBuffer(device, dsb);
-		if (err != DS_OK) {
-			HeapFree(GetProcessHeap(),0,dsb->buffer->memory);
-			HeapFree(GetProcessHeap(),0,dsb->buffer);
-			RtlDeleteResource(&dsb->lock);
-			HeapFree(GetProcessHeap(),0,dsb->pwfx);
-			HeapFree(GetProcessHeap(),0,dsb);
-			dsb = NULL;
-		}
-	}
-
-        IDirectSoundBuffer8_AddRef(&dsb->IDirectSoundBuffer8_iface);
-	*pdsb = dsb;
 	return err;
 }
 
