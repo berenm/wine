@@ -998,7 +998,7 @@ BOOL WINAPI SetupDiClassGuidsFromNameExW(
 
     for (dwIndex = 0; ; dwIndex++)
     {
-	dwLength = sizeof(szKeyName) / sizeof(WCHAR);
+        dwLength = ARRAY_SIZE(szKeyName);
 	lError = RegEnumKeyExW(hClassesKey,
 			       dwIndex,
 			       szKeyName,
@@ -2092,7 +2092,7 @@ static void SETUPDI_AddDeviceInterfaces(struct device *device, HKEY key,
 
     for (i = 0; !l; i++)
     {
-        len = sizeof(subKeyName) / sizeof(subKeyName[0]);
+        len = ARRAY_SIZE(subKeyName);
         l = RegEnumKeyExW(key, i, subKeyName, &len, NULL, NULL, NULL, NULL);
         if (!l)
         {
@@ -2142,7 +2142,7 @@ static void SETUPDI_EnumerateMatchingInterfaces(HDEVINFO DeviceInfoSet,
     l = open_enum_key(&enumKey);
     for (i = 0; !l; i++)
     {
-        len = sizeof(subKeyName) / sizeof(subKeyName[0]);
+        len = ARRAY_SIZE(subKeyName);
         l = RegEnumKeyExW(key, i, subKeyName, &len, NULL, NULL, NULL, NULL);
         if (!l)
         {
@@ -2220,7 +2220,7 @@ static void SETUPDI_EnumerateInterfaces(HDEVINFO DeviceInfoSet,
 
             for (i = 0; !l; i++)
             {
-                len = sizeof(interfaceGuidStr) / sizeof(interfaceGuidStr[0]);
+                len = ARRAY_SIZE(interfaceGuidStr);
                 l = RegEnumKeyExW(interfacesKey, i, interfaceGuidStr, &len,
                         NULL, NULL, NULL, NULL);
                 if (!l)
@@ -2271,7 +2271,7 @@ static void SETUPDI_EnumerateMatchingDeviceInstances(struct DeviceInfoSet *set,
 
     for (i = 0; !l; i++)
     {
-        len = sizeof(deviceInstance) / sizeof(deviceInstance[0]);
+        len = ARRAY_SIZE(deviceInstance);
         l = RegEnumKeyExW(deviceKey, i, deviceInstance, &len, NULL, NULL, NULL,
                 NULL);
         if (!l)
@@ -2336,7 +2336,7 @@ static void SETUPDI_EnumerateMatchingDevices(HDEVINFO DeviceInfoSet,
 
     for (i = 0; !l; i++)
     {
-        len = sizeof(subKeyName) / sizeof(subKeyName[0]);
+        len = ARRAY_SIZE(subKeyName);
         l = RegEnumKeyExW(key, i, subKeyName, &len, NULL, NULL, NULL, NULL);
         if (!l)
         {
@@ -2411,7 +2411,7 @@ static void SETUPDI_EnumerateDevices(HDEVINFO DeviceInfoSet, const GUID *class,
             l = ERROR_SUCCESS;
             for (i = 0; !l; i++)
             {
-                len = sizeof(subKeyName) / sizeof(subKeyName[0]);
+                len = ARRAY_SIZE(subKeyName);
                 l = RegEnumKeyExW(enumKey, i, subKeyName, &len, NULL,
                         NULL, NULL, NULL);
                 if (!l)
@@ -3118,8 +3118,7 @@ BOOL WINAPI SetupDiGetDeviceRegistryPropertyA(
         return FALSE;
     }
     device = (struct device *)DeviceInfoData->Reserved;
-    if (Property < sizeof(PropertyMap) / sizeof(PropertyMap[0])
-        && PropertyMap[Property].nameA)
+    if (Property < ARRAY_SIZE(PropertyMap) && PropertyMap[Property].nameA)
     {
         DWORD size = PropertyBufferSize;
         LONG l = RegQueryValueExA(device->key, PropertyMap[Property].nameA,
@@ -3181,8 +3180,7 @@ BOOL WINAPI SetupDiGetDeviceRegistryPropertyW(
         return FALSE;
     }
     device = (struct device *)DeviceInfoData->Reserved;
-    if (Property < sizeof(PropertyMap) / sizeof(PropertyMap[0])
-        && PropertyMap[Property].nameW)
+    if (Property < ARRAY_SIZE(PropertyMap) && PropertyMap[Property].nameW)
     {
         DWORD size = PropertyBufferSize;
         LONG l = RegQueryValueExW(device->key, PropertyMap[Property].nameW,
@@ -3236,8 +3234,7 @@ BOOL WINAPI SetupDiSetDeviceRegistryPropertyA(
         return FALSE;
     }
     device = (struct device *)DeviceInfoData->Reserved;
-    if (Property < sizeof(PropertyMap) / sizeof(PropertyMap[0])
-        && PropertyMap[Property].nameA)
+    if (Property < ARRAY_SIZE(PropertyMap) && PropertyMap[Property].nameA)
     {
         LONG l = RegSetValueExA(device->key, PropertyMap[Property].nameA, 0,
                 PropertyMap[Property].regType, PropertyBuffer,

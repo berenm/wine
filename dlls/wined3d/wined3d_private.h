@@ -188,15 +188,17 @@ struct wined3d_d3d_info
 {
     struct wined3d_d3d_limits limits;
     struct wined3d_ffp_attrib_ops ffp_attrib_ops;
-    BOOL xyzrhw;
-    BOOL emulated_flatshading;
-    BOOL ffp_generic_attributes;
-    BOOL vs_clipping;
-    BOOL shader_color_key;
     DWORD valid_rt_mask;
     DWORD valid_dual_rt_mask;
     DWORD wined3d_creation_flags;
-    BOOL shader_double_precision;
+    unsigned int xyzrhw : 1;
+    unsigned int emulated_flatshading : 1;
+    unsigned int ffp_generic_attributes : 1;
+    unsigned int vs_clipping : 1;
+    unsigned int shader_color_key : 1;
+    unsigned int shader_double_precision : 1;
+    unsigned int texture_npot : 1;
+    unsigned int texture_npot_conditional : 1;
     enum wined3d_feature_level feature_level;
 };
 
@@ -1547,7 +1549,6 @@ void draw_primitive(struct wined3d_device *device, const struct wined3d_state *s
         const struct wined3d_draw_parameters *draw_parameters) DECLSPEC_HIDDEN;
 void dispatch_compute(struct wined3d_device *device, const struct wined3d_state *state,
         const struct wined3d_dispatch_parameters *dispatch_parameters) DECLSPEC_HIDDEN;
-DWORD get_flexible_vertex_size(DWORD d3dvtVertexType) DECLSPEC_HIDDEN;
 
 #define eps 1e-8f
 
@@ -2617,6 +2618,7 @@ enum wined3d_display_driver
     DRIVER_NVIDIA_GEFORCE6,
     DRIVER_NVIDIA_GEFORCE8,
     DRIVER_VMWARE,
+    DRIVER_WINE,
     DRIVER_UNKNOWN,
 };
 
@@ -2675,7 +2677,6 @@ struct wined3d_adapter
     LUID luid;
 
     struct wined3d_format *formats;
-    unsigned int format_count;
 
     const struct wined3d_vertex_pipe_ops *vertex_pipe;
     const struct fragment_pipeline *fragment_pipe;
@@ -3162,7 +3163,7 @@ void resource_unload(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 BOOL wined3d_resource_allocate_sysmem(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 void wined3d_resource_free_sysmem(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 const struct wined3d_format *wined3d_resource_get_decompress_format(
-        struct wined3d_resource *resource) DECLSPEC_HIDDEN;
+        const struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 GLbitfield wined3d_resource_gl_map_flags(DWORD d3d_flags) DECLSPEC_HIDDEN;
 GLenum wined3d_resource_gl_legacy_map_flags(DWORD d3d_flags) DECLSPEC_HIDDEN;
 BOOL wined3d_resource_is_offscreen(struct wined3d_resource *resource) DECLSPEC_HIDDEN;
@@ -4266,6 +4267,7 @@ static inline BOOL shader_is_scalar(const struct wined3d_shader_register *reg)
         case WINED3DSPR_OUTPOINTID:
         case WINED3DSPR_PREDICATE:  /* p0 */
         case WINED3DSPR_PRIMID:     /* primID */
+        case WINED3DSPR_COVERAGE: /* vCoverage */
         case WINED3DSPR_SAMPLEMASK: /* oMask */
             return TRUE;
 
