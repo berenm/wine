@@ -1042,13 +1042,6 @@ static const struct wined3d_gpu_description *query_gpu_description(const struct 
         TRACE("Overriding device PCI ID with 0x%04x.\n", device);
     }
 
-    if (wined3d_settings.emulated_textureram)
-    {
-        *vram_bytes = wined3d_settings.emulated_textureram;
-        TRACE("Overriding amount of video memory with 0x%s bytes.\n",
-                wine_dbgstr_longlong(*vram_bytes));
-    }
-
     if (!(gpu_description = wined3d_get_gpu_description(vendor, device))
             && (wined3d_settings.pci_vendor_id != PCI_VENDOR_NONE
             || wined3d_settings.pci_device_id != PCI_DEVICE_NONE) && !once++)
@@ -3717,7 +3710,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     d3d_info->limits.vs_uniform_count = shader_caps.vs_uniform_count;
     d3d_info->limits.ps_uniform_count = shader_caps.ps_uniform_count;
     d3d_info->limits.varying_count = shader_caps.varying_count;
-    d3d_info->shader_double_precision = shader_caps.wined3d_caps & WINED3D_SHADER_CAP_DOUBLE_PRECISION;
+    d3d_info->shader_double_precision = !!(shader_caps.wined3d_caps & WINED3D_SHADER_CAP_DOUBLE_PRECISION);
 
     adapter->vertex_pipe->vp_get_caps(gl_info, &vertex_caps);
     d3d_info->xyzrhw = vertex_caps.xyzrhw;
@@ -3729,9 +3722,13 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     adapter->fragment_pipe->get_caps(gl_info, &fragment_caps);
     d3d_info->limits.ffp_blend_stages = fragment_caps.MaxTextureBlendStages;
     d3d_info->limits.ffp_textures = fragment_caps.MaxSimultaneousTextures;
-    d3d_info->shader_color_key = fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_COLOR_KEY;
+    d3d_info->shader_color_key = !!(fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_COLOR_KEY);
     d3d_info->wined3d_creation_flags = wined3d_creation_flags;
     d3d_info->feature_level = feature_level_from_caps(gl_info, &shader_caps, &fragment_caps);
+
+    d3d_info->texture_npot = !!gl_info->supported[ARB_TEXTURE_NON_POWER_OF_TWO];
+    d3d_info->texture_npot_conditional = gl_info->supported[WINED3D_GL_NORMALIZED_TEXRECT]
+            || gl_info->supported[ARB_TEXTURE_RECTANGLE];
 
     TRACE("Max texture stages: %u.\n", d3d_info->limits.ffp_blend_stages);
 
@@ -3865,6 +3862,10 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     wined3d_driver_info_init(driver_info, gpu_description, vram_bytes);
     TRACE("Reporting (fake) driver version 0x%08x-0x%08x.\n",
             driver_info->version_high, driver_info->version_low);
+
+    adapter->vram_bytes = driver_info->vram_bytes;
+    adapter->vram_bytes_used = 0;
+    TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
 
     gl_ext_emul_mask = adapter->vertex_pipe->vp_get_emul_mask(gl_info)
             | adapter->fragment_pipe->get_emul_mask(gl_info);
@@ -4335,10 +4336,6 @@ BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_
         heap_free(adapter->cfgs);
         return FALSE;
     }
-
-    adapter->vram_bytes = adapter->driver_info.vram_bytes;
-    adapter->vram_bytes_used = 0;
-    TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
 
     wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
 

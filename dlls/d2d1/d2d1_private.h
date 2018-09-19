@@ -160,6 +160,11 @@ HRESULT d2d_d3d_create_render_target(ID2D1Factory *factory, IDXGISurface *surfac
         void **render_target) DECLSPEC_HIDDEN;
 HRESULT d2d_d3d_render_target_create_rtv(ID2D1RenderTarget *render_target, IDXGISurface1 *surface) DECLSPEC_HIDDEN;
 
+static inline BOOL d2d_device_context_is_dxgi_target(const struct d2d_device_context *context)
+{
+    return !context->ops;
+}
+
 struct d2d_wic_render_target
 {
     IUnknown IUnknown_iface;
@@ -275,7 +280,7 @@ struct d2d_brush
             struct d2d_bitmap *bitmap;
             D2D1_EXTEND_MODE extend_mode_x;
             D2D1_EXTEND_MODE extend_mode_y;
-            D2D1_BITMAP_INTERPOLATION_MODE interpolation_mode;
+            D2D1_INTERPOLATION_MODE interpolation_mode;
             ID3D10SamplerState *sampler_state;
         } bitmap;
     } u;
@@ -290,7 +295,7 @@ HRESULT d2d_radial_gradient_brush_create(ID2D1Factory *factory,
         const D2D1_RADIAL_GRADIENT_BRUSH_PROPERTIES *gradient_desc, const D2D1_BRUSH_PROPERTIES *brush_desc,
         ID2D1GradientStopCollection *gradient, struct d2d_brush **brush) DECLSPEC_HIDDEN;
 HRESULT d2d_bitmap_brush_create(ID2D1Factory *factory, ID2D1Bitmap *bitmap,
-        const D2D1_BITMAP_BRUSH_PROPERTIES *bitmap_brush_desc, const D2D1_BRUSH_PROPERTIES *brush_desc,
+        const D2D1_BITMAP_BRUSH_PROPERTIES1 *bitmap_brush_desc, const D2D1_BRUSH_PROPERTIES *brush_desc,
         struct d2d_brush **brush) DECLSPEC_HIDDEN;
 void d2d_brush_bind_resources(struct d2d_brush *brush, ID3D10Device *device, unsigned int brush_idx) DECLSPEC_HIDDEN;
 HRESULT d2d_brush_get_ps_cb(struct d2d_brush *brush, struct d2d_brush *opacity_brush, BOOL outline,
@@ -339,6 +344,7 @@ struct d2d_bitmap
 
     ID2D1Factory *factory;
     ID3D10ShaderResourceView *view;
+    IDXGISurface *surface;
     D2D1_SIZE_U pixel_size;
     D2D1_PIXEL_FORMAT format;
     float dpi_x;
@@ -346,11 +352,11 @@ struct d2d_bitmap
     D2D1_BITMAP_OPTIONS options;
 };
 
-HRESULT d2d_bitmap_create(ID2D1Factory *factory, ID3D10Device *device, D2D1_SIZE_U size, const void *src_data,
+HRESULT d2d_bitmap_create(struct d2d_device_context *context, D2D1_SIZE_U size, const void *src_data,
         UINT32 pitch, const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
-HRESULT d2d_bitmap_create_shared(ID2D1DeviceContext *context, ID3D10Device *device, REFIID iid, void *data,
+HRESULT d2d_bitmap_create_shared(struct d2d_device_context *context, REFIID iid, void *data,
         const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
-HRESULT d2d_bitmap_create_from_wic_bitmap(ID2D1Factory *factory, ID3D10Device *device, IWICBitmapSource *bitmap_source,
+HRESULT d2d_bitmap_create_from_wic_bitmap(struct d2d_device_context *context, IWICBitmapSource *bitmap_source,
         const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
 struct d2d_bitmap *unsafe_impl_from_ID2D1Bitmap(ID2D1Bitmap *iface) DECLSPEC_HIDDEN;
 

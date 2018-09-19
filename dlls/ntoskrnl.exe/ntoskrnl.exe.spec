@@ -517,7 +517,7 @@
 @ stub KeAttachProcess
 @ stub KeBugCheck
 @ stub KeBugCheckEx
-@ stub KeCancelTimer
+@ stdcall KeCancelTimer(ptr)
 @ stub KeCapturePersistentThreadState
 @ stdcall KeClearEvent(ptr)
 @ stub KeConnectInterrupt
@@ -1402,7 +1402,7 @@
 @ stdcall -private ZwUnloadKey(ptr) NtUnloadKey
 @ stdcall -private ZwUnmapViewOfSection(long ptr) NtUnmapViewOfSection
 @ stdcall -private ZwWaitForMultipleObjects(long ptr long long ptr) NtWaitForMultipleObjects
-@ stdcall -private ZwWaitForSingleObject(long long ptr) NtWaitForSingleObject
+@ stdcall ZwWaitForSingleObject(long long ptr) NtWaitForSingleObject
 @ stdcall ZwWriteFile(long long ptr ptr ptr ptr long ptr ptr) NtWriteFile
 @ stdcall -private ZwYieldExecution() NtYieldExecution
 @ stdcall -private -arch=arm,x86_64 -norelay __chkstk()
