@@ -55,6 +55,61 @@ static DXGI_SWAP_EFFECT dxgi_swap_effect_from_wined3d(enum wined3d_swap_effect s
     }
 }
 
+static BOOL dxgi_validate_flip_swap_effect_format(DXGI_FORMAT format)
+{
+    switch (format)
+    {
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+            return TRUE;
+        default:
+            WARN("Invalid swapchain format %#x for flip presentation model.\n", format);
+            return FALSE;
+    }
+}
+
+BOOL dxgi_validate_swapchain_desc(const DXGI_SWAP_CHAIN_DESC1 *desc)
+{
+    unsigned int min_buffer_count;
+
+    switch (desc->SwapEffect)
+    {
+        case DXGI_SWAP_EFFECT_DISCARD:
+        case DXGI_SWAP_EFFECT_SEQUENTIAL:
+            min_buffer_count = 1;
+            break;
+
+        case DXGI_SWAP_EFFECT_FLIP_DISCARD:
+        case DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL:
+            min_buffer_count = 2;
+
+            if (!dxgi_validate_flip_swap_effect_format(desc->Format))
+                return FALSE;
+
+            if (desc->SampleDesc.Count != 1 || desc->SampleDesc.Quality)
+            {
+                WARN("Invalid sample desc %u, %u for swap effect %#x.\n",
+                        desc->SampleDesc.Count, desc->SampleDesc.Quality, desc->SwapEffect);
+                return FALSE;
+            }
+            break;
+
+        default:
+            WARN("Invalid swap effect %u used.\n", desc->SwapEffect);
+            return FALSE;
+    }
+
+    if (desc->BufferCount < min_buffer_count || desc->BufferCount > DXGI_MAX_SWAP_CHAIN_BUFFERS)
+    {
+        WARN("BufferCount is %u.\n", desc->BufferCount);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 static inline struct d3d11_swapchain *d3d11_swapchain_from_IDXGISwapChain1(IDXGISwapChain1 *iface)
 {
     return CONTAINING_RECORD(iface, struct d3d11_swapchain, IDXGISwapChain1_iface);
@@ -931,11 +986,10 @@ static DXGI_FORMAT dxgi_format_from_vk_format(VkFormat vk_format)
 {
     switch (vk_format)
     {
-        case VK_FORMAT_B8G8R8A8_SRGB:  return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
         case VK_FORMAT_B8G8R8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM;
-        case VK_FORMAT_R8G8B8A8_SRGB:  return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         case VK_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
         case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return DXGI_FORMAT_R10G10B10A2_UNORM;
+        case VK_FORMAT_R16G16B16A16_SFLOAT: return DXGI_FORMAT_R16G16B16A16_FLOAT;
         default:
             WARN("Unhandled format %#x.\n", vk_format);
             return DXGI_FORMAT_UNKNOWN;
@@ -946,9 +1000,10 @@ static VkFormat get_swapchain_fallback_format(VkFormat vk_format)
 {
     switch (vk_format)
     {
-        case VK_FORMAT_R8G8B8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
-        case VK_FORMAT_R8G8B8A8_UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
-        case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return VK_FORMAT_B8G8R8A8_UNORM;
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+            return VK_FORMAT_B8G8R8A8_UNORM;
         default:
             WARN("Unhandled format %#x.\n", vk_format);
             return VK_FORMAT_UNDEFINED;
@@ -1749,7 +1804,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_swapchain_ResizeBuffers(IDXGISwapChain3 *
         UINT buffer_count, UINT width, UINT height, DXGI_FORMAT format, UINT flags)
 {
     struct d3d12_swapchain *swapchain = d3d12_swapchain_from_IDXGISwapChain3(iface);
-    DXGI_SWAP_CHAIN_DESC1 *desc;
+    DXGI_SWAP_CHAIN_DESC1 *desc, new_desc;
     unsigned int i;
     ULONG refcount;
     HRESULT hr;
@@ -1771,9 +1826,10 @@ static HRESULT STDMETHODCALLTYPE d3d12_swapchain_ResizeBuffers(IDXGISwapChain3 *
     }
 
     desc = &swapchain->desc;
+    new_desc = swapchain->desc;
 
-    if (!buffer_count)
-        buffer_count = desc->BufferCount;
+    if (buffer_count)
+        new_desc.BufferCount = buffer_count;
     if (!width || !height)
     {
         RECT client_rect;
@@ -1789,20 +1845,21 @@ static HRESULT STDMETHODCALLTYPE d3d12_swapchain_ResizeBuffers(IDXGISwapChain3 *
         if (!height)
             height = client_rect.bottom;
     }
-    if (!format)
-        format = desc->Format;
+    new_desc.Width = width;
+    new_desc.Height = height;
 
-    if (desc->Width == width && desc->Height == height
-            && desc->Format == format && desc->BufferCount == buffer_count)
+    if (format)
+        new_desc.Format = format;
+
+    if (!dxgi_validate_swapchain_desc(&new_desc))
+        return DXGI_ERROR_INVALID_CALL;
+
+    if (desc->Width == new_desc.Width && desc->Height == new_desc.Height
+            && desc->Format == new_desc.Format && desc->BufferCount == new_desc.BufferCount)
         return S_OK;
 
     d3d12_swapchain_destroy_buffers(swapchain);
-
-    desc->Width = width;
-    desc->Height = height;
-    desc->Format = format;
-    desc->BufferCount = buffer_count;
-
+    swapchain->desc = new_desc;
     if (FAILED(hr = d3d12_swapchain_create_vulkan_swapchain(swapchain)))
     {
         ERR("Failed to recreate Vulkan swapchain, hr %#x.\n", hr);

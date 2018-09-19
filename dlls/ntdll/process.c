@@ -620,16 +620,20 @@ NTSTATUS WINAPI NtQueryInformationProcess(
             ret = STATUS_INFO_LENGTH_MISMATCH;
         break;
     case ProcessCookie:
-        FIXME("(%p,info_class=%d,%p,0x%08x,%p) stub\n",
-              ProcessHandle,ProcessInformationClass,
-              ProcessInformation,ProcessInformationLength,
-              ReturnLength);
+        FIXME("ProcessCookie (%p,%p,0x%08x,%p) stub\n",
+              ProcessHandle,ProcessInformation,
+              ProcessInformationLength,ReturnLength);
 
-        len = sizeof(ULONG);
-        if (ProcessInformationLength == len)
-            *(ULONG *)ProcessInformation = 0;
+        if(ProcessHandle == NtCurrentProcess())
+        {
+            len = sizeof(ULONG);
+            if (ProcessInformationLength == len)
+                *(ULONG *)ProcessInformation = 0;
+            else
+                ret = STATUS_INFO_LENGTH_MISMATCH;
+        }
         else
-            ret = STATUS_INFO_LENGTH_MISMATCH;
+            ret = STATUS_INVALID_PARAMETER;
         break;
     default:
         FIXME("(%p,info_class=%d,%p,0x%08x,%p) Unknown information class\n",

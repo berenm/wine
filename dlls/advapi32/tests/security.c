@@ -3163,6 +3163,7 @@ static void test_process_security_child(void)
     CloseHandle( handle );
 
     handle = OpenThread( THREAD_SET_THREAD_TOKEN, FALSE, GetCurrentThreadId() );
+    todo_wine
     ok(handle == NULL, "OpenThread(THREAD_SET_THREAD_TOKEN) should have failed\n");
 }
 
@@ -6963,7 +6964,7 @@ static void test_system_security_access(void)
 
     /* privilege is checked on access */
     err = GetSecurityInfo( hkey, SE_REGISTRY_KEY, SACL_SECURITY_INFORMATION, NULL, NULL, NULL, &sacl, &sd );
-    todo_wine ok( err == ERROR_PRIVILEGE_NOT_HELD, "got %u\n", err );
+    todo_wine ok( err == ERROR_PRIVILEGE_NOT_HELD || err == ERROR_ACCESS_DENIED, "got %u\n", err );
     if (err == ERROR_SUCCESS)
         LocalFree( sd );
 
@@ -7000,7 +7001,7 @@ static void test_system_security_access(void)
     ok( res == ERROR_SUCCESS, "got %d\n", res );
 
     err = GetSecurityInfo( hkey, SE_REGISTRY_KEY, SACL_SECURITY_INFORMATION, NULL, NULL, NULL, &sacl, &sd );
-    todo_wine ok( err == ERROR_PRIVILEGE_NOT_HELD, "got %u\n", err );
+    ok( err == ERROR_PRIVILEGE_NOT_HELD || err == ERROR_ACCESS_DENIED, "got %u\n", err );
     RegCloseKey( hkey );
 
     res = RegDeleteKeyW( HKEY_LOCAL_MACHINE, testkeyW );

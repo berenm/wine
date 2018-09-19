@@ -20205,28 +20205,28 @@ static void test_vertex_blending(void)
     {{{
          1.0f, 0.0f, 0.0f, 0.0f,
          0.0f, 1.0f, 0.0f, 0.0f,
-         0.0f, 0.0f, 2.0f, 0.0f,
+         0.0f, 0.0f, 1.0f, 0.0f,
         -4.0f, 4.0f, 0.0f, 1.0f
     }}},
     lower_left =
     {{{
          1.0f,  0.0f, 0.0f, 0.0f,
          0.0f,  1.0f, 0.0f, 0.0f,
-         0.0f,  0.0f, 2.0f, 0.0f,
+         0.0f,  0.0f, 1.0f, 0.0f,
         -4.0f, -4.0f, 0.0f, 1.0f
     }}},
     upper_right =
     {{{
         1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 2.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
         4.0f, 4.0f, 0.0f, 1.0f
     }}},
     lower_right =
     {{{
         1.0f,  0.0f, 0.0f, 0.0f,
         0.0f,  1.0f, 0.0f, 0.0f,
-        0.0f,  0.0f, 2.0f, 0.0f,
+        0.0f,  0.0f, 1.0f, 0.0f,
         4.0f, -4.0f, 0.0f, 1.0f
     }}};
 
@@ -20454,39 +20454,41 @@ static void do_test_indexed_vertex_blending(IDirect3DDevice9 *device, const char
     HRESULT hr;
     unsigned int i;
 
+    /* This comment exists so that this hunk doesn't get applied to the wrong function, again. */
     static const D3DMATRIX view_mat =
     {{{
         2.0f / 10.0f, 0.0f,         0.0f, 0.0f,
         0.0f,         2.0f / 10.0f, 0.0f, 0.0f,
         0.0f,         0.0f,         1.0f, 0.0f,
         0.0f,         0.0f,         0.0f, 1.0f
+    /* This comment exists so that this hunk doesn't get applied to the wrong function, again. */
     }}},
     upper_left =
     {{{
          1.0f, 0.0f, 0.0f, 0.0f,
          0.0f, 1.0f, 0.0f, 0.0f,
-         0.0f, 0.0f, 1.0f, 0.0f,
+         0.0f, 0.0f, 2.0f, 0.0f,
         -4.0f, 4.0f, 0.0f, 1.0f
     }}},
     lower_left =
     {{{
          1.0f,  0.0f, 0.0f, 0.0f,
          0.0f,  1.0f, 0.0f, 0.0f,
-         0.0f,  0.0f, 1.0f, 0.0f,
+         0.0f,  0.0f, 2.0f, 0.0f,
         -4.0f, -4.0f, 0.0f, 1.0f
     }}},
     upper_right =
     {{{
         1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 2.0f, 0.0f,
         4.0f, 4.0f, 0.0f, 1.0f
     }}},
     lower_right =
     {{{
         1.0f,  0.0f, 0.0f, 0.0f,
         0.0f,  1.0f, 0.0f, 0.0f,
-        0.0f,  0.0f, 1.0f, 0.0f,
+        0.0f,  0.0f, 2.0f, 0.0f,
         4.0f, -4.0f, 0.0f, 1.0f
     }}},
     identity =
