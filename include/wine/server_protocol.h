@@ -741,29 +741,22 @@ struct new_process_request
     unsigned int create_flags;
     int          socket_fd;
     obj_handle_t exe_file;
-    unsigned int process_access;
-    unsigned int process_attr;
-    unsigned int thread_access;
-    unsigned int thread_attr;
+    unsigned int access;
     cpu_type_t   cpu;
     data_size_t  info_size;
-    data_size_t  env_size;
-    data_size_t  process_sd_size;
     obj_handle_t token;
+    /* VARARG(objattr,object_attributes); */
     /* VARARG(info,startup_info,info_size); */
-    /* VARARG(env,unicode_str,env_size); */
-    /* VARARG(process_sd,security_descriptor,process_sd_size); */
-    /* VARARG(thread_sd,security_descriptor); */
+    /* VARARG(env,unicode_str); */
+    char __pad_44[4];
 };
 struct new_process_reply
 {
     struct reply_header __header;
     obj_handle_t info;
     process_id_t pid;
-    obj_handle_t phandle;
-    thread_id_t  tid;
-    obj_handle_t thandle;
-    char __pad_28[4];
+    obj_handle_t handle;
+    char __pad_20[4];
 };
 
 
@@ -785,10 +778,11 @@ struct get_new_process_info_reply
 struct new_thread_request
 {
     struct request_header __header;
+    obj_handle_t process;
     unsigned int access;
-    unsigned int attributes;
     int          suspend;
     int          request_fd;
+    /* VARARG(objattr,object_attributes); */
     char __pad_28[4];
 };
 struct new_thread_reply
@@ -6942,6 +6936,6 @@ union generic_reply
     struct esync_msgwait_reply esync_msgwait_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 560
+#define SERVER_PROTOCOL_VERSION 565
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

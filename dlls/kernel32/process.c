@@ -1982,66 +1982,64 @@ static pid_t exec_loader( LPCWSTR cmd_line, unsigned int flags, int socketfd,
 }
 
 /* creates a struct security_descriptor and contained information in one contiguous piece of memory */
-static NTSTATUS create_struct_sd(PSECURITY_DESCRIPTOR nt_sd, struct security_descriptor **server_sd,
-                                 data_size_t *server_sd_len)
+static NTSTATUS alloc_object_attributes( const SECURITY_ATTRIBUTES *attr, struct object_attributes **ret,
+                                         data_size_t *ret_len )
 {
-    unsigned int len;
-    PSID owner, group;
+    unsigned int len = sizeof(**ret);
+    PSID owner = NULL, group = NULL;
     ACL *dacl, *sacl;
-    BOOLEAN owner_present, group_present, dacl_present, sacl_present;
-    BOOLEAN defaulted;
+    BOOLEAN dacl_present, sacl_present, defaulted;
+    PSECURITY_DESCRIPTOR sd = NULL;
     NTSTATUS status;
-    unsigned char *ptr;
 
-    if (!nt_sd)
+    *ret = NULL;
+    *ret_len = 0;
+
+    if (attr) sd = attr->lpSecurityDescriptor;
+
+    if (sd)
     {
-        *server_sd = NULL;
-        *server_sd_len = 0;
-        return STATUS_SUCCESS;
+        len += sizeof(struct security_descriptor);
+
+        if ((status = RtlGetOwnerSecurityDescriptor( sd, &owner, &defaulted ))) return status;
+        if ((status = RtlGetGroupSecurityDescriptor( sd, &group, &defaulted ))) return status;
+        if ((status = RtlGetSaclSecurityDescriptor( sd, &sacl_present, &sacl, &defaulted ))) return status;
+        if ((status = RtlGetDaclSecurityDescriptor( sd, &dacl_present, &dacl, &defaulted ))) return status;
+        if (owner) len += RtlLengthSid( owner );
+        if (group) len += RtlLengthSid( group );
+        if (sacl_present && sacl) len += sacl->AclSize;
+        if (dacl_present && dacl) len += dacl->AclSize;
     }
 
-    len = sizeof(struct security_descriptor);
+    len = (len + 3) & ~3;  /* DWORD-align the entire structure */
 
-    status = RtlGetOwnerSecurityDescriptor(nt_sd, &owner, &owner_present);
-    if (status != STATUS_SUCCESS) return status;
-    status = RtlGetGroupSecurityDescriptor(nt_sd, &group, &group_present);
-    if (status != STATUS_SUCCESS) return status;
-    status = RtlGetSaclSecurityDescriptor(nt_sd, &sacl_present, &sacl, &defaulted);
-    if (status != STATUS_SUCCESS) return status;
-    status = RtlGetDaclSecurityDescriptor(nt_sd, &dacl_present, &dacl, &defaulted);
-    if (status != STATUS_SUCCESS) return status;
+    *ret = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, len );
+    if (!*ret) return STATUS_NO_MEMORY;
 
-    if (owner_present)
-        len += RtlLengthSid(owner);
-    if (group_present)
-        len += RtlLengthSid(group);
-    if (sacl_present && sacl)
-        len += sacl->AclSize;
-    if (dacl_present && dacl)
-        len += dacl->AclSize;
+    (*ret)->attributes = (attr && attr->bInheritHandle) ? OBJ_INHERIT : 0;
 
-    /* fix alignment for the Unicode name that follows the structure */
-    len = (len + sizeof(WCHAR) - 1) & ~(sizeof(WCHAR) - 1);
-    *server_sd = RtlAllocateHeap(GetProcessHeap(), 0, len);
-    if (!*server_sd) return STATUS_NO_MEMORY;
+    if (sd)
+    {
+        struct security_descriptor *descr = (struct security_descriptor *)(*ret + 1);
+        unsigned char *ptr = (unsigned char *)(descr + 1);
 
-    (*server_sd)->control = ((SECURITY_DESCRIPTOR *)nt_sd)->Control & ~SE_SELF_RELATIVE;
-    (*server_sd)->owner_len = owner_present ? RtlLengthSid(owner) : 0;
-    (*server_sd)->group_len = group_present ? RtlLengthSid(group) : 0;
-    (*server_sd)->sacl_len = (sacl_present && sacl) ? sacl->AclSize : 0;
-    (*server_sd)->dacl_len = (dacl_present && dacl) ? dacl->AclSize : 0;
+        descr->control = ((SECURITY_DESCRIPTOR *)sd)->Control & ~SE_SELF_RELATIVE;
+        if (owner) descr->owner_len = RtlLengthSid( owner );
+        if (group) descr->group_len = RtlLengthSid( group );
+        if (sacl_present && sacl) descr->sacl_len = sacl->AclSize;
+        if (dacl_present && dacl) descr->dacl_len = dacl->AclSize;
 
-    ptr = (unsigned char *)(*server_sd + 1);
-    memcpy(ptr, owner, (*server_sd)->owner_len);
-    ptr += (*server_sd)->owner_len;
-    memcpy(ptr, group, (*server_sd)->group_len);
-    ptr += (*server_sd)->group_len;
-    memcpy(ptr, sacl, (*server_sd)->sacl_len);
-    ptr += (*server_sd)->sacl_len;
-    memcpy(ptr, dacl, (*server_sd)->dacl_len);
-
-    *server_sd_len = len;
-
+        memcpy( ptr, owner, descr->owner_len );
+        ptr += descr->owner_len;
+        memcpy( ptr, group, descr->group_len );
+        ptr += descr->group_len;
+        memcpy( ptr, sacl, descr->sacl_len );
+        ptr += descr->sacl_len;
+        memcpy( ptr, dacl, descr->dacl_len );
+        (*ret)->sd_len = (sizeof(*descr) + descr->owner_len + descr->group_len + descr->sacl_len +
+                          descr->dacl_len + sizeof(WCHAR) - 1) & ~(sizeof(WCHAR) - 1);
+    }
+    *ret_len = len;
     return STATUS_SUCCESS;
 }
 
@@ -2060,7 +2058,9 @@ static BOOL create_process( HANDLE token, HANDLE hFile, LPCWSTR filename, LPWSTR
     static const char *cpu_names[] = { "x86", "x86_64", "PowerPC", "ARM", "ARM64" };
     NTSTATUS status;
     BOOL success = FALSE;
-    HANDLE process_info;
+    HANDLE process_info, process_handle = 0;
+    struct object_attributes *objattr;
+    data_size_t attr_len;
     WCHAR *env_end;
     char *winedebug = NULL;
     startup_info_t *startup_info;
@@ -2068,8 +2068,6 @@ static BOOL create_process( HANDLE token, HANDLE hFile, LPCWSTR filename, LPWSTR
     int socketfd[2], stdin_fd = -1, stdout_fd = -1;
     pid_t pid;
     int err, cpu;
-    struct security_descriptor *process_sd = NULL, *thread_sd = NULL;
-    data_size_t process_sd_size = 0, thread_sd_size = 0;
 
     if ((cpu = get_process_cpu( filename, binary_info )) == -1)
     {
@@ -2124,41 +2122,12 @@ static BOOL create_process( HANDLE token, HANDLE hFile, LPCWSTR filename, LPWSTR
         return FALSE;
     }
 
-    if (psa && (psa->nLength >= sizeof(*psa)))
-    {
-        status = create_struct_sd( psa->lpSecurityDescriptor, &process_sd, &process_sd_size );
-        if (status != STATUS_SUCCESS)
-        {
-            close( socketfd[0] );
-            close( socketfd[1] );
-            WARN( "Invalid process security descriptor: Status %x\n", status );
-            SetLastError( RtlNtStatusToDosError(status) );
-            return FALSE;
-        }
-    }
-
-    if (tsa && (tsa->nLength >= sizeof(*tsa)))
-    {
-        status = create_struct_sd( tsa->lpSecurityDescriptor, &thread_sd, &thread_sd_size );
-        if (status != STATUS_SUCCESS)
-        {
-            RtlFreeHeap( GetProcessHeap(), 0, process_sd );
-            close( socketfd[0] );
-            close( socketfd[1] );
-            WARN( "Invalid thread security descriptor: Status %x\n", status );
-            SetLastError( RtlNtStatusToDosError(status) );
-            return FALSE;
-        }
-    }
-
     RtlAcquirePebLock();
 
     if (!(startup_info = create_startup_info( filename, cmd_line, cur_dir, env, flags, startup,
                                               &startup_info_size )))
     {
         RtlReleasePebLock();
-        RtlFreeHeap( GetProcessHeap(), 0, process_sd );
-        RtlFreeHeap( GetProcessHeap(), 0, thread_sd );
         close( socketfd[0] );
         close( socketfd[1] );
         return FALSE;
@@ -2183,41 +2152,52 @@ static BOOL create_process( HANDLE token, HANDLE hFile, LPCWSTR filename, LPWSTR
 
     /* create the process on the server side */
 
+    alloc_object_attributes( psa, &objattr, &attr_len );
     SERVER_START_REQ( new_process )
     {
         req->inherit_all    = inherit;
         req->create_flags   = flags;
         req->socket_fd      = socketfd[1];
         req->exe_file       = wine_server_obj_handle( hFile );
-        req->process_access = PROCESS_ALL_ACCESS;
-        req->process_attr   = (psa && (psa->nLength >= sizeof(*psa)) && psa->bInheritHandle) ? OBJ_INHERIT : 0;
-        req->thread_access  = THREAD_ALL_ACCESS;
-        req->thread_attr    = (tsa && (tsa->nLength >= sizeof(*tsa)) && tsa->bInheritHandle) ? OBJ_INHERIT : 0;
+        req->access         = PROCESS_ALL_ACCESS;
         req->cpu            = cpu;
         req->info_size      = startup_info_size;
-        req->env_size       = (env_end - env) * sizeof(WCHAR);
-        req->process_sd_size = process_sd_size;
         req->token          = wine_server_obj_handle( token );
-
+        wine_server_add_data( req, objattr, attr_len );
         wine_server_add_data( req, startup_info, startup_info_size );
         wine_server_add_data( req, env, (env_end - env) * sizeof(WCHAR) );
-        wine_server_add_data( req, process_sd, process_sd_size );
-        wine_server_add_data( req, thread_sd, thread_sd_size );
         if (!(status = wine_server_call( req )))
         {
             info->dwProcessId = (DWORD)reply->pid;
-            info->dwThreadId  = (DWORD)reply->tid;
-            info->hProcess    = wine_server_ptr_handle( reply->phandle );
-            info->hThread     = wine_server_ptr_handle( reply->thandle );
+            process_handle    = wine_server_ptr_handle( reply->handle );
         }
         process_info = wine_server_ptr_handle( reply->info );
     }
     SERVER_END_REQ;
+    HeapFree( GetProcessHeap(), 0, objattr );
+
+    if (!status)
+    {
+        alloc_object_attributes( tsa, &objattr, &attr_len );
+        SERVER_START_REQ( new_thread )
+        {
+            req->process    = wine_server_obj_handle( process_handle );
+            req->access     = THREAD_ALL_ACCESS;
+            req->suspend    = !!(flags & CREATE_SUSPENDED);
+            req->request_fd = -1;
+            wine_server_add_data( req, objattr, attr_len );
+            if (!(status = wine_server_call( req )))
+            {
+                info->hProcess = process_handle;
+                info->hThread = wine_server_ptr_handle( reply->handle );
+                info->dwThreadId = reply->tid;
+            }
+        }
+        SERVER_END_REQ;
+        HeapFree( GetProcessHeap(), 0, objattr );
+    }
 
     RtlReleasePebLock();
-    RtlFreeHeap( GetProcessHeap(), 0, process_sd );
-    RtlFreeHeap( GetProcessHeap(), 0, thread_sd );
-
     if (status)
     {
         switch (status)
@@ -2231,6 +2211,7 @@ static BOOL create_process( HANDLE token, HANDLE hFile, LPCWSTR filename, LPWSTR
             break;
         }
         close( socketfd[0] );
+        CloseHandle( process_handle );
         HeapFree( GetProcessHeap(), 0, startup_info );
         HeapFree( GetProcessHeap(), 0, winedebug );
         SetLastError( RtlNtStatusToDosError( status ));
