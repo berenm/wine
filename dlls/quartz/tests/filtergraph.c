@@ -76,6 +76,46 @@ static IFilterGraph2 *create_graph(void)
     return ret;
 }
 
+#define check_interface(a, b, c) check_interface_(__LINE__, a, b, c)
+static void check_interface_(unsigned int line, void *iface_ptr, REFIID iid, BOOL supported)
+{
+    IUnknown *iface = iface_ptr;
+    HRESULT hr, expected_hr;
+    IUnknown *unk;
+
+    expected_hr = supported ? S_OK : E_NOINTERFACE;
+
+    hr = IUnknown_QueryInterface(iface, iid, (void **)&unk);
+    ok_(__FILE__, line)(hr == expected_hr, "Got hr %#x, expected %#x.\n", hr, expected_hr);
+    if (SUCCEEDED(hr))
+        IUnknown_Release(unk);
+}
+
+static void test_interfaces(void)
+{
+    IFilterGraph2 *graph = create_graph();
+
+    check_interface(graph, &IID_IBasicAudio, TRUE);
+    check_interface(graph, &IID_IBasicVideo2, TRUE);
+    check_interface(graph, &IID_IFilterGraph2, TRUE);
+    check_interface(graph, &IID_IFilterMapper, TRUE);
+    check_interface(graph, &IID_IFilterMapper3, TRUE);
+    check_interface(graph, &IID_IGraphConfig, TRUE);
+    check_interface(graph, &IID_IGraphVersion, TRUE);
+    check_interface(graph, &IID_IMediaControl, TRUE);
+    check_interface(graph, &IID_IMediaEvent, TRUE);
+    check_interface(graph, &IID_IMediaFilter, TRUE);
+    check_interface(graph, &IID_IMediaEventSink, TRUE);
+    check_interface(graph, &IID_IMediaPosition, TRUE);
+    check_interface(graph, &IID_IMediaSeeking, TRUE);
+    check_interface(graph, &IID_IObjectWithSite, TRUE);
+    check_interface(graph, &IID_IVideoWindow, TRUE);
+
+    check_interface(graph, &IID_IBaseFilter, FALSE);
+
+    IFilterGraph2_Release(graph);
+}
+
 static void test_basic_video(IFilterGraph2 *graph)
 {
     IBasicVideo* pbv;
@@ -498,7 +538,7 @@ static void rungraph(IFilterGraph2 *graph)
     test_media_event(graph);
 }
 
-static HRESULT test_graph_builder_connect(WCHAR *filename)
+static HRESULT test_graph_builder_connect_file(WCHAR *filename)
 {
     static const WCHAR outputW[] = {'O','u','t','p','u','t',0};
     static const WCHAR inW[] = {'I','n',0};
@@ -568,7 +608,7 @@ static void test_render_run(const WCHAR *file)
         refs = IFilterGraph2_Release(graph);
         ok(!refs, "Graph has %u references\n", refs);
 
-        hr = test_graph_builder_connect(filename);
+        hr = test_graph_builder_connect_file(filename);
 todo_wine
         ok(hr == VFW_E_CANNOT_CONNECT, "got %#x\n", hr);
     }
@@ -580,7 +620,7 @@ todo_wine
         refs = IFilterGraph2_Release(graph);
         ok(!refs, "Graph has %u references\n", refs);
 
-        hr = test_graph_builder_connect(filename);
+        hr = test_graph_builder_connect_file(filename);
         ok(hr == S_OK || hr == VFW_S_PARTIAL_RENDER, "got %#x\n", hr);
     }
 
@@ -720,69 +760,6 @@ static void test_render_with_multithread(void)
     CoUninitialize();
 }
 
-static void test_graph_builder(void)
-{
-    HRESULT hr;
-    IGraphBuilder *pgraph;
-    IBaseFilter *pF = NULL;
-    IBaseFilter *pF2 = NULL;
-    IPin *pIn = NULL;
-    IEnumPins *pEnum = NULL;
-    PIN_DIRECTION dir;
-    static const WCHAR testFilterW[] = {'t','e','s','t','F','i','l','t','e','r',0};
-    static const WCHAR fooBarW[] = {'f','o','o','B','a','r',0};
-
-    pgraph = (IGraphBuilder *)create_graph();
-
-    /* create video filter */
-    hr = CoCreateInstance(&CLSID_VideoRenderer, NULL, CLSCTX_INPROC_SERVER,
-            &IID_IBaseFilter, (LPVOID*)&pF);
-    ok(hr == S_OK, "CoCreateInstance failed with %x\n", hr);
-    ok(pF != NULL, "pF is NULL\n");
-
-    hr = IGraphBuilder_AddFilter(pgraph, NULL, testFilterW);
-    ok(hr == E_POINTER, "IGraphBuilder_AddFilter returned %x\n", hr);
-
-    /* add the two filters to the graph */
-    hr = IGraphBuilder_AddFilter(pgraph, pF, testFilterW);
-    ok(hr == S_OK, "failed to add pF to the graph: %x\n", hr);
-
-    /* find the pins */
-    hr = IBaseFilter_EnumPins(pF, &pEnum);
-    ok(hr == S_OK, "IBaseFilter_EnumPins failed for pF: %x\n", hr);
-    ok(pEnum != NULL, "pEnum is NULL\n");
-    hr = IEnumPins_Next(pEnum, 1, &pIn, NULL);
-    ok(hr == S_OK, "IEnumPins_Next failed for pF: %x\n", hr);
-    ok(pIn != NULL, "pIn is NULL\n");
-    hr = IPin_QueryDirection(pIn, &dir);
-    ok(hr == S_OK, "IPin_QueryDirection failed: %x\n", hr);
-    ok(dir == PINDIR_INPUT, "pin has wrong direction\n");
-
-    hr = IGraphBuilder_FindFilterByName(pgraph, fooBarW, &pF2);
-    ok(hr == VFW_E_NOT_FOUND, "IGraphBuilder_FindFilterByName returned %x\n", hr);
-    ok(pF2 == NULL, "IGraphBuilder_FindFilterByName returned %p\n", pF2);
-    hr = IGraphBuilder_FindFilterByName(pgraph, testFilterW, &pF2);
-    ok(hr == S_OK, "IGraphBuilder_FindFilterByName returned %x\n", hr);
-    ok(pF2 != NULL, "IGraphBuilder_FindFilterByName returned NULL\n");
-    hr = IGraphBuilder_FindFilterByName(pgraph, testFilterW, NULL);
-    ok(hr == E_POINTER, "IGraphBuilder_FindFilterByName returned %x\n", hr);
-
-    hr = IGraphBuilder_Connect(pgraph, NULL, pIn);
-    ok(hr == E_POINTER, "IGraphBuilder_Connect returned %x\n", hr);
-
-    hr = IGraphBuilder_Connect(pgraph, pIn, NULL);
-    ok(hr == E_POINTER, "IGraphBuilder_Connect returned %x\n", hr);
-
-    hr = IGraphBuilder_Connect(pgraph, pIn, pIn);
-    ok(hr == VFW_E_CANNOT_CONNECT, "IGraphBuilder_Connect returned %x\n", hr);
-
-    if (pIn) IPin_Release(pIn);
-    if (pEnum) IEnumPins_Release(pEnum);
-    if (pF) IBaseFilter_Release(pF);
-    if (pF2) IBaseFilter_Release(pF2);
-    IGraphBuilder_Release(pgraph);
-}
-
 struct testpin
 {
     IPin IPin_iface;
@@ -790,10 +767,16 @@ struct testpin
     PIN_DIRECTION dir;
     IBaseFilter *filter;
     IPin *peer;
+    AM_MEDIA_TYPE *mt;
+    WCHAR name[10];
+    WCHAR id[10];
 
     IEnumMediaTypes IEnumMediaTypes_iface;
     const AM_MEDIA_TYPE *types;
     unsigned int type_count, enum_idx;
+    AM_MEDIA_TYPE *request_mt, *accept_mt;
+
+    HRESULT QueryInternalConnections_hr;
 };
 
 static inline struct testpin *impl_from_IEnumMediaTypes(IEnumMediaTypes *iface)
@@ -947,7 +930,7 @@ static HRESULT WINAPI testpin_QueryPinInfo(IPin *iface, PIN_INFO *info)
     info->pFilter = pin->filter;
     IBaseFilter_AddRef(pin->filter);
     info->dir = pin->dir;
-    info->achName[0] = 0;
+    lstrcpyW(info->achName, pin->name);
     return S_OK;
 }
 
@@ -963,8 +946,11 @@ static HRESULT WINAPI testpin_QueryDirection(IPin *iface, PIN_DIRECTION *dir)
 
 static HRESULT WINAPI testpin_QueryId(IPin *iface, WCHAR **id)
 {
+    struct testpin *pin = impl_from_IPin(iface);
     if (winetest_debug > 1) trace("%p->QueryId()\n", iface);
-    return E_NOTIMPL;
+    *id = CoTaskMemAlloc(11);
+    lstrcpyW(*id, pin->id);
+    return S_OK;
 }
 
 static HRESULT WINAPI testpin_QueryAccept(IPin *iface, const AM_MEDIA_TYPE *mt)
@@ -986,8 +972,11 @@ static HRESULT WINAPI testpin_EnumMediaTypes(IPin *iface, IEnumMediaTypes **out)
 
 static HRESULT WINAPI testpin_QueryInternalConnections(IPin *iface, IPin **out, ULONG *count)
 {
-    if (winetest_debug > 1) trace("%p->QueryInternalConnections()\n", iface);
-    return E_NOTIMPL;
+    struct testpin *pin = impl_from_IPin(iface);
+    if (winetest_debug > 1) trace("%p->QueryInternalConnections()\n", pin);
+
+    *count = 0;
+    return pin->QueryInternalConnections_hr;
 }
 
 static HRESULT WINAPI testpin_BeginFlush(IPin *iface)
@@ -1014,7 +1003,19 @@ static HRESULT WINAPI testpin_EndOfStream(IPin *iface)
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI testsink_Connect(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
+static HRESULT WINAPI no_Connect(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
+{
+    ok(0, "Unexpected call.\n");
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI no_ReceiveConnection(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
+{
+    ok(0, "Unexpected call.\n");
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI no_EnumMediaTypes(IPin *iface, IEnumMediaTypes **out)
 {
     ok(0, "Unexpected call.\n");
     return E_NOTIMPL;
@@ -1025,15 +1026,12 @@ static HRESULT WINAPI testsink_ReceiveConnection(IPin *iface, IPin *peer, const 
     struct testpin *pin = impl_from_IPin(iface);
     if (winetest_debug > 1) trace("%p->ReceiveConnection(%p)\n", pin, peer);
 
+    if (pin->accept_mt && memcmp(pin->accept_mt, mt, sizeof(*mt)))
+        return VFW_E_TYPE_NOT_ACCEPTED;
+
     pin->peer = peer;
     IPin_AddRef(peer);
     return S_OK;
-}
-
-static HRESULT WINAPI testsink_EnumMediaTypes(IPin *iface, IEnumMediaTypes **out)
-{
-    ok(0, "Unexpected call.\n");
-    return E_NOTIMPL;
 }
 
 static const IPinVtbl testsink_vtbl =
@@ -1041,7 +1039,7 @@ static const IPinVtbl testsink_vtbl =
     testpin_QueryInterface,
     testpin_AddRef,
     testpin_Release,
-    testsink_Connect,
+    no_Connect,
     testsink_ReceiveConnection,
     testpin_Disconnect,
     testpin_ConnectedTo,
@@ -1050,7 +1048,7 @@ static const IPinVtbl testsink_vtbl =
     testpin_QueryDirection,
     testpin_QueryId,
     testpin_QueryAccept,
-    testsink_EnumMediaTypes,
+    no_EnumMediaTypes,
     testpin_QueryInternalConnections,
     testpin_EndOfStream,
     testpin_BeginFlush,
@@ -1058,32 +1056,35 @@ static const IPinVtbl testsink_vtbl =
     testpin_NewSegment
 };
 
-static void testsink_init(struct testpin *pin)
+static void testpin_init(struct testpin *pin, const IPinVtbl *vtbl, PIN_DIRECTION dir)
 {
     memset(pin, 0, sizeof(*pin));
-    pin->IPin_iface.lpVtbl = &testsink_vtbl;
-    pin->ref = 1;
-    pin->dir = PINDIR_INPUT;
-
+    pin->IPin_iface.lpVtbl = vtbl;
     pin->IEnumMediaTypes_iface.lpVtbl = &testenummt_vtbl;
+    pin->ref = 1;
+    pin->dir = dir;
+    pin->QueryInternalConnections_hr = E_NOTIMPL;
+}
+
+static void testsink_init(struct testpin *pin)
+{
+    testpin_init(pin, &testsink_vtbl, PINDIR_INPUT);
 }
 
 static HRESULT WINAPI testsource_Connect(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
 {
     struct testpin *pin = impl_from_IPin(iface);
+    HRESULT hr;
     if (winetest_debug > 1) trace("%p->Connect(%p)\n", pin, peer);
 
     ok(!mt, "Got media type %p.\n", mt);
 
-    pin->peer = peer;
-    IPin_AddRef(peer);
-    return IPin_ReceiveConnection(peer, &pin->IPin_iface, mt);
-}
-
-static HRESULT WINAPI testsource_ReceiveConnection(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
-{
-    ok(0, "Unexpected call.\n");
-    return E_NOTIMPL;
+    if (SUCCEEDED(hr = IPin_ReceiveConnection(peer, &pin->IPin_iface, pin->request_mt)))
+    {
+        pin->peer = peer;
+        IPin_AddRef(peer);
+    }
+    return hr;
 }
 
 static const IPinVtbl testsource_vtbl =
@@ -1092,7 +1093,7 @@ static const IPinVtbl testsource_vtbl =
     testpin_AddRef,
     testpin_Release,
     testsource_Connect,
-    testsource_ReceiveConnection,
+    no_ReceiveConnection,
     testpin_Disconnect,
     testpin_ConnectedTo,
     testpin_ConnectionMediaType,
@@ -1110,12 +1111,7 @@ static const IPinVtbl testsource_vtbl =
 
 static void testsource_init(struct testpin *pin, const AM_MEDIA_TYPE *types, int type_count)
 {
-    memset(pin, 0, sizeof(*pin));
-    pin->IPin_iface.lpVtbl = &testsource_vtbl;
-    pin->ref = 1;
-    pin->dir = PINDIR_OUTPUT;
-
-    pin->IEnumMediaTypes_iface.lpVtbl = &testenummt_vtbl;
+    testpin_init(pin, &testsource_vtbl, PINDIR_OUTPUT);
     pin->types = types;
     pin->type_count = type_count;
 }
@@ -1126,6 +1122,7 @@ struct testfilter
     LONG ref;
     IFilterGraph *graph;
     WCHAR *name;
+    IReferenceClock *clock;
 
     IEnumPins IEnumPins_iface;
     struct testpin *pins;
@@ -1245,7 +1242,7 @@ static ULONG WINAPI testfilter_Release(IBaseFilter *iface)
 static HRESULT WINAPI testfilter_GetClassID(IBaseFilter *iface, CLSID *clsid)
 {
     if (winetest_debug > 1) trace("%p->GetClassID()\n", iface);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI testfilter_Stop(IBaseFilter *iface)
@@ -1274,8 +1271,15 @@ static HRESULT WINAPI testfilter_GetState(IBaseFilter *iface, DWORD timeout, FIL
 
 static HRESULT WINAPI testfilter_SetSyncSource(IBaseFilter *iface, IReferenceClock *clock)
 {
-    if (winetest_debug > 1) trace("%p->SetSyncSource(%p)\n", iface, clock);
-    return E_NOTIMPL;
+    struct testfilter *filter = impl_from_IBaseFilter(iface);
+    if (winetest_debug > 1) trace("%p->SetSyncSource(%p)\n", filter, clock);
+
+    if (filter->clock)
+        IReferenceClock_Release(filter->clock);
+    if (clock)
+        IReferenceClock_AddRef(clock);
+    filter->clock = clock;
+    return S_OK;
 }
 
 static HRESULT WINAPI testfilter_GetSyncSource(IBaseFilter *iface, IReferenceClock **clock)
@@ -1622,6 +1626,315 @@ out:
     ok(parser_pins[1].ref == 1, "Got outstanding refcount %d.\n", parser_pins[1].ref);
 }
 
+static void test_graph_builder_connect(void)
+{
+    static const WCHAR testW[] = {'t','e','s','t',0};
+    static const GUID parser1_clsid = {0x12345678};
+    static const GUID parser2_clsid = {0x87654321};
+    AM_MEDIA_TYPE source_type = {{0}}, sink_type = {{0}}, parser3_type = {{0}};
+    struct testpin source_pin, sink_pin, sink2_pin, parser1_pins[3], parser2_pins[2], parser3_pins[2];
+    struct testfilter source, sink, sink2, parser1, parser2, parser3;
+    struct testfilter_cf parser1_cf = { {&testfilter_cf_vtbl}, &parser1 };
+    struct testfilter_cf parser2_cf = { {&testfilter_cf_vtbl}, &parser2 };
+
+    IFilterGraph2 *graph = create_graph();
+    REGFILTERPINS2 regpins[2] = {{0}};
+    REGPINTYPES regtypes = {0};
+    REGFILTER2 regfilter = {0};
+    IFilterMapper2 *mapper;
+    DWORD cookie1, cookie2;
+    HRESULT hr;
+    ULONG ref;
+
+    memset(&source_type.majortype, 0xcc, sizeof(GUID));
+    memset(&sink_type.majortype, 0x66, sizeof(GUID));
+    testsource_init(&source_pin, &source_type, 1);
+    source_pin.request_mt = &source_type;
+    testfilter_init(&source, &source_pin, 1);
+    testsink_init(&sink_pin);
+    testfilter_init(&sink, &sink_pin, 1);
+    testsink_init(&sink2_pin);
+    testfilter_init(&sink2, &sink2_pin, 1);
+
+    testsink_init(&parser1_pins[0]);
+    testsource_init(&parser1_pins[1], &sink_type, 1);
+    parser1_pins[1].request_mt = &sink_type;
+    testsource_init(&parser1_pins[2], &sink_type, 1);
+    parser1_pins[2].request_mt = &sink_type;
+    testfilter_init(&parser1, parser1_pins, 3);
+    parser1.pin_count = 2;
+
+    testsink_init(&parser2_pins[0]);
+    testsource_init(&parser2_pins[1], &sink_type, 1);
+    parser2_pins[1].request_mt = &sink_type;
+    testfilter_init(&parser2, parser2_pins, 2);
+
+    testsink_init(&parser3_pins[0]);
+    testsource_init(&parser3_pins[1], &sink_type, 1);
+    parser3_pins[1].request_mt = &parser3_type;
+    testfilter_init(&parser3, parser3_pins, 2);
+
+    IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &sink.IBaseFilter_iface, NULL);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+
+    sink_pin.accept_mt = &sink_type;
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+todo_wine
+    ok(hr == VFW_E_CANNOT_CONNECT, "Got hr %#x.\n", hr);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+
+    /* Test usage of intermediate filters. Similarly to Render(), filters are
+     * simply tried in enumeration order. */
+
+    IFilterGraph2_AddFilter(graph, &parser1.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &parser2.IBaseFilter_iface, NULL);
+
+    sink_pin.accept_mt = NULL;
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+
+    sink_pin.accept_mt = &sink_type;
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser2_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser2_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+
+    IFilterGraph2_RemoveFilter(graph, &parser1.IBaseFilter_iface);
+    IFilterGraph2_AddFilter(graph, &parser1.IBaseFilter_iface, NULL);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+
+    /* No preference is given to smaller chains. */
+
+    IFilterGraph2_AddFilter(graph, &parser3.IBaseFilter_iface, NULL);
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser3_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(parser3_pins[1].peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", parser3_pins[1].peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, parser3_pins[0].peer);
+    IFilterGraph2_Disconnect(graph, &parser3_pins[0].IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+
+    IFilterGraph2_RemoveFilter(graph, &parser3.IBaseFilter_iface);
+    IFilterGraph2_RemoveFilter(graph, &parser2.IBaseFilter_iface);
+
+    /* Extra source pins on an intermediate filter are not rendered. */
+
+    IFilterGraph2_RemoveFilter(graph, &parser1.IBaseFilter_iface);
+    parser1.pin_count = 3;
+    IFilterGraph2_AddFilter(graph, &parser1.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &sink2.IBaseFilter_iface, NULL);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+todo_wine
+    ok(hr == VFW_S_PARTIAL_RENDER, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    ok(!parser1_pins[2].peer, "Got peer %p.\n", parser1_pins[2].peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+    parser1.pin_count = 2;
+
+    /* QueryInternalConnections is not used to find output pins. */
+
+    parser1_pins[1].QueryInternalConnections_hr = S_OK;
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+
+    /* A pin whose name (not ID) begins with a tilde is not connected. */
+
+    parser1_pins[1].name[0] = '~';
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+todo_wine
+    ok(hr == VFW_E_CANNOT_CONNECT, "Got hr %#x.\n", hr);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+
+    parser1.pin_count = 3;
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+todo_wine {
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[2].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+}
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+    parser1.pin_count = 2;
+
+    parser1_pins[1].name[0] = 0;
+    parser1_pins[1].id[0] = '~';
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, source_pin.peer);
+    IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    IFilterGraph2_Disconnect(graph, sink_pin.peer);
+    IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+
+    ref = IFilterGraph2_Release(graph);
+    ok(!ref, "Got outstanding refcount %d.\n", ref);
+
+    /* Test enumeration of filters from the registry. */
+
+    graph = create_graph();
+    IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &sink.IBaseFilter_iface, NULL);
+
+    CoRegisterClassObject(&parser1_clsid, (IUnknown *)&parser1_cf.IClassFactory_iface,
+            CLSCTX_INPROC_SERVER, REGCLS_MULTIPLEUSE, &cookie1);
+    CoRegisterClassObject(&parser2_clsid, (IUnknown *)&parser2_cf.IClassFactory_iface,
+            CLSCTX_INPROC_SERVER, REGCLS_MULTIPLEUSE, &cookie2);
+
+    CoCreateInstance(&CLSID_FilterMapper2, NULL, CLSCTX_INPROC_SERVER,
+            &IID_IFilterMapper2, (void **)&mapper);
+
+    regfilter.dwVersion = 2;
+    regfilter.dwMerit = MERIT_UNLIKELY;
+    regfilter.cPins2 = 2;
+    regfilter.rgPins2 = regpins;
+    regpins[0].dwFlags = 0;
+    regpins[0].cInstances = 1;
+    regpins[0].nMediaTypes = 1;
+    regpins[0].lpMediaType = &regtypes;
+    regpins[1].dwFlags = REG_PINFLAG_B_OUTPUT;
+    regpins[1].cInstances = 1;
+    regpins[1].nMediaTypes = 1;
+    regpins[1].lpMediaType = &regtypes;
+    regtypes.clsMajorType = &source_type.majortype;
+    regtypes.clsMinorType = &MEDIASUBTYPE_NULL;
+    hr = IFilterMapper2_RegisterFilter(mapper, &parser1_clsid, testW, NULL, NULL, NULL, &regfilter);
+    if (hr == E_ACCESSDENIED)
+    {
+        skip("Not enough permission to register filters.\n");
+        goto out;
+    }
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    IFilterMapper2_RegisterFilter(mapper, &parser2_clsid, testW, NULL, NULL, NULL, &regfilter);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface
+            || source_pin.peer == &parser2_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface
+            || sink_pin.peer == &parser2_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+
+    ref = IFilterGraph2_Release(graph);
+    ok(!ref, "Got outstanding refcount %d.\n", ref);
+
+    /* Preference is given to filters already in the graph. */
+
+    graph = create_graph();
+    IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &sink.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &parser1.IBaseFilter_iface, NULL);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+
+    ref = IFilterGraph2_Release(graph);
+    ok(!ref, "Got outstanding refcount %d.\n", ref);
+
+    /* Preference is given to filters with higher merit. */
+
+    graph = create_graph();
+    IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &sink.IBaseFilter_iface, NULL);
+
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &parser1_clsid);
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &parser2_clsid);
+
+    regfilter.dwMerit = MERIT_UNLIKELY;
+    IFilterMapper2_RegisterFilter(mapper, &parser1_clsid, testW, NULL, NULL, NULL, &regfilter);
+    regfilter.dwMerit = MERIT_PREFERRED;
+    IFilterMapper2_RegisterFilter(mapper, &parser2_clsid, testW, NULL, NULL, NULL, &regfilter);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser2_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser2_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+
+    ref = IFilterGraph2_Release(graph);
+    ok(!ref, "Got outstanding refcount %d.\n", ref);
+
+    graph = create_graph();
+    IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    IFilterGraph2_AddFilter(graph, &sink.IBaseFilter_iface, NULL);
+
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &parser1_clsid);
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &parser2_clsid);
+
+    regfilter.dwMerit = MERIT_PREFERRED;
+    IFilterMapper2_RegisterFilter(mapper, &parser1_clsid, testW, NULL, NULL, NULL, &regfilter);
+    regfilter.dwMerit = MERIT_UNLIKELY;
+    IFilterMapper2_RegisterFilter(mapper, &parser2_clsid, testW, NULL, NULL, NULL, &regfilter);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &parser1_pins[0].IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(sink_pin.peer == &parser1_pins[1].IPin_iface, "Got peer %p.\n", sink_pin.peer);
+
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &parser1_clsid);
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &parser2_clsid);
+
+out:
+    CoRevokeClassObject(cookie1);
+    CoRevokeClassObject(cookie2);
+    IFilterMapper2_Release(mapper);
+    ref = IFilterGraph2_Release(graph);
+    ok(!ref, "Got outstanding refcount %d.\n", ref);
+    ok(source.ref == 1, "Got outstanding refcount %d.\n", source.ref);
+    ok(source_pin.ref == 1, "Got outstanding refcount %d.\n", source_pin.ref);
+    ok(sink.ref == 1, "Got outstanding refcount %d.\n", sink.ref);
+    ok(sink_pin.ref == 1, "Got outstanding refcount %d.\n", sink_pin.ref);
+    ok(parser1.ref == 1, "Got outstanding refcount %d.\n", parser1.ref);
+    ok(parser1_pins[0].ref == 1, "Got outstanding refcount %d.\n", parser1_pins[0].ref);
+    ok(parser1_pins[1].ref == 1, "Got outstanding refcount %d.\n", parser1_pins[1].ref);
+    ok(parser1_pins[2].ref == 1, "Got outstanding refcount %d.\n", parser1_pins[2].ref);
+    ok(parser2.ref == 1, "Got outstanding refcount %d.\n", parser2.ref);
+    ok(parser2_pins[0].ref == 1, "Got outstanding refcount %d.\n", parser2_pins[0].ref);
+    ok(parser2_pins[1].ref == 1, "Got outstanding refcount %d.\n", parser2_pins[1].ref);
+    ok(parser3.ref == 1, "Got outstanding refcount %d.\n", parser3.ref);
+    ok(parser3_pins[0].ref == 1, "Got outstanding refcount %d.\n", parser3_pins[0].ref);
+    ok(parser3_pins[1].ref == 1, "Got outstanding refcount %d.\n", parser3_pins[1].ref);
+}
+
 typedef struct IUnknownImpl
 {
     IUnknown IUnknown_iface;
@@ -1823,17 +2136,257 @@ static void test_control_delegation(void)
     IFilterGraph2_Release(graph);
 }
 
+static void test_add_remove_filter(void)
+{
+    static const WCHAR defaultid[] = {'0','0','0','1',0};
+    static const WCHAR testid[] = {'t','e','s','t','i','d',0};
+    struct testfilter filter;
+
+    IFilterGraph2 *graph = create_graph();
+    IBaseFilter *ret_filter;
+    HRESULT hr;
+
+    testfilter_init(&filter, NULL, 0);
+
+    hr = IFilterGraph2_FindFilterByName(graph, testid, &ret_filter);
+    ok(hr == VFW_E_NOT_FOUND, "Got hr %#x.\n", hr);
+    ok(!ret_filter, "Got filter %p.\n", ret_filter);
+
+    hr = IFilterGraph2_AddFilter(graph, &filter.IBaseFilter_iface, testid);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(filter.graph == (IFilterGraph *)graph, "Got graph %p.\n", filter.graph);
+    ok(!lstrcmpW(filter.name, testid), "Got name %s.\n", wine_dbgstr_w(filter.name));
+
+    hr = IFilterGraph2_FindFilterByName(graph, testid, &ret_filter);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(ret_filter == &filter.IBaseFilter_iface, "Got filter %p.\n", ret_filter);
+    IBaseFilter_Release(ret_filter);
+
+    hr = IFilterGraph2_RemoveFilter(graph, &filter.IBaseFilter_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(!filter.graph, "Got graph %p.\n", filter.graph);
+    ok(!filter.name, "Got name %s.\n", wine_dbgstr_w(filter.name));
+    ok(!filter.clock, "Got clock %p,\n", filter.clock);
+    ok(filter.ref == 1, "Got outstanding refcount %d.\n", filter.ref);
+
+    hr = IFilterGraph2_FindFilterByName(graph, testid, &ret_filter);
+    ok(hr == VFW_E_NOT_FOUND, "Got hr %#x.\n", hr);
+    ok(!ret_filter, "Got filter %p.\n", ret_filter);
+
+    hr = IFilterGraph2_AddFilter(graph, &filter.IBaseFilter_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(filter.graph == (IFilterGraph *)graph, "Got graph %p.\n", filter.graph);
+    ok(!lstrcmpW(filter.name, defaultid), "Got name %s.\n", wine_dbgstr_w(filter.name));
+
+    hr = IFilterGraph2_FindFilterByName(graph, defaultid, &ret_filter);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(ret_filter == &filter.IBaseFilter_iface, "Got filter %p.\n", ret_filter);
+    IBaseFilter_Release(ret_filter);
+
+    /* test releasing the filter graph while filters are still connected */
+    hr = IFilterGraph2_Release(graph);
+    ok(!hr, "Got outstanding refcount %d.\n", hr);
+    ok(!filter.graph, "Got graph %p.\n", filter.graph);
+    ok(!filter.name, "Got name %s.\n", wine_dbgstr_w(filter.name));
+    ok(!filter.clock, "Got clock %p.\n", filter.clock);
+    ok(filter.ref == 1, "Got outstanding refcount %d.\n", filter.ref);
+}
+
+static HRESULT WINAPI test_connect_direct_Connect(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
+{
+    struct testpin *pin = impl_from_IPin(iface);
+    if (winetest_debug > 1) trace("%p->Connect()\n", pin);
+
+    pin->peer = peer;
+    IPin_AddRef(peer);
+    pin->mt = (AM_MEDIA_TYPE *)mt;
+    return S_OK;
+}
+
+static const IPinVtbl test_connect_direct_vtbl =
+{
+    testpin_QueryInterface,
+    testpin_AddRef,
+    testpin_Release,
+    test_connect_direct_Connect,
+    no_ReceiveConnection,
+    testpin_Disconnect,
+    testpin_ConnectedTo,
+    testpin_ConnectionMediaType,
+    testpin_QueryPinInfo,
+    testpin_QueryDirection,
+    testpin_QueryId,
+    testpin_QueryAccept,
+    no_EnumMediaTypes,
+    testpin_QueryInternalConnections,
+    testpin_EndOfStream,
+    testpin_BeginFlush,
+    testpin_EndFlush,
+    testpin_NewSegment
+};
+
+static void test_connect_direct_init(struct testpin *pin, PIN_DIRECTION dir)
+{
+    memset(pin, 0, sizeof(*pin));
+    pin->IPin_iface.lpVtbl = &test_connect_direct_vtbl;
+    pin->ref = 1;
+    pin->dir = dir;
+}
+
+static void test_connect_direct(void)
+{
+    struct testpin source_pin, sink_pin;
+    struct testfilter source, sink;
+
+    IFilterGraph2 *graph = create_graph();
+    AM_MEDIA_TYPE mt;
+    HRESULT hr;
+
+    test_connect_direct_init(&source_pin, PINDIR_OUTPUT);
+    test_connect_direct_init(&sink_pin, PINDIR_INPUT);
+    testfilter_init(&source, &source_pin, 1);
+    testfilter_init(&sink, &sink_pin, 1);
+
+    hr = IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    hr = IFilterGraph2_AddFilter(graph, &sink.IBaseFilter_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    hr = IFilterGraph2_ConnectDirect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!source_pin.mt, "Got mt %p.\n", source_pin.mt);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+    ok(hr == S_FALSE, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Connect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!source_pin.mt, "Got mt %p.\n", source_pin.mt);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+    ok(hr == S_FALSE, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    /* Swap the pins when connecting. */
+    hr = IFilterGraph2_ConnectDirect(graph, &sink_pin.IPin_iface, &source_pin.IPin_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+todo_wine
+    ok(sink_pin.peer == &source_pin.IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    ok(!sink_pin.mt, "Got mt %p.\n", sink_pin.mt);
+todo_wine
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+todo_wine
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+todo_wine
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Connect(graph, &sink_pin.IPin_iface, &source_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+todo_wine
+    ok(sink_pin.peer == &source_pin.IPin_iface, "Got peer %p.\n", sink_pin.peer);
+    ok(!sink_pin.mt, "Got mt %p.\n", sink_pin.mt);
+todo_wine
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+todo_wine
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+todo_wine
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    /* Disconnect() does not disconnect the peer. */
+    hr = IFilterGraph2_ConnectDirect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!source_pin.mt, "Got mt %p.\n", source_pin.mt);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    sink_pin.peer = &source_pin.IPin_iface;
+    IPin_AddRef(sink_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &sink_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    hr = IFilterGraph2_Disconnect(graph, &source_pin.IPin_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    /* Test specifying the media type. */
+    hr = IFilterGraph2_ConnectDirect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface, &mt);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(source_pin.mt == &mt, "Got mt %p.\n", source_pin.mt);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    /* Both pins are disconnected when a filter is removed. */
+    sink_pin.peer = &source_pin.IPin_iface;
+    IPin_AddRef(sink_pin.peer);
+    hr = IFilterGraph2_RemoveFilter(graph, &source.IBaseFilter_iface);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+
+    /* Or when the graph is destroyed. */
+    hr = IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    hr = IFilterGraph2_ConnectDirect(graph, &source_pin.IPin_iface, &sink_pin.IPin_iface, NULL);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(source_pin.peer == &sink_pin.IPin_iface, "Got peer %p.\n", source_pin.peer);
+    ok(!source_pin.mt, "Got mt %p.\n", source_pin.mt);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+    IPin_AddRef(sink_pin.peer = &source_pin.IPin_iface);
+
+    hr = IFilterGraph2_Release(graph);
+    ok(!hr, "Got outstanding refcount %d.\n", hr);
+    ok(source.ref == 1, "Got outstanding refcount %d.\n", source.ref);
+    ok(sink.ref == 1, "Got outstanding refcount %d.\n", sink.ref);
+    ok(source_pin.ref == 1, "Got outstanding refcount %d.\n", source_pin.ref);
+todo_wine
+    ok(sink_pin.ref == 1, "Got outstanding refcount %d.\n", sink_pin.ref);
+    ok(!source_pin.peer, "Got peer %p.\n", source_pin.peer);
+    ok(!sink_pin.peer, "Got peer %p.\n", sink_pin.peer);
+}
+
 START_TEST(filtergraph)
 {
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
+    test_interfaces();
     test_render_run(avifile);
     test_render_run(mpegfile);
     test_enum_filters();
-    test_graph_builder();
     test_graph_builder_render();
+    test_graph_builder_connect();
     test_aggregate_filter_graph();
     test_control_delegation();
+    test_add_remove_filter();
+    test_connect_direct();
 
     CoUninitialize();
     test_render_with_multithread();

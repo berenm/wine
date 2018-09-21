@@ -241,16 +241,6 @@ static void add_job_completion( struct job *job, apc_param_t msg, apc_param_t pi
 
 static void add_job_process( struct job *job, struct process *process )
 {
-    if (!process->running_threads)
-    {
-        set_error( STATUS_PROCESS_IS_TERMINATING );
-        return;
-    }
-    if (process->job)
-    {
-        set_error( STATUS_ACCESS_DENIED );
-        return;
-    }
     process->job = (struct job *)grab_object( job );
     list_add_tail( &job->process_list, &process->job_entry );
     job->num_processes++;
@@ -502,13 +492,12 @@ static void start_sigkill_timer( struct process *process )
         process_died( process );
 }
 
-/* create a new process and its main thread */
+/* create a new process */
 /* if the function fails the fd is closed */
-struct thread *create_process( int fd, struct thread *parent_thread, int inherit_all, struct token *token )
+struct process *create_process( int fd, struct thread *parent_thread, int inherit_all,
+                                const struct security_descriptor *sd, struct token *token )
 {
     struct process *process;
-    struct thread *thread = NULL;
-    int request_pipe[2];
 
     if (!(process = alloc_object( &process_ops )))
     {
@@ -554,6 +543,12 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     process->end_time = 0;
     list_add_tail( &process_list, &process->entry );
 
+    if (sd && !default_set_sd( &process->obj, sd, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
+                               DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION ))
+    {
+        close( fd );
+        goto error;
+    }
     if (!(process->id = process->group_id = alloc_ptid( process )))
     {
         close( fd );
@@ -584,24 +579,8 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     if (do_esync())
         process->esync_fd = esync_create_fd( 0, 0 );
 
-    /* create the main thread */
-    if (pipe( request_pipe ) == -1)
-    {
-        file_set_error();
-        goto error;
-    }
-    if (send_client_fd( process, request_pipe[1], SERVER_PROTOCOL_VERSION ) == -1)
-    {
-        close( request_pipe[0] );
-        close( request_pipe[1] );
-        goto error;
-    }
-    close( request_pipe[1] );
-    if (!(thread = create_thread( request_pipe[0], process ))) goto error;
-
     set_fd_events( process->msg_fd, POLLIN );  /* start listening to events */
-    release_object( process );
-    return thread;
+    return process;
 
  error:
     if (process) release_object( process );
@@ -1166,16 +1145,24 @@ void replace_process_token( struct process *process, struct token *new_token )
 DECL_HANDLER(new_process)
 {
     struct startup_info *info;
-    struct thread *thread;
-    struct process *process;
+    const void *info_ptr;
+    struct unicode_str name;
+    const struct security_descriptor *sd;
+    const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, NULL );
+    struct process *process = NULL;
     struct token *token = NULL;
     struct process *parent = current->process;
     int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
-    const struct security_descriptor *process_sd = NULL, *thread_sd = NULL;
 
     if (socket_fd == -1)
     {
         set_error( STATUS_INVALID_PARAMETER );
+        return;
+    }
+    if (!objattr)
+    {
+        set_error( STATUS_INVALID_PARAMETER );
+        close( socket_fd );
         return;
     }
     if (fcntl( socket_fd, F_SETFL, O_NONBLOCK ) == -1)
@@ -1223,7 +1210,11 @@ DECL_HANDLER(new_process)
 
     if (!req->info_size)  /* create an orphaned process */
     {
-        create_process( socket_fd, NULL, 0, token );
+        if ((process = create_process( socket_fd, NULL, 0, sd, token )))
+        {
+            create_thread( -1, process, NULL );
+            release_object( process );
+        }
         if (token) release_object( token );
         return;
     }
@@ -1246,7 +1237,7 @@ DECL_HANDLER(new_process)
         goto done;
     }
 
-    info->data_size = min( get_req_data_size(), req->info_size + req->env_size );
+    info_ptr = get_req_data_after_objattr( objattr, &info->data_size );
     info->info_size = min( req->info_size, info->data_size );
 
     if (req->info_size < sizeof(*info->data))
@@ -1260,9 +1251,9 @@ DECL_HANDLER(new_process)
             close( socket_fd );
             goto done;
         }
-        memcpy( info->data, get_req_data(), info_size );
+        memcpy( info->data, info_ptr, info_size );
         memset( (char *)info->data + info_size, 0, sizeof(*info->data) - info_size );
-        memcpy( info->data + 1, (const char *)get_req_data() + req->info_size, env_size );
+        memcpy( info->data + 1, (const char *)info_ptr + req->info_size, env_size );
         info->info_size = sizeof(startup_info_t);
         info->data_size = info->info_size + env_size;
     }
@@ -1270,7 +1261,7 @@ DECL_HANDLER(new_process)
     {
         data_size_t pos = sizeof(*info->data);
 
-        if (!(info->data = memdup( get_req_data(), info->data_size )))
+        if (!(info->data = memdup( info_ptr, info->data_size )))
         {
             close( socket_fd );
             goto done;
@@ -1287,36 +1278,8 @@ DECL_HANDLER(new_process)
 #undef FIXUP_LEN
     }
 
-    if (get_req_data_size() > req->info_size + req->env_size)
-    {
-        data_size_t sd_size, pos = req->info_size + req->env_size;
+    if (!(process = create_process( socket_fd, current, req->inherit_all, sd, token ))) goto done;
 
-        /* verify process sd */
-        if ((sd_size = min( get_req_data_size() - pos, req->process_sd_size )))
-        {
-            process_sd = (const struct security_descriptor *)((const char *)get_req_data() + pos);
-            if (!sd_is_valid( process_sd, sd_size ))
-            {
-                set_error( STATUS_INVALID_SECURITY_DESCR );
-                goto done;
-            }
-            pos += sd_size;
-        }
-
-        /* verify thread sd */
-        if ((sd_size = get_req_data_size() - pos))
-        {
-            thread_sd = (const struct security_descriptor *)((const char *)get_req_data() + pos);
-            if (!sd_is_valid( thread_sd, sd_size ))
-            {
-                set_error( STATUS_INVALID_SECURITY_DESCR );
-                goto done;
-            }
-        }
-    }
-
-    if (!(thread = create_process( socket_fd, current, req->inherit_all, token ))) goto done;
-    process = thread->process;
     process->startup_info = (struct startup_info *)grab_object( info );
 
     if (parent->job
@@ -1328,9 +1291,6 @@ DECL_HANDLER(new_process)
 
     /* connect to the window station */
     connect_process_winstation( process, current );
-
-    /* thread will be actually suspended in init_done */
-    if (req->create_flags & CREATE_SUSPENDED) thread->suspend++;
 
     /* set the process console */
     if (!(req->create_flags & (DETACHED_PROCESS | CREATE_NEW_CONSOLE)))
@@ -1373,31 +1333,11 @@ DECL_HANDLER(new_process)
     info->process = (struct process *)grab_object( process );
     reply->info = alloc_handle( current->process, info, SYNCHRONIZE, 0 );
     reply->pid = get_process_id( process );
-    reply->tid = get_thread_id( thread );
-    reply->phandle = alloc_handle( parent, process, req->process_access, req->process_attr );
-    reply->thandle = alloc_handle( parent, thread, req->thread_access, req->thread_attr );
-
-    if (process_sd)
-    {
-        default_set_sd( &process->obj, process_sd,
-                        OWNER_SECURITY_INFORMATION |
-                        GROUP_SECURITY_INFORMATION |
-                        DACL_SECURITY_INFORMATION |
-                        SACL_SECURITY_INFORMATION );
-    }
-
-    if (thread_sd)
-    {
-        set_sd_defaults_from_token( &thread->obj, thread_sd,
-                                    OWNER_SECURITY_INFORMATION |
-                                    GROUP_SECURITY_INFORMATION |
-                                    DACL_SECURITY_INFORMATION |
-                                    SACL_SECURITY_INFORMATION,
-                                    process->token );
-    }
+    reply->handle = alloc_handle_no_access_check( parent, process, req->access, objattr->attributes );
 
  done:
     if (token) release_object( token );
+    if (process) release_object( process );
     release_object( info );
 }
 
@@ -1764,7 +1704,12 @@ DECL_HANDLER(assign_job)
 
     if ((process = get_process_from_handle( req->process, PROCESS_SET_QUOTA | PROCESS_TERMINATE )))
     {
-        add_job_process( job, process );
+        if (!process->running_threads)
+            set_error( STATUS_PROCESS_IS_TERMINATING );
+        else if (process->job)
+            set_error( STATUS_ACCESS_DENIED );
+        else
+            add_job_process( job, process );
         release_object( process );
     }
     release_object( job );

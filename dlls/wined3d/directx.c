@@ -2441,12 +2441,11 @@ HRESULT CDECL wined3d_device_create(struct wined3d *wined3d, UINT adapter_idx, e
     struct wined3d_device *object;
     HRESULT hr;
 
-    TRACE("wined3d %p, adapter_idx %u, device_type %#x, focus_window %p, flags %#x, surface_alignment %u, device_parent %p, device %p.\n",
+    TRACE("wined3d %p, adapter_idx %u, device_type %#x, focus_window %p, "
+            "flags %#x, surface_alignment %u, device_parent %p, device %p.\n",
             wined3d, adapter_idx, device_type, focus_window, flags, surface_alignment, device_parent, device);
 
-    /* Validate the adapter number. If no adapters are available(no GL), ignore the adapter
-     * number and create a device without a 3D adapter for 2D only operation. */
-    if (wined3d->adapter_count && adapter_idx >= wined3d->adapter_count)
+    if (adapter_idx >= wined3d->adapter_count)
         return WINED3DERR_INVALIDCALL;
 
     if (!(object = heap_alloc_zero(sizeof(*object))))
@@ -2494,7 +2493,7 @@ static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter)
     adapter->vram_bytes_used = 0;
     TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
 
-    if (!wined3d_adapter_init_format_info(adapter, NULL))
+    if (!wined3d_adapter_init_format_info(adapter, sizeof(struct wined3d_format)))
         return FALSE;
 
     adapter->vertex_pipe = &none_vertex_pipe;
@@ -2528,7 +2527,7 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int o
 
     if (wined3d_creation_flags & WINED3D_NO3D)
         return wined3d_adapter_no3d_init(adapter);
-    return wined3d_adapter_opengl_init(adapter, wined3d_creation_flags);
+    return wined3d_adapter_gl_init(adapter, wined3d_creation_flags);
 }
 
 static void STDMETHODCALLTYPE wined3d_null_wined3d_object_destroyed(void *parent) {}

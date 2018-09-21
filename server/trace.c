@@ -1119,8 +1119,7 @@ static void dump_varargs_object_attributes( const char *prefix, data_size_t size
         fprintf( stderr, ",name=L\"" );
         dump_strW( str, objattr->name_len / sizeof(WCHAR), stderr, "\"\"" );
         fputc( '\"', stderr );
-        remove_data( ((sizeof(*objattr) + objattr->sd_len) / sizeof(WCHAR)) * sizeof(WCHAR) +
-                     (objattr->name_len / sizeof(WCHAR)) * sizeof(WCHAR) );
+        remove_data( (sizeof(*objattr) + (objattr->sd_len & ~1) + (objattr->name_len & ~1) + 3) & ~3 );
     }
     fputc( '}', stderr );
 }
@@ -1230,28 +1229,20 @@ static void dump_new_process_request( const struct new_process_request *req )
     fprintf( stderr, ", create_flags=%08x", req->create_flags );
     fprintf( stderr, ", socket_fd=%d", req->socket_fd );
     fprintf( stderr, ", exe_file=%04x", req->exe_file );
-    fprintf( stderr, ", process_access=%08x", req->process_access );
-    fprintf( stderr, ", process_attr=%08x", req->process_attr );
-    fprintf( stderr, ", thread_access=%08x", req->thread_access );
-    fprintf( stderr, ", thread_attr=%08x", req->thread_attr );
+    fprintf( stderr, ", access=%08x", req->access );
     dump_cpu_type( ", cpu=", &req->cpu );
     fprintf( stderr, ", info_size=%u", req->info_size );
-    fprintf( stderr, ", env_size=%u", req->env_size );
-    fprintf( stderr, ", process_sd_size=%u", req->process_sd_size );
     fprintf( stderr, ", token=%04x", req->token );
+    dump_varargs_object_attributes( ", objattr=", cur_size );
     dump_varargs_startup_info( ", info=", min(cur_size,req->info_size) );
-    dump_varargs_unicode_str( ", env=", min(cur_size,req->env_size) );
-    dump_varargs_security_descriptor( ", process_sd=", min(cur_size,req->process_sd_size) );
-    dump_varargs_security_descriptor( ", thread_sd=", cur_size );
+    dump_varargs_unicode_str( ", env=", cur_size );
 }
 
 static void dump_new_process_reply( const struct new_process_reply *req )
 {
     fprintf( stderr, " info=%04x", req->info );
     fprintf( stderr, ", pid=%04x", req->pid );
-    fprintf( stderr, ", phandle=%04x", req->phandle );
-    fprintf( stderr, ", tid=%04x", req->tid );
-    fprintf( stderr, ", thandle=%04x", req->thandle );
+    fprintf( stderr, ", handle=%04x", req->handle );
 }
 
 static void dump_get_new_process_info_request( const struct get_new_process_info_request *req )
@@ -1267,10 +1258,11 @@ static void dump_get_new_process_info_reply( const struct get_new_process_info_r
 
 static void dump_new_thread_request( const struct new_thread_request *req )
 {
-    fprintf( stderr, " access=%08x", req->access );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
+    fprintf( stderr, " process=%04x", req->process );
+    fprintf( stderr, ", access=%08x", req->access );
     fprintf( stderr, ", suspend=%d", req->suspend );
     fprintf( stderr, ", request_fd=%d", req->request_fd );
+    dump_varargs_object_attributes( ", objattr=", cur_size );
 }
 
 static void dump_new_thread_reply( const struct new_thread_reply *req )

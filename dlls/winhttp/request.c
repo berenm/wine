@@ -766,7 +766,6 @@ static BOOL query_headers( request_t *request, DWORD level, LPCWSTR name, LPVOID
         set_last_error( ERROR_WINHTTP_HEADER_NOT_FOUND );
         return FALSE;
     }
-    if (index) *index += 1;
     if (level & WINHTTP_QUERY_FLAG_NUMBER)
     {
         if (!buffer || sizeof(int) > *buflen)
@@ -813,6 +812,7 @@ static BOOL query_headers( request_t *request, DWORD level, LPCWSTR name, LPVOID
         }
         *buflen = len;
     }
+    if (ret && index) *index += 1;
     return ret;
 }
 
@@ -902,7 +902,6 @@ static BOOL query_auth_schemes( request_t *request, DWORD level, LPDWORD support
         query_headers( request, level, NULL, NULL, &size, &index );
         if (get_last_error() != ERROR_INSUFFICIENT_BUFFER) break;
 
-        index--;
         if (!(buffer = heap_alloc( size ))) return FALSE;
         if (!query_headers( request, level, NULL, buffer, &size, &index ))
         {
@@ -966,6 +965,7 @@ BOOL WINAPI WinHttpQueryAuthSchemes( HINTERNET hrequest, LPDWORD supported, LPDW
         *target = WINHTTP_AUTH_TARGET_PROXY;
         ret = TRUE;
     }
+    else set_last_error( ERROR_INVALID_OPERATION );
 
     release_object( &request->hdr );
     if (ret) set_last_error( ERROR_SUCCESS );
