@@ -12908,7 +12908,7 @@ static void yuv_layout_test(void)
     IDirect3D9 *d3d;
     D3DCOLOR color;
     DWORD ref_color;
-    BYTE *buf, *chroma_buf, *u_buf = NULL, *v_buf = NULL;
+    BYTE *buf, *chroma_buf, *u_buf, *v_buf;
     UINT width = 20, height = 16;
     IDirect3DDevice9 *device;
     ULONG refcount;

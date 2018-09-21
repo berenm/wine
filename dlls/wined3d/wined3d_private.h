@@ -166,6 +166,7 @@ struct wined3d_d3d_limits
     unsigned int active_light_count;
 
     unsigned int max_rt_count;
+    unsigned int max_clip_distances;
     float pointsize_max;
 };
 
@@ -2656,7 +2657,7 @@ struct wined3d_adapter_ops
             struct wined3d_texture *target, const struct wined3d_format *ds_format);
 };
 
-BOOL wined3d_adapter_opengl_create_context(struct wined3d_context *context,
+BOOL wined3d_adapter_gl_create_context(struct wined3d_context *context,
         struct wined3d_texture *target, const struct wined3d_format *ds_format) DECLSPEC_HIDDEN;
 
 /* The adapter structure */
@@ -2676,7 +2677,8 @@ struct wined3d_adapter
     UINT64 vram_bytes_used;
     LUID luid;
 
-    struct wined3d_format *formats;
+    void *formats;
+    size_t format_size;
 
     const struct wined3d_vertex_pipe_ops *vertex_pipe;
     const struct fragment_pipeline *fragment_pipe;
@@ -2684,7 +2686,7 @@ struct wined3d_adapter
     const struct wined3d_adapter_ops *adapter_ops;
 };
 
-BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags) DECLSPEC_HIDDEN;
+BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags) DECLSPEC_HIDDEN;
 
 struct wined3d_caps_gl_ctx
 {
@@ -2699,7 +2701,8 @@ struct wined3d_caps_gl_ctx
     GLuint test_program_id;
 };
 
-BOOL wined3d_adapter_init_format_info(struct wined3d_adapter *adapter,
+BOOL wined3d_adapter_init_format_info(struct wined3d_adapter *adapter, size_t format_size) DECLSPEC_HIDDEN;
+BOOL wined3d_adapter_gl_init_format_info(struct wined3d_adapter *adapter,
         struct wined3d_caps_gl_ctx *ctx) DECLSPEC_HIDDEN;
 UINT64 adapter_adjust_memory(struct wined3d_adapter *adapter, INT64 amount) DECLSPEC_HIDDEN;
 

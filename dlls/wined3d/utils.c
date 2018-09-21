@@ -1925,6 +1925,11 @@ static inline int get_format_idx(enum wined3d_format_id format_id)
     return -1;
 }
 
+static struct wined3d_format *get_format_by_idx(const struct wined3d_adapter *adapter, int fmt_idx)
+{
+    return (struct wined3d_format *)((BYTE *)adapter->formats + fmt_idx * adapter->format_size);
+}
+
 static struct wined3d_format *get_format_internal(const struct wined3d_adapter *adapter,
         enum wined3d_format_id format_id)
 {
@@ -1936,13 +1941,14 @@ static struct wined3d_format *get_format_internal(const struct wined3d_adapter *
         return NULL;
     }
 
-    return &adapter->formats[fmt_idx];
+    return get_format_by_idx(adapter, fmt_idx);
 }
 
-static void copy_format(struct wined3d_format *dst_format, const struct wined3d_format *src_format)
+static void copy_format(const struct wined3d_adapter *adapter,
+        struct wined3d_format *dst_format, const struct wined3d_format *src_format)
 {
     enum wined3d_format_id id = dst_format->id;
-    *dst_format = *src_format;
+    memcpy(dst_format, src_format, adapter->format_size);
     dst_format->id = id;
 }
 
@@ -1993,17 +1999,10 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
     struct wined3d_format *format;
     unsigned int i, j;
 
-    if (!(adapter->formats = heap_calloc(WINED3D_FORMAT_COUNT
-            + ARRAY_SIZE(typeless_depth_stencil_formats), sizeof(*adapter->formats))))
-    {
-        ERR("Failed to allocate memory.\n");
-        return FALSE;
-    }
-
     for (i = 0; i < ARRAY_SIZE(formats); ++i)
     {
         if (!(format = get_format_internal(adapter, formats[i].id)))
-            goto fail;
+            return FALSE;
 
         format->id = formats[i].id;
         format->red_size = formats[i].red_size;
@@ -2029,10 +2028,10 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
         DWORD flags = 0;
 
         if (!(format = get_format_internal(adapter, typed_formats[i].id)))
-            goto fail;
+            return FALSE;
 
         if (!(typeless_format = get_format_internal(adapter, typed_formats[i].typeless_id)))
-            goto fail;
+            return FALSE;
 
         format->id = typed_formats[i].id;
         format->red_size = typeless_format->red_size;
@@ -2080,7 +2079,7 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
     for (i = 0; i < ARRAY_SIZE(ddi_formats); ++i)
     {
         if (!(format = get_format_internal(adapter, ddi_formats[i].id)))
-            goto fail;
+            return FALSE;
 
         format->ddi_format = ddi_formats[i].ddi_format;
     }
@@ -2088,16 +2087,12 @@ static BOOL init_format_base_info(struct wined3d_adapter *adapter)
     for (i = 0; i < ARRAY_SIZE(format_base_flags); ++i)
     {
         if (!(format = get_format_internal(adapter, format_base_flags[i].id)))
-            goto fail;
+            return FALSE;
 
         format_set_flag(format, format_base_flags[i].flags);
     }
 
     return TRUE;
-
-fail:
-    heap_free(adapter->formats);
-    return FALSE;
 }
 
 static BOOL init_format_block_info(struct wined3d_adapter *adapter)
@@ -2729,8 +2724,8 @@ static void init_format_fbo_compat_info(const struct wined3d_adapter *adapter,
     {
         for (i = 0; i < WINED3D_FORMAT_COUNT; ++i)
         {
+            struct wined3d_format *format = get_format_by_idx(adapter, i);
             BOOL fallback_fmt_used = FALSE, regular_fmt_used = FALSE;
-            struct wined3d_format *format = &adapter->formats[i];
             GLenum rt_internal = format->rtInternal;
             GLint value;
 
@@ -2843,7 +2838,7 @@ static void init_format_fbo_compat_info(const struct wined3d_adapter *adapter,
 
     for (i = 0; i < WINED3D_FORMAT_COUNT; ++i)
     {
-        struct wined3d_format *format = &adapter->formats[i];
+        struct wined3d_format *format = get_format_by_idx(adapter, i);
 
         if (!format->glInternal) continue;
 
@@ -3193,7 +3188,7 @@ static BOOL init_format_texture_info(struct wined3d_adapter *adapter, struct win
         if (!srgb_format)
             continue;
 
-        copy_format(srgb_format, format);
+        copy_format(adapter, srgb_format, format);
 
         if (gl_info->supported[EXT_TEXTURE_SRGB]
                 && !(adapter->d3d_info.wined3d_creation_flags & WINED3D_SRGB_READ_WRITE_CONTROL))
@@ -3629,7 +3624,7 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
 
     for (i = 0; i < WINED3D_FORMAT_COUNT; ++i)
     {
-        struct wined3d_format *format = &adapter->formats[i];
+        struct wined3d_format *format = get_format_by_idx(adapter, i);
 
         if (!(format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_TEXTURE))
             continue;
@@ -3711,7 +3706,7 @@ static BOOL init_typeless_formats(const struct wined3d_adapter *adapter)
             return FALSE;
 
         memcpy(flags, typeless_format->flags, sizeof(flags));
-        copy_format(typeless_format, format);
+        copy_format(adapter, typeless_format, format);
         for (j = 0; j < ARRAY_SIZE(typeless_format->flags); ++j)
             typeless_format->flags[j] |= flags[j];
     }
@@ -3727,9 +3722,9 @@ static BOOL init_typeless_formats(const struct wined3d_adapter *adapter)
         if (!(ds_format = get_format_internal(adapter, typeless_depth_stencil_formats[i].depth_stencil_id)))
             return FALSE;
 
-        typeless_ds_format = &adapter->formats[WINED3D_FORMAT_COUNT + i];
+        typeless_ds_format = get_format_by_idx(adapter, WINED3D_FORMAT_COUNT + i);
         typeless_ds_format->id = typeless_depth_stencil_formats[i].typeless_id;
-        copy_format(typeless_ds_format, ds_format);
+        copy_format(adapter, typeless_ds_format, ds_format);
         for (j = 0; j < ARRAY_SIZE(typeless_ds_format->flags); ++j)
         {
             typeless_ds_format->flags[j] = typeless_format->flags[j];
@@ -3741,13 +3736,13 @@ static BOOL init_typeless_formats(const struct wined3d_adapter *adapter)
         {
             if (!(depth_view_format = get_format_internal(adapter, format_id)))
                 return FALSE;
-            copy_format(depth_view_format, ds_format);
+            copy_format(adapter, depth_view_format, ds_format);
         }
         if ((format_id = typeless_depth_stencil_formats[i].stencil_view_id))
         {
             if (!(stencil_view_format = get_format_internal(adapter, format_id)))
                 return FALSE;
-            copy_format(stencil_view_format, ds_format);
+            copy_format(adapter, stencil_view_format, ds_format);
         }
     }
 
@@ -3764,7 +3759,7 @@ static void init_format_gen_mipmap_info(const struct wined3d_adapter *adapter,
 
     for (i = 0; i < WINED3D_FORMAT_COUNT; ++i)
     {
-        struct wined3d_format *format = &adapter->formats[i];
+        struct wined3d_format *format = get_format_by_idx(adapter, i);
 
         for (j = 0; j < ARRAY_SIZE(format->flags); ++j)
             if (!(~format->flags[j] & (WINED3DFMT_FLAG_RENDERTARGET | WINED3DFMT_FLAG_FILTERING)))
@@ -3921,7 +3916,7 @@ static void init_format_depth_bias_scale(struct wined3d_adapter *adapter,
 
     for (i = 0; i < WINED3D_FORMAT_COUNT; ++i)
     {
-        struct wined3d_format *format = &adapter->formats[i];
+        struct wined3d_format *format = get_format_by_idx(adapter, i);
 
         if (format->flags[WINED3D_GL_RES_TYPE_RB] & WINED3DFMT_FLAG_DEPTH)
         {
@@ -3942,17 +3937,39 @@ static void init_format_depth_bias_scale(struct wined3d_adapter *adapter,
     }
 }
 
+BOOL wined3d_adapter_init_format_info(struct wined3d_adapter *adapter, size_t format_size)
+{
+    unsigned int count = WINED3D_FORMAT_COUNT + ARRAY_SIZE(typeless_depth_stencil_formats);
+
+    if (!(adapter->formats = heap_calloc(count, format_size)))
+    {
+        ERR("Failed to allocate memory.\n");
+        return FALSE;
+    }
+    adapter->format_size = format_size;
+
+    if (!init_format_base_info(adapter))
+        goto fail;
+    if (!init_format_block_info(adapter))
+        goto fail;
+    if (!init_format_decompress_info(adapter))
+        goto fail;
+
+    return TRUE;
+
+fail:
+    heap_free(adapter->formats);
+    adapter->formats = NULL;
+    return FALSE;
+}
+
 /* Context activation is done by the caller. */
-BOOL wined3d_adapter_init_format_info(struct wined3d_adapter *adapter, struct wined3d_caps_gl_ctx *ctx)
+BOOL wined3d_adapter_gl_init_format_info(struct wined3d_adapter *adapter, struct wined3d_caps_gl_ctx *ctx)
 {
     struct wined3d_gl_info *gl_info = &adapter->gl_info;
 
-    if (!init_format_base_info(adapter)) return FALSE;
-    if (!init_format_block_info(adapter)) goto fail;
-    if (!init_format_decompress_info(adapter)) goto fail;
-
-    if (!ctx) /* WINED3D_NO3D */
-        return TRUE;
+    if (!wined3d_adapter_init_format_info(adapter, sizeof(struct wined3d_format)))
+        return FALSE;
 
     if (!init_format_texture_info(adapter, gl_info)) goto fail;
     if (!init_format_vertex_info(adapter, gl_info)) goto fail;
@@ -3987,14 +4004,14 @@ const struct wined3d_format *wined3d_get_format(const struct wined3d_adapter *ad
         return get_format_internal(adapter, WINED3DFMT_UNKNOWN);
     }
 
-    format = &adapter->formats[idx];
+    format = get_format_by_idx(adapter, idx);
 
     if (resource_usage & WINED3DUSAGE_DEPTHSTENCIL && wined3d_format_is_typeless(format))
     {
         for (i = 0; i < ARRAY_SIZE(typeless_depth_stencil_formats); ++i)
         {
             if (typeless_depth_stencil_formats[i].typeless_id == format_id)
-                return &adapter->formats[WINED3D_FORMAT_COUNT + i];
+                return get_format_by_idx(adapter, WINED3D_FORMAT_COUNT + i);
         }
 
         FIXME("Cannot find depth/stencil typeless format %s (%#x).\n",

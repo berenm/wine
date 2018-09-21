@@ -3697,6 +3697,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     adapter->fragment_pipe = select_fragment_implementation(gl_info, adapter->shader_backend);
 
     d3d_info->limits.max_rt_count = gl_info->limits.buffers;
+    d3d_info->limits.max_clip_distances = gl_info->limits.user_clip_distances;
     d3d_info->limits.pointsize_max = gl_info->limits.pointsize_max;
 
     adapter->shader_backend->shader_get_caps(gl_info, &shader_caps);
@@ -4232,12 +4233,12 @@ static DWORD get_max_gl_version(const struct wined3d_gl_info *gl_info, DWORD fla
     return wined3d_settings.max_gl_version;
 }
 
-static const struct wined3d_adapter_ops wined3d_adapter_opengl_ops =
+static const struct wined3d_adapter_ops wined3d_adapter_gl_ops =
 {
-    wined3d_adapter_opengl_create_context,
+    wined3d_adapter_gl_create_context,
 };
 
-BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
+BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
 {
     static const DWORD supported_gl_versions[] =
     {
@@ -4329,7 +4330,7 @@ BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_
         return FALSE;
     }
 
-    if (!wined3d_adapter_init_format_info(adapter, &caps_gl_ctx))
+    if (!wined3d_adapter_gl_init_format_info(adapter, &caps_gl_ctx))
     {
         ERR("Failed to initialize GL format info.\n");
         wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
@@ -4340,7 +4341,7 @@ BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_
     wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
 
     wined3d_adapter_init_ffp_attrib_ops(adapter);
-    adapter->adapter_ops = &wined3d_adapter_opengl_ops;
+    adapter->adapter_ops = &wined3d_adapter_gl_ops;
 
     return TRUE;
 }

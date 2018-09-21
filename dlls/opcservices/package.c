@@ -25,6 +25,7 @@
 #include "xmllite.h"
 
 #include "wine/debug.h"
+#include "wine/list.h"
 #include "wine/unicode.h"
 
 #include "opc_private.h"
@@ -861,9 +862,6 @@ static HRESULT opc_part_create(struct opc_part_set *set, IOpcPartUri *name, cons
 {
     struct opc_part *part;
 
-    if (!name)
-        return E_POINTER;
-
     if (!opc_array_reserve((void **)&set->parts, &set->size, set->count + 1, sizeof(*set->parts)))
         return E_OUTOFMEMORY;
 
@@ -896,6 +894,21 @@ static HRESULT opc_part_create(struct opc_part_set *set, IOpcPartUri *name, cons
     *out = &part->IOpcPart_iface;
     TRACE("Created part %p.\n", *out);
     return S_OK;
+}
+
+static struct opc_part *opc_part_set_get_part(const struct opc_part_set *part_set, IOpcPartUri *name)
+{
+    BOOL is_equal;
+    size_t i;
+
+    for (i = 0; i < part_set->count; ++i)
+    {
+        is_equal = FALSE;
+        if (IOpcPartUri_IsEqual(part_set->parts[i]->name, (IUri *)name, &is_equal) == S_OK && is_equal)
+            return part_set->parts[i];
+    }
+
+    return NULL;
 }
 
 static HRESULT WINAPI opc_part_set_QueryInterface(IOpcPartSet *iface, REFIID iid, void **out)
@@ -944,11 +957,28 @@ static ULONG WINAPI opc_part_set_Release(IOpcPartSet *iface)
     return refcount;
 }
 
-static HRESULT WINAPI opc_part_set_GetPart(IOpcPartSet *iface, IOpcPartUri *name, IOpcPart **part)
+static HRESULT WINAPI opc_part_set_GetPart(IOpcPartSet *iface, IOpcPartUri *name, IOpcPart **out)
 {
-    FIXME("iface %p, name %p, part %p stub!\n", iface, name, part);
+    struct opc_part_set *part_set = impl_from_IOpcPartSet(iface);
+    struct opc_part *part;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, name %p, out %p.\n", iface, name, out);
+
+    if (!out)
+        return E_POINTER;
+
+    *out = NULL;
+
+    if (!name)
+        return E_POINTER;
+
+    if ((part = opc_part_set_get_part(part_set, name)))
+    {
+        *out = &part->IOpcPart_iface;
+        IOpcPart_AddRef(*out);
+    }
+
+    return *out ? S_OK : OPC_E_NO_SUCH_PART;
 }
 
 static HRESULT WINAPI opc_part_set_CreatePart(IOpcPartSet *iface, IOpcPartUri *name, LPCWSTR content_type,
@@ -958,6 +988,17 @@ static HRESULT WINAPI opc_part_set_CreatePart(IOpcPartSet *iface, IOpcPartUri *n
 
     TRACE("iface %p, name %p, content_type %s, compression_options %#x, part %p.\n", iface, name,
             debugstr_w(content_type), compression_options, part);
+
+    if (!part)
+        return E_POINTER;
+
+    *part = NULL;
+
+    if (!name)
+        return E_POINTER;
+
+    if (opc_part_set_get_part(part_set, name))
+        return OPC_E_DUPLICATE_PART;
 
     return opc_part_create(part_set, name, content_type, compression_options, part);
 }
@@ -971,9 +1012,16 @@ static HRESULT WINAPI opc_part_set_DeletePart(IOpcPartSet *iface, IOpcPartUri *n
 
 static HRESULT WINAPI opc_part_set_PartExists(IOpcPartSet *iface, IOpcPartUri *name, BOOL *exists)
 {
-    FIXME("iface %p, name %p, exists %p stub!\n", iface, name, exists);
+    struct opc_part_set *part_set = impl_from_IOpcPartSet(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, name %p, exists %p.\n", iface, name, exists);
+
+    if (!name || !exists)
+        return E_POINTER;
+
+    *exists = opc_part_set_get_part(part_set, name) != NULL;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI opc_part_set_GetEnumerator(IOpcPartSet *iface, IOpcPartEnumerator **enumerator)
@@ -1112,6 +1160,20 @@ static const IOpcRelationshipVtbl opc_relationship_vtbl =
     opc_relationship_GetTargetMode,
 };
 
+static struct opc_relationship *opc_relationshipset_get_rel(struct opc_relationship_set *relationship_set,
+        const WCHAR *id)
+{
+    size_t i;
+
+    for (i = 0; i < relationship_set->count; i++)
+    {
+        if (!strcmpW(id, relationship_set->relationships[i]->id))
+            return relationship_set->relationships[i];
+    }
+
+    return NULL;
+}
+
 static HRESULT opc_relationship_create(struct opc_relationship_set *set, const WCHAR *id, const WCHAR *type,
         IUri *target_uri, OPC_URI_TARGET_MODE target_mode, IOpcRelationship **out)
 {
@@ -1131,7 +1193,6 @@ static HRESULT opc_relationship_create(struct opc_relationship_set *set, const W
     relationship->source_uri = set->source_uri;
     IOpcUri_AddRef(relationship->source_uri);
 
-    /* FIXME: test that id is unique */
     if (id)
         relationship->id = opc_strdupW(id);
     else
@@ -1142,8 +1203,16 @@ static HRESULT opc_relationship_create(struct opc_relationship_set *set, const W
             static const WCHAR fmtW[] = {'R','%','0','8','X',0};
             DWORD generated;
 
+            /* FIXME: test that generated id is unique */
             RtlGenRandom(&generated, sizeof(generated));
             sprintfW(relationship->id, fmtW, generated);
+
+            if (opc_relationshipset_get_rel(set, relationship->id))
+            {
+                WARN("Newly generated id %s already exists.\n", debugstr_w(relationship->id));
+                IOpcRelationship_Release(&relationship->IOpcRelationship_iface);
+                return E_FAIL;
+            }
         }
     }
 
@@ -1210,20 +1279,6 @@ static ULONG WINAPI opc_relationship_set_Release(IOpcRelationshipSet *iface)
     return refcount;
 }
 
-static struct opc_relationship *opc_relationshipset_get_item(struct opc_relationship_set *relationship_set,
-        const WCHAR *id)
-{
-    size_t i;
-
-    for (i = 0; i < relationship_set->count; i++)
-    {
-        if (!strcmpW(id, relationship_set->relationships[i]->id))
-            return relationship_set->relationships[i];
-    }
-
-    return NULL;
-}
-
 static HRESULT WINAPI opc_relationship_set_GetRelationship(IOpcRelationshipSet *iface, const WCHAR *id,
         IOpcRelationship **relationship)
 {
@@ -1240,7 +1295,7 @@ static HRESULT WINAPI opc_relationship_set_GetRelationship(IOpcRelationshipSet *
     if (!id)
         return E_POINTER;
 
-    if ((ret = opc_relationshipset_get_item(relationship_set, id)))
+    if ((ret = opc_relationshipset_get_rel(relationship_set, id)))
     {
         *relationship = &ret->IOpcRelationship_iface;
         IOpcRelationship_AddRef(*relationship);
@@ -1253,12 +1308,25 @@ static HRESULT WINAPI opc_relationship_set_CreateRelationship(IOpcRelationshipSe
         const WCHAR *type, IUri *target_uri, OPC_URI_TARGET_MODE target_mode, IOpcRelationship **relationship)
 {
     struct opc_relationship_set *relationship_set = impl_from_IOpcRelationshipSet(iface);
+    DWORD length;
 
     TRACE("iface %p, id %s, type %s, target_uri %p, target_mode %d, relationship %p.\n", iface, debugstr_w(id),
             debugstr_w(type), target_uri, target_mode, relationship);
 
+    if (!relationship)
+        return E_POINTER;
+
+    *relationship = NULL;
+
     if (!type || !target_uri)
         return E_POINTER;
+
+    if (id && opc_relationshipset_get_rel(relationship_set, id))
+        return OPC_E_DUPLICATE_RELATIONSHIP;
+
+    if (IUri_GetPropertyLength(target_uri, Uri_PROPERTY_SCHEME_NAME, &length, 0) == S_OK && length != 0
+            && target_mode == OPC_URI_TARGET_MODE_INTERNAL)
+        return OPC_E_INVALID_RELATIONSHIP_TARGET;
 
     return opc_relationship_create(relationship_set, id, type, target_uri, target_mode, relationship);
 }
@@ -1279,7 +1347,7 @@ static HRESULT WINAPI opc_relationship_set_RelationshipExists(IOpcRelationshipSe
     if (!id || !exists)
         return E_POINTER;
 
-    *exists = opc_relationshipset_get_item(relationship_set, id) != NULL;
+    *exists = opc_relationshipset_get_rel(relationship_set, id) != NULL;
 
     return S_OK;
 }
@@ -1464,23 +1532,243 @@ HRESULT opc_package_create(IOpcFactory *factory, IOpcPackage **out)
     return S_OK;
 }
 
-static HRESULT opc_package_write_contenttypes(struct zip_archive *archive, IXmlWriter *writer)
+struct content_types
+{
+    struct list types;
+};
+
+enum content_type_element
+{
+    CONTENT_TYPE_DEFAULT,
+    CONTENT_TYPE_OVERRIDE,
+};
+
+struct content_type
+{
+    struct list entry;
+    enum content_type_element element;
+    union
+    {
+        struct default_type
+        {
+            WCHAR *ext;
+            WCHAR *type;
+        } def;
+        struct override_type
+        {
+            IOpcPart *part;
+        } override;
+    } u;
+};
+
+static HRESULT opc_package_add_override_content_type(struct content_types *types, IOpcPart *part)
+{
+    struct content_type *type;
+
+    if (!(type = heap_alloc(sizeof(*type))))
+        return E_OUTOFMEMORY;
+
+    type->element = CONTENT_TYPE_OVERRIDE;
+    type->u.override.part = part;
+    IOpcPart_AddRef(part);
+
+    list_add_tail(&types->types, &type->entry);
+
+    return S_OK;
+}
+
+static HRESULT opc_package_add_default_content_type(struct content_types *types,
+        const WCHAR *ext, const WCHAR *content_type)
+{
+    struct content_type *type;
+
+    if (!(type = heap_alloc(sizeof(*type))))
+        return E_OUTOFMEMORY;
+
+    type->element = CONTENT_TYPE_DEFAULT;
+    type->u.def.ext = opc_strdupW(ext);
+    type->u.def.type = opc_strdupW(content_type);
+    if (!type->u.def.ext || !type->u.def.type)
+    {
+        CoTaskMemFree(type->u.def.ext);
+        CoTaskMemFree(type->u.def.type);
+        heap_free(type);
+        return E_OUTOFMEMORY;
+    }
+
+    list_add_tail(&types->types, &type->entry);
+
+    return S_OK;
+}
+
+static HRESULT opc_package_add_content_type(struct content_types *types, IOpcPart *part)
+{
+    struct content_type *cur;
+    BSTR ext, content_type;
+    BOOL added = FALSE;
+    IOpcPartUri *name;
+    HRESULT hr;
+
+    if (FAILED(hr = IOpcPart_GetName(part, &name)))
+        return hr;
+
+    hr = IOpcPartUri_GetExtension(name, &ext);
+    IOpcPartUri_Release(name);
+    if (hr == S_FALSE)
+    {
+        hr = opc_package_add_override_content_type(types, part);
+        SysFreeString(ext);
+        return hr;
+    }
+
+    if (FAILED(hr))
+        return hr;
+
+    if (FAILED(hr = IOpcPart_GetContentType(part, &content_type)))
+        return hr;
+
+    LIST_FOR_EACH_ENTRY(cur, &types->types, struct content_type, entry)
+    {
+        if (cur->element == CONTENT_TYPE_OVERRIDE)
+            continue;
+
+        if (!strcmpiW(cur->u.def.ext, ext))
+        {
+            added = TRUE;
+
+            if (!strcmpW(cur->u.def.type, content_type))
+                break;
+
+            hr = opc_package_add_override_content_type(types, part);
+            break;
+        }
+    }
+
+    if (!added)
+        hr = opc_package_add_default_content_type(types, ext, content_type);
+
+    SysFreeString(ext);
+    SysFreeString(content_type);
+
+    return hr;
+}
+
+static HRESULT opc_package_collect_content_types(IOpcPackage *package, struct content_types *types)
+{
+    IOpcPartEnumerator *enumerator;
+    IOpcPartSet *parts;
+    BOOL has_next;
+    HRESULT hr;
+
+    if (FAILED(hr = IOpcPackage_GetPartSet(package, &parts)))
+        return hr;
+
+    hr = IOpcPartSet_GetEnumerator(parts, &enumerator);
+    IOpcPartSet_Release(parts);
+    if (FAILED(hr))
+        return hr;
+
+    if (FAILED(hr = IOpcPartEnumerator_MoveNext(enumerator, &has_next)) || !has_next)
+    {
+        IOpcPartEnumerator_Release(enumerator);
+        return hr;
+    }
+
+    while (has_next)
+    {
+        IOpcPart *part;
+
+        if (FAILED(hr = IOpcPartEnumerator_GetCurrent(enumerator, &part)))
+            break;
+
+        hr = opc_package_add_content_type(types, part);
+        IOpcPart_Release(part);
+        if (FAILED(hr))
+            break;
+
+        IOpcPartEnumerator_MoveNext(enumerator, &has_next);
+    }
+
+    IOpcPartEnumerator_Release(enumerator);
+
+    return hr;
+}
+
+static HRESULT opc_package_write_contenttypes(IOpcPackage *package, struct zip_archive *archive, IXmlWriter *writer)
 {
     static const WCHAR uriW[] = {'h','t','t','p',':','/','/','s','c','h','e','m','a','s','.','o','p','e','n','x','m','l','f','o','r','m','a','t','s','.','o','r','g','/',
             'p','a','c','k','a','g','e','/','2','0','0','6','/','c','o','n','t','e','n','t','-','t','y','p','e','s',0};
     static const WCHAR contenttypesW[] = {'[','C','o','n','t','e','n','t','_','T','y','p','e','s',']','.','x','m','l',0};
+    static const WCHAR contenttypeW[] = {'C','o','n','t','e','n','t','T','y','p','e',0};
+    static const WCHAR extensionW[] = {'E','x','t','e','n','s','i','o','n',0};
+    static const WCHAR overrideW[] = {'O','v','e','r','r','i','d','e',0};
+    static const WCHAR partnameW[] = {'P','a','r','t','N','a','m','e',0};
+    static const WCHAR defaultW[] = {'D','e','f','a','u','l','t',0};
     static const WCHAR typesW[] = {'T','y','p','e','s',0};
-    IStream *content;
+    struct content_type *content_type, *content_type2;
+    struct content_types types;
+    IStream *content = NULL;
     HRESULT hr;
 
-    if (FAILED(hr = CreateStreamOnHGlobal(NULL, TRUE, &content)))
-        return hr;
+    list_init(&types.types);
 
-    IXmlWriter_SetOutput(writer, (IUnknown *)content);
-
-    hr = IXmlWriter_WriteStartDocument(writer, XmlStandalone_Omit);
+    hr = CreateStreamOnHGlobal(NULL, TRUE, &content);
+    if (SUCCEEDED(hr))
+        hr = opc_package_collect_content_types(package, &types);
+    if (SUCCEEDED(hr))
+        hr = IXmlWriter_SetOutput(writer, (IUnknown *)content);
+    if (SUCCEEDED(hr))
+        hr = IXmlWriter_WriteStartDocument(writer, XmlStandalone_Omit);
     if (SUCCEEDED(hr))
         hr = IXmlWriter_WriteStartElement(writer, NULL, typesW, uriW);
+
+    LIST_FOR_EACH_ENTRY_SAFE(content_type, content_type2, &types.types, struct content_type, entry)
+    {
+        if (content_type->element == CONTENT_TYPE_DEFAULT)
+        {
+            if (SUCCEEDED(hr))
+                hr = IXmlWriter_WriteStartElement(writer, NULL, defaultW, NULL);
+            if (SUCCEEDED(hr))
+                hr = IXmlWriter_WriteAttributeString(writer, NULL, extensionW, NULL, content_type->u.def.ext + 1);
+            if (SUCCEEDED(hr))
+                hr = IXmlWriter_WriteAttributeString(writer, NULL, contenttypeW, NULL, content_type->u.def.type);
+
+            CoTaskMemFree(content_type->u.def.ext);
+            CoTaskMemFree(content_type->u.def.type);
+        }
+        else
+        {
+            IOpcPartUri *uri = NULL;
+            WCHAR *type = NULL;
+            BSTR name = NULL;
+
+            if (SUCCEEDED(hr))
+                hr = IXmlWriter_WriteStartElement(writer, NULL, overrideW, NULL);
+            if (SUCCEEDED(hr))
+                hr = IOpcPart_GetName(content_type->u.override.part, &uri);
+            if (SUCCEEDED(hr))
+                hr = IOpcPartUri_GetRawUri(uri, &name);
+            if (SUCCEEDED(hr))
+                hr = IXmlWriter_WriteAttributeString(writer, NULL, partnameW, NULL, name);
+            if (SUCCEEDED(hr))
+                hr = IOpcPart_GetContentType(content_type->u.override.part, &type);
+            if (SUCCEEDED(hr))
+                hr = IXmlWriter_WriteAttributeString(writer, NULL, contenttypeW, NULL, type);
+
+            if (uri)
+                IOpcPartUri_Release(uri);
+            SysFreeString(name);
+            CoTaskMemFree(type);
+
+            IOpcPart_Release(content_type->u.override.part);
+        }
+        if (SUCCEEDED(hr))
+            hr = IXmlWriter_WriteEndElement(writer);
+
+        list_remove(&content_type->entry);
+        heap_free(content_type);
+    }
+
     if (SUCCEEDED(hr))
         hr = IXmlWriter_WriteEndDocument(writer);
     if (SUCCEEDED(hr))
@@ -1488,14 +1776,196 @@ static HRESULT opc_package_write_contenttypes(struct zip_archive *archive, IXmlW
 
     if (SUCCEEDED(hr))
         hr = compress_add_file(archive, contenttypesW, content, OPC_COMPRESSION_NORMAL);
+
+    if (content)
+        IStream_Release(content);
+
+    return hr;
+}
+
+static HRESULT opc_package_write_rel(IOpcRelationship *rel, IXmlWriter *writer)
+{
+    static const WCHAR relationshipW[] = {'R','e','l','a','t','i','o','n','s','h','i','p',0};
+    static const WCHAR targetW[] = {'T','a','r','g','e','t',0};
+    static const WCHAR typeW[] = {'T','y','p','e',0};
+    static const WCHAR idW[] = {'I','d',0};
+    BSTR target_uri;
+    HRESULT hr;
+    WCHAR *str;
+    IUri *uri;
+
+    if (FAILED(hr = IXmlWriter_WriteStartElement(writer, NULL, relationshipW, NULL)))
+        return hr;
+
+    if (FAILED(hr = IOpcRelationship_GetTargetUri(rel, &uri)))
+        return hr;
+
+    IUri_GetRawUri(uri, &target_uri);
+    IUri_Release(uri);
+
+    hr = IXmlWriter_WriteAttributeString(writer, NULL, targetW, NULL, target_uri);
+    SysFreeString(target_uri);
+    if (FAILED(hr))
+        return hr;
+
+    if (FAILED(hr = IOpcRelationship_GetId(rel, &str)))
+        return hr;
+
+    hr = IXmlWriter_WriteAttributeString(writer, NULL, idW, NULL, str);
+    CoTaskMemFree(str);
+    if (FAILED(hr))
+        return hr;
+
+    if (FAILED(hr = IOpcRelationship_GetRelationshipType(rel, &str)))
+        return hr;
+
+    hr = IXmlWriter_WriteAttributeString(writer, NULL, typeW, NULL, str);
+    CoTaskMemFree(str);
+    if (FAILED(hr))
+        return hr;
+
+    return IXmlWriter_WriteEndElement(writer);
+}
+
+static HRESULT opc_package_write_rels(struct zip_archive *archive, IOpcRelationshipSet *rels,
+        IOpcUri *uri, IXmlWriter *writer)
+{
+    static const WCHAR uriW[] = {'h','t','t','p',':','/','/','s','c','h','e','m','a','s','.','o','p','e','n','x','m','l','f','o','r','m','a','t','s','.','o','r','g','/',
+            'p','a','c','k','a','g','e','/','2','0','0','6','/','r','e','l','a','t','i','o','n','s','h','i','p','s',0};
+    static const WCHAR relationshipsW[] = {'R','e','l','a','t','i','o','n','s','h','i','p','s',0};
+    IOpcRelationshipEnumerator *enumerator;
+    IOpcPartUri *rels_uri;
+    BSTR rels_part_uri;
+    IStream *content;
+    BOOL has_next;
+    HRESULT hr;
+
+    if (FAILED(hr = IOpcRelationshipSet_GetEnumerator(rels, &enumerator)))
+        return hr;
+
+    hr = IOpcRelationshipEnumerator_MoveNext(enumerator, &has_next);
+    if (!has_next)
+    {
+        IOpcRelationshipEnumerator_Release(enumerator);
+        return hr;
+    }
+
+    if (FAILED(hr = CreateStreamOnHGlobal(NULL, TRUE, &content)))
+    {
+        IOpcRelationshipEnumerator_Release(enumerator);
+        return hr;
+    }
+
+    hr = IXmlWriter_SetOutput(writer, (IUnknown *)content);
+    if (SUCCEEDED(hr))
+        hr = IXmlWriter_WriteStartDocument(writer, XmlStandalone_Yes);
+    if (SUCCEEDED(hr))
+        hr = IXmlWriter_WriteStartElement(writer, NULL, relationshipsW, uriW);
+
+    while (has_next)
+    {
+        IOpcRelationship *rel;
+
+        if (FAILED(hr = IOpcRelationshipEnumerator_GetCurrent(enumerator, &rel)))
+            break;
+
+        hr = opc_package_write_rel(rel, writer);
+        IOpcRelationship_Release(rel);
+        if (FAILED(hr))
+            break;
+
+        IOpcRelationshipEnumerator_MoveNext(enumerator, &has_next);
+    }
+
+    IOpcRelationshipEnumerator_Release(enumerator);
+
+    if (SUCCEEDED(hr))
+        hr = IXmlWriter_WriteEndDocument(writer);
+    if (SUCCEEDED(hr))
+        hr = IXmlWriter_Flush(writer);
+
+    hr = IOpcUri_GetRelationshipsPartUri(uri, &rels_uri);
+    if (SUCCEEDED(hr))
+        hr = IOpcPartUri_GetRawUri(rels_uri, &rels_part_uri);
+    if (SUCCEEDED(hr))
+    {
+        /* Relationship part names always start with root '/', skip it. */
+        hr = compress_add_file(archive, rels_part_uri + 1, content, OPC_COMPRESSION_NORMAL);
+    }
+
+    SysFreeString(rels_part_uri);
     IStream_Release(content);
 
     return hr;
 }
 
-HRESULT opc_package_write(IOpcPackage *input, OPC_WRITE_FLAGS flags, IStream *stream)
+static HRESULT opc_package_write_part(struct zip_archive *archive, IOpcPart *part, IXmlWriter *writer)
 {
+    OPC_COMPRESSION_OPTIONS options = OPC_COMPRESSION_NORMAL;
+    IStream *content = NULL;
+    IOpcPartUri *name;
+    BSTR uri = NULL;
+    HRESULT hr;
+
+    if (FAILED(hr = IOpcPart_GetName(part, &name)))
+        return hr;
+
+    hr = IOpcPartUri_GetRawUri(name, &uri);
+    if (SUCCEEDED(hr))
+        hr = IOpcPart_GetCompressionOptions(part, &options);
+    if (SUCCEEDED(hr))
+        hr = IOpcPart_GetContentStream(part, &content);
+    if (SUCCEEDED(hr))
+    {
+        /* Part names always start with root '/', skip it. */
+        hr = compress_add_file(archive, uri + 1, content, options);
+    }
+
+    SysFreeString(uri);
+    if (content)
+        IStream_Release(content);
+
+    return hr;
+}
+
+static HRESULT opc_package_write_parts(struct zip_archive *archive, IOpcPackage *package, IXmlWriter *writer)
+{
+    IOpcPartEnumerator *parts;
+    IOpcPartSet *part_set;
+    BOOL got_next;
+    HRESULT hr;
+
+    if (FAILED(hr = IOpcPackage_GetPartSet(package, &part_set)))
+        return hr;
+
+    hr = IOpcPartSet_GetEnumerator(part_set, &parts);
+    IOpcPartSet_Release(part_set);
+    if (FAILED(hr))
+        return hr;
+
+    while (IOpcPartEnumerator_MoveNext(parts, &got_next) == S_OK && got_next)
+    {
+        IOpcPart *part;
+
+        if (FAILED(hr = IOpcPartEnumerator_GetCurrent(parts, &part)))
+            break;
+
+        hr = opc_package_write_part(archive, part, writer);
+        IOpcPart_Release(part);
+        if (FAILED(hr))
+            break;
+    }
+
+    IOpcPartEnumerator_Release(parts);
+
+    return hr;
+}
+
+HRESULT opc_package_write(IOpcPackage *package, OPC_WRITE_FLAGS flags, IStream *stream)
+{
+    IOpcRelationshipSet *rels = NULL;
     struct zip_archive *archive;
+    IOpcUri *uri = NULL;
     IXmlWriter *writer;
     HRESULT hr;
 
@@ -1512,7 +1982,22 @@ HRESULT opc_package_write(IOpcPackage *input, OPC_WRITE_FLAGS flags, IStream *st
     }
 
     /* [Content_Types].xml */
-    hr = opc_package_write_contenttypes(archive, writer);
+    hr = opc_package_write_contenttypes(package, archive, writer);
+    /* Package relationships. */
+    if (SUCCEEDED(hr))
+        hr = IOpcPackage_GetRelationshipSet(package, &rels);
+    if (SUCCEEDED(hr))
+        hr = opc_root_uri_create(&uri);
+    if (SUCCEEDED(hr))
+        hr = opc_package_write_rels(archive, rels, uri, writer);
+    /* Parts. */
+    if (SUCCEEDED(hr))
+        hr = opc_package_write_parts(archive, package, writer);
+
+    if (rels)
+        IOpcRelationshipSet_Release(rels);
+    if (uri)
+        IOpcUri_Release(uri);
 
     compress_finalize_archive(archive);
     IXmlWriter_Release(writer);

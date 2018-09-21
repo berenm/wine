@@ -281,7 +281,7 @@ static void test_db(MSIHANDLE hinst)
                                         VT_EMPTY, VT_EMPTY, VT_LPSTR, VT_EMPTY, VT_LPSTR,
                                         VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_I4,
                                         VT_I4, VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY };
-    MSIHANDLE hdb, view, rec, rec2, suminfo;
+    MSIHANDLE hdb, hdb2, view, rec, rec2, suminfo;
     char buffer[10];
     DWORD sz;
     UINT r, count, type, i;
@@ -311,6 +311,17 @@ static void test_db(MSIHANDLE hinst)
     ok(hinst, !r, "got %u\n", r);
     ok(hinst, sz == strlen(buffer), "got size %u\n", sz);
     ok(hinst, !strcmp(buffer, "Name"), "got '%s'\n", buffer);
+
+    /* Test MsiGetActiveDatabase + MsiDatabaseIsTablePersistent once again */
+    hdb2 = MsiGetActiveDatabase(hinst);
+    ok(hinst, hdb2, "MsiGetActiveDatabase failed\n");
+    ok(hinst, hdb2 != hdb, "db handles should be different\n");
+
+    r = MsiDatabaseIsTablePersistentA(hdb2, "Test");
+    ok(hinst, r == MSICONDITION_TRUE, "got %u\n", r);
+
+    r = MsiCloseHandle(hdb2);
+    ok(hinst, !r, "got %u\n", r);
 
     r = MsiCloseHandle(rec2);
     ok(hinst, !r, "got %u\n", r);
@@ -510,12 +521,14 @@ static void test_db(MSIHANDLE hinst)
 
     for (i = 0; i < 20; i++)
     {
+        WCHAR emptyW[1] = { 0 };
+
         r = MsiSummaryInfoSetPropertyA(suminfo, i, prop_type[i], 1252, &ft, "");
         ok(hinst, r == ERROR_FUNCTION_FAILED, "%u: got %u\n", i, r);
-    }
 
-    r = MsiSummaryInfoSetPropertyW(suminfo, PID_CODEPAGE, VT_I2, 1252, &ft, NULL);
-    ok(hinst, r == ERROR_FUNCTION_FAILED, "got %u\n", r);
+        r = MsiSummaryInfoSetPropertyW(suminfo, i, prop_type[i], 1252, &ft, emptyW);
+        ok(hinst, r == ERROR_FUNCTION_FAILED, "%u: got %u\n", i, r);
+    }
 
     r = MsiCloseHandle(suminfo);
     ok(hinst, !r, "got %u\n", r);

@@ -10130,7 +10130,7 @@ static void set_glsl_shader_program(const struct wined3d_context *context, const
     GLuint ds_id = 0;
     GLuint gs_id = 0;
     GLuint ps_id = 0;
-    struct list *ps_list = NULL, *vs_list = NULL;
+    struct list *ps_list, *vs_list;
     WORD attribs_map;
     struct wined3d_string_buffer *tmp_name;
 
