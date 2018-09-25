@@ -722,6 +722,11 @@ static const struct ID2D1BitmapRenderTargetVtbl d2d_bitmap_render_target_vtbl =
     d2d_bitmap_render_target_GetBitmap
 };
 
+static const struct d2d_device_context_ops d2d_bitmap_render_target_ops =
+{
+    NULL,
+};
+
 HRESULT d2d_bitmap_render_target_init(struct d2d_bitmap_render_target *render_target,
         const struct d2d_device_context *parent_target, const D2D1_SIZE_F *size,
         const D2D1_SIZE_U *pixel_size, const D2D1_PIXEL_FORMAT *pixel_format,
@@ -790,7 +795,7 @@ HRESULT d2d_bitmap_render_target_init(struct d2d_bitmap_render_target *render_ta
     texture_desc.CPUAccessFlags = 0;
     texture_desc.MiscFlags = 0;
 
-    if (FAILED(hr = ID3D10Device_CreateTexture2D(parent_target->device, &texture_desc, NULL, &texture)))
+    if (FAILED(hr = ID3D10Device_CreateTexture2D(parent_target->d3d_device, &texture_desc, NULL, &texture)))
     {
         WARN("Failed to create texture, hr %#x.\n", hr);
         return hr;
@@ -804,8 +809,9 @@ HRESULT d2d_bitmap_render_target_init(struct d2d_bitmap_render_target *render_ta
         return hr;
     }
 
-    if (FAILED(hr = d2d_d3d_create_render_target(parent_target->factory, dxgi_surface,
-            (IUnknown *)&render_target->ID2D1BitmapRenderTarget_iface, NULL,
+    if (FAILED(hr = d2d_d3d_create_render_target(parent_target->device, dxgi_surface,
+            (IUnknown *)&render_target->ID2D1BitmapRenderTarget_iface,
+            parent_target->ops ? &d2d_bitmap_render_target_ops : NULL,
             &dxgi_rt_desc, (void **)&render_target->dxgi_inner)))
     {
         WARN("Failed to create DXGI surface render target, hr %#x.\n", hr);
