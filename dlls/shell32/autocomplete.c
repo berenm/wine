@@ -100,6 +100,14 @@ static inline IAutoCompleteImpl *impl_from_IAutoCompleteDropDown(IAutoCompleteDr
     return CONTAINING_RECORD(iface, IAutoCompleteImpl, IAutoCompleteDropDown_iface);
 }
 
+static void set_text_and_selection(IAutoCompleteImpl *ac, HWND hwnd, WCHAR *text, WPARAM start, LPARAM end)
+{
+    /* Send it directly to the edit control to match Windows behavior */
+    WNDPROC proc = ac->wpOrigEditProc;
+    if (CallWindowProcW(proc, hwnd, WM_SETTEXT, 0, (LPARAM)text))
+        CallWindowProcW(proc, hwnd, EM_SETSEL, start, end);
+}
+
 static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *str, size_t str_len)
 {
     /* Replace the first %s directly without using snprintf, to avoid
@@ -142,8 +150,7 @@ static void autoappend_str(IAutoCompleteImpl *ac, WCHAR *text, UINT len, WCHAR *
     }
     else tmp = str;
 
-    SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)tmp);
-    SendMessageW(hwnd, EM_SETSEL, len, size - 1);
+    set_text_and_selection(ac, hwnd, tmp, len, size - 1);
     if (tmp != str)
         heap_free(tmp);
 }
@@ -256,8 +263,7 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
                 if ((buf = heap_alloc(sz * sizeof(WCHAR))))
                 {
                     len = format_quick_complete(buf, ac->quickComplete, text, len);
-                    SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)buf);
-                    SendMessageW(hwnd, EM_SETSEL, 0, len);
+                    set_text_and_selection(ac, hwnd, buf, 0, len);
                     heap_free(buf);
                 }
 
@@ -296,7 +302,7 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
                 /* Change the selection */
                 sel = SendMessageW(ac->hwndListBox, LB_GETCURSEL, 0, 0);
                 if (wParam == VK_UP)
-                    sel = ((sel - 1) < 0) ? count - 1 : sel - 1;
+                    sel = ((sel - 1) < -1) ? count - 1 : sel - 1;
                 else
                     sel = ((sel + 1) >= count) ? -1 : sel + 1;
                 SendMessageW(ac->hwndListBox, LB_SETCURSEL, sel, 0);
@@ -309,16 +315,13 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
                     if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
                         return 0;
                     len = SendMessageW(ac->hwndListBox, LB_GETTEXT, sel, (LPARAM)msg);
-                    SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)msg);
-                    SendMessageW(hwnd, EM_SETSEL, len, len);
+                    set_text_and_selection(ac, hwnd, msg, len, len);
                     heap_free(msg);
                 }
                 else
                 {
-                    UINT len;
-                    SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)ac->txtbackup);
-                    len = strlenW(ac->txtbackup);
-                    SendMessageW(hwnd, EM_SETSEL, len, len);
+                    UINT len = strlenW(ac->txtbackup);
+                    set_text_and_selection(ac, hwnd, ac->txtbackup, len, len);
                 }
                 return 0;
             }
@@ -348,20 +351,35 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
         case CB_SHOWDROPDOWN:
             if (This->options & ACO_AUTOSUGGEST)
                 ShowWindow(This->hwndListBox, SW_HIDE);
-            break;
+            return 0;
         case WM_KILLFOCUS:
             if ((This->options & ACO_AUTOSUGGEST) && ((HWND)wParam != This->hwndListBox))
             {
                 ShowWindow(This->hwndListBox, SW_HIDE);
             }
-            return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            break;
         case WM_KEYDOWN:
             return ACEditSubclassProc_KeyDown(This, hwnd, uMsg, wParam, lParam);
         case WM_CHAR:
         case WM_UNICHAR:
+            /* Don't autocomplete at all on most control characters */
+            if (iscntrlW(wParam) && !(wParam >= '\b' && wParam <= '\r'))
+                break;
+
             ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
             autocomplete_text(This, hwnd, (This->options & ACO_AUTOAPPEND) && wParam >= ' '
                                           ? autoappend_flag_yes : autoappend_flag_no);
+            return ret;
+        case WM_SETTEXT:
+        case WM_CUT:
+        case WM_CLEAR:
+        case WM_UNDO:
+            ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            autocomplete_text(This, hwnd, autoappend_flag_no);
+            return ret;
+        case WM_PASTE:
+            ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            autocomplete_text(This, hwnd, autoappend_flag_yes);
             return ret;
         case WM_DESTROY:
         {
@@ -372,11 +390,8 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             destroy_autocomplete_object(This);
             return CallWindowProcW(proc, hwnd, uMsg, wParam, lParam);
         }
-        default:
-            return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
     }
-
-    return 0;
+    return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
 }
 
 static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -394,12 +409,11 @@ static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             sel = SendMessageW(hwnd, LB_GETCURSEL, 0, 0);
             if (sel < 0)
                 break;
-            len = SendMessageW(This->hwndListBox, LB_GETTEXTLEN, sel, 0);
+            len = SendMessageW(hwnd, LB_GETTEXTLEN, sel, 0);
             if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
                 break;
             len = SendMessageW(hwnd, LB_GETTEXT, sel, (LPARAM)msg);
-            SendMessageW(This->hwndEdit, WM_SETTEXT, 0, (LPARAM)msg);
-            SendMessageW(This->hwndEdit, EM_SETSEL, 0, len);
+            set_text_and_selection(This, This->hwndEdit, msg, 0, len);
             ShowWindow(hwnd, SW_HIDE);
             heap_free(msg);
             break;
