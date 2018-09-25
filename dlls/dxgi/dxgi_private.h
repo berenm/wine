@@ -75,8 +75,6 @@ struct dxgi_device_layer
     UINT (WINAPI *get_size)(enum dxgi_device_layer_id id, struct layer_get_size_args *args, DWORD unknown0);
     HRESULT (WINAPI *create)(enum dxgi_device_layer_id id, void **layer_base, DWORD unknown0,
             void *device_object, REFIID riid, void **device_layer);
-    void (WINAPI *set_feature_level)(enum dxgi_device_layer_id id, void *device,
-            D3D_FEATURE_LEVEL feature_level);
 };
 
 /* TRACE helper functions */
@@ -97,6 +95,7 @@ DXGI_USAGE dxgi_usage_from_wined3d_usage(DWORD wined3d_usage) DECLSPEC_HIDDEN;
 DWORD wined3d_usage_from_dxgi_usage(DXGI_USAGE usage) DECLSPEC_HIDDEN;
 unsigned int dxgi_swapchain_flags_from_wined3d(unsigned int wined3d_flags) DECLSPEC_HIDDEN;
 unsigned int wined3d_swapchain_flags_from_dxgi(unsigned int flags) DECLSPEC_HIDDEN;
+
 HRESULT dxgi_get_private_data(struct wined3d_private_store *store,
         REFGUID guid, UINT *data_size, void *data) DECLSPEC_HIDDEN;
 HRESULT dxgi_set_private_data(struct wined3d_private_store *store,

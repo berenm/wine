@@ -617,49 +617,52 @@ void wined3d_driver_info_init(struct wined3d_driver_info *driver_info,
 enum wined3d_pci_device wined3d_gpu_from_feature_level(enum wined3d_pci_vendor *vendor,
         enum wined3d_feature_level feature_level)
 {
-    unsigned int i;
-
-    static const enum wined3d_pci_device card_fallback_nvidia[] =
+    static const struct wined3d_fallback_card
     {
-        CARD_NVIDIA_RIVA_128,           /* D3D5 */
-        CARD_NVIDIA_RIVA_TNT,           /* D3D6 */
-        CARD_NVIDIA_GEFORCE,            /* D3D7 */
-        CARD_NVIDIA_GEFORCE3,           /* D3D8 */
-        CARD_NVIDIA_GEFORCEFX_5800,     /* D3D9_SM2 */
-        CARD_NVIDIA_GEFORCE_6800,       /* D3D9_SM3 */
-        CARD_NVIDIA_GEFORCE_8800GTX,    /* D3D10 */
-        CARD_NVIDIA_GEFORCE_GTX470,     /* D3D11 */
+        enum wined3d_feature_level feature_level;
+        enum wined3d_pci_device device_id;
+    }
+    card_fallback_nvidia[] =
+    {
+        {WINED3D_FEATURE_LEVEL_5,     CARD_NVIDIA_RIVA_128},
+        {WINED3D_FEATURE_LEVEL_6,     CARD_NVIDIA_RIVA_TNT},
+        {WINED3D_FEATURE_LEVEL_7,     CARD_NVIDIA_GEFORCE},
+        {WINED3D_FEATURE_LEVEL_8,     CARD_NVIDIA_GEFORCE3},
+        {WINED3D_FEATURE_LEVEL_9_SM2, CARD_NVIDIA_GEFORCEFX_5800},
+        {WINED3D_FEATURE_LEVEL_9_SM3, CARD_NVIDIA_GEFORCE_6800},
+        {WINED3D_FEATURE_LEVEL_10,    CARD_NVIDIA_GEFORCE_8800GTX},
+        {WINED3D_FEATURE_LEVEL_11,    CARD_NVIDIA_GEFORCE_GTX470},
+        {WINED3D_FEATURE_LEVEL_NONE},
     },
     card_fallback_amd[] =
     {
-        CARD_AMD_RAGE_128PRO,           /* D3D5 */
-        CARD_AMD_RAGE_128PRO,           /* D3D6 */
-        CARD_AMD_RADEON_7200,           /* D3D7 */
-        CARD_AMD_RADEON_8500,           /* D3D8 */
-        CARD_AMD_RADEON_9500,           /* D3D9_SM2 */
-        CARD_AMD_RADEON_X1600,          /* D3D9_SM3 */
-        CARD_AMD_RADEON_HD2900,         /* D3D10 */
-        CARD_AMD_RADEON_HD5600,         /* D3D11 */
+        {WINED3D_FEATURE_LEVEL_5,     CARD_AMD_RAGE_128PRO},
+        {WINED3D_FEATURE_LEVEL_6,     CARD_AMD_RAGE_128PRO},
+        {WINED3D_FEATURE_LEVEL_7,     CARD_AMD_RADEON_7200},
+        {WINED3D_FEATURE_LEVEL_8,     CARD_AMD_RADEON_8500},
+        {WINED3D_FEATURE_LEVEL_9_SM2, CARD_AMD_RADEON_9500},
+        {WINED3D_FEATURE_LEVEL_9_SM3, CARD_AMD_RADEON_X1600},
+        {WINED3D_FEATURE_LEVEL_10,    CARD_AMD_RADEON_HD2900},
+        {WINED3D_FEATURE_LEVEL_11,    CARD_AMD_RADEON_HD5600},
+        {WINED3D_FEATURE_LEVEL_NONE},
     },
     card_fallback_intel[] =
     {
-        CARD_INTEL_845G,                /* D3D5 */
-        CARD_INTEL_845G,                /* D3D6 */
-        CARD_INTEL_845G,                /* D3D7 */
-        CARD_INTEL_915G,                /* D3D8 */
-        CARD_INTEL_915G,                /* D3D9_SM2 */
-        CARD_INTEL_945G,                /* D3D9_SM3 */
-        CARD_INTEL_G45,                 /* D3D10 */
-        CARD_INTEL_IVBD,                /* D3D11 */
+        {WINED3D_FEATURE_LEVEL_5,     CARD_INTEL_845G},
+        {WINED3D_FEATURE_LEVEL_6,     CARD_INTEL_845G},
+        {WINED3D_FEATURE_LEVEL_7,     CARD_INTEL_845G},
+        {WINED3D_FEATURE_LEVEL_8,     CARD_INTEL_915G},
+        {WINED3D_FEATURE_LEVEL_9_SM2, CARD_INTEL_915G},
+        {WINED3D_FEATURE_LEVEL_9_SM3, CARD_INTEL_945G},
+        {WINED3D_FEATURE_LEVEL_10,    CARD_INTEL_G45},
+        {WINED3D_FEATURE_LEVEL_11,    CARD_INTEL_IVBD},
+        {WINED3D_FEATURE_LEVEL_NONE},
     };
-    C_ASSERT(ARRAY_SIZE(card_fallback_nvidia)  == WINED3D_FEATURE_LEVEL_COUNT);
-    C_ASSERT(ARRAY_SIZE(card_fallback_amd)     == WINED3D_FEATURE_LEVEL_COUNT);
-    C_ASSERT(ARRAY_SIZE(card_fallback_intel)   == WINED3D_FEATURE_LEVEL_COUNT);
 
     static const struct
     {
         enum wined3d_pci_vendor vendor;
-        const enum wined3d_pci_device *device;
+        const struct wined3d_fallback_card *cards;
     }
     fallbacks[] =
     {
@@ -669,15 +672,29 @@ enum wined3d_pci_device wined3d_gpu_from_feature_level(enum wined3d_pci_vendor *
         {HW_VENDOR_INTEL,  card_fallback_intel},
     };
 
+    const struct wined3d_fallback_card *cards;
+    enum wined3d_pci_device device_id;
+    unsigned int i;
+
+    cards = NULL;
     for (i = 0; i < ARRAY_SIZE(fallbacks); ++i)
     {
         if (*vendor == fallbacks[i].vendor)
-            return fallbacks[i].device[feature_level];
+            cards = fallbacks[i].cards;
+    }
+    if (!cards)
+    {
+        *vendor = HW_VENDOR_NVIDIA;
+        cards = card_fallback_nvidia;
     }
 
-    *vendor = HW_VENDOR_NVIDIA;
-
-    return card_fallback_nvidia[feature_level];
+    device_id = cards->device_id;
+    for (i = 0; cards[i].feature_level; ++i)
+    {
+        if (feature_level >= cards[i].feature_level)
+            device_id = cards[i].device_id;
+    }
+    return device_id;
 }
 
 UINT CDECL wined3d_get_adapter_count(const struct wined3d *wined3d)
@@ -1474,41 +1491,9 @@ static BOOL CheckRenderTargetCapability(const struct wined3d_adapter *adapter,
     return FALSE;
 }
 
-static BOOL wined3d_check_surface_capability(const struct wined3d_format *format, BOOL no3d)
+static BOOL wined3d_check_surface_capability(const struct wined3d_format *format)
 {
-    if (no3d)
-    {
-        switch (format->id)
-        {
-            case WINED3DFMT_B8G8R8_UNORM:
-                TRACE("[FAILED] - Not enumerated on Windows.\n");
-                return FALSE;
-            case WINED3DFMT_B8G8R8A8_UNORM:
-            case WINED3DFMT_B8G8R8X8_UNORM:
-            case WINED3DFMT_B5G6R5_UNORM:
-            case WINED3DFMT_B5G5R5X1_UNORM:
-            case WINED3DFMT_B5G5R5A1_UNORM:
-            case WINED3DFMT_B4G4R4A4_UNORM:
-            case WINED3DFMT_B2G3R3_UNORM:
-            case WINED3DFMT_A8_UNORM:
-            case WINED3DFMT_B2G3R3A8_UNORM:
-            case WINED3DFMT_B4G4R4X4_UNORM:
-            case WINED3DFMT_R10G10B10A2_UNORM:
-            case WINED3DFMT_R8G8B8A8_UNORM:
-            case WINED3DFMT_R8G8B8X8_UNORM:
-            case WINED3DFMT_R16G16_UNORM:
-            case WINED3DFMT_B10G10R10A2_UNORM:
-            case WINED3DFMT_R16G16B16A16_UNORM:
-            case WINED3DFMT_P8_UINT:
-                TRACE("[OK]\n");
-                return TRUE;
-            default:
-                TRACE("[FAILED] - Not available on GDI surfaces.\n");
-                return FALSE;
-        }
-    }
-
-    if (format->glInternal)
+    if ((format->flags[WINED3D_GL_RES_TYPE_TEX_2D] | format->flags[WINED3D_GL_RES_TYPE_RB]) & WINED3DFMT_FLAG_BLIT)
     {
         TRACE("[OK]\n");
         return TRUE;
@@ -1589,7 +1574,7 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
                 allowed_usage |= WINED3DUSAGE_QUERY_SRGBWRITE;
             if (!(usage & WINED3DUSAGE_TEXTURE))
             {
-                if (!wined3d_check_surface_capability(format, wined3d->flags & WINED3D_NO3D))
+                if (!wined3d_check_surface_capability(format))
                 {
                     TRACE("[FAILED] - Not supported for plain surfaces.\n");
                     return WINED3DERR_NOTAVAILABLE;
@@ -2434,16 +2419,18 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_create(struct wined3d *wined3d, UINT adapter_idx, enum wined3d_device_type device_type,
-        HWND focus_window, DWORD flags, BYTE surface_alignment, struct wined3d_device_parent *device_parent,
-        struct wined3d_device **device)
+HRESULT CDECL wined3d_device_create(struct wined3d *wined3d, unsigned int adapter_idx,
+        enum wined3d_device_type device_type, HWND focus_window, DWORD flags, BYTE surface_alignment,
+        const enum wined3d_feature_level *feature_levels, unsigned int feature_level_count,
+        struct wined3d_device_parent *device_parent, struct wined3d_device **device)
 {
     struct wined3d_device *object;
     HRESULT hr;
 
-    TRACE("wined3d %p, adapter_idx %u, device_type %#x, focus_window %p, "
-            "flags %#x, surface_alignment %u, device_parent %p, device %p.\n",
-            wined3d, adapter_idx, device_type, focus_window, flags, surface_alignment, device_parent, device);
+    TRACE("wined3d %p, adapter_idx %u, device_type %#x, focus_window %p, flags %#x, "
+            "surface_alignment %u, feature_levels %p, feature_level_count %u, device_parent %p, device %p.\n",
+            wined3d, adapter_idx, device_type, focus_window, flags, surface_alignment,
+            feature_levels, feature_level_count, device_parent, device);
 
     if (adapter_idx >= wined3d->adapter_count)
         return WINED3DERR_INVALIDCALL;
@@ -2451,9 +2438,9 @@ HRESULT CDECL wined3d_device_create(struct wined3d *wined3d, UINT adapter_idx, e
     if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    hr = device_init(object, wined3d, adapter_idx, device_type,
-            focus_window, flags, surface_alignment, device_parent);
-    if (FAILED(hr))
+    if (FAILED(hr = device_init(object, wined3d, adapter_idx,
+            device_type, focus_window, flags, surface_alignment,
+            feature_levels, feature_level_count, device_parent)))
     {
         WARN("Failed to initialize device, hr %#x.\n", hr);
         heap_free(object);
@@ -2493,7 +2480,7 @@ static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter)
     adapter->vram_bytes_used = 0;
     TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
 
-    if (!wined3d_adapter_init_format_info(adapter, sizeof(struct wined3d_format)))
+    if (!wined3d_adapter_no3d_init_format_info(adapter))
         return FALSE;
 
     adapter->vertex_pipe = &none_vertex_pipe;
