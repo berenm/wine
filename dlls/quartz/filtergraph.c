@@ -1146,7 +1146,11 @@ static HRESULT WINAPI FilterGraph2_Connect(IFilterGraph2 *iface, IPin *ppinOut, 
 
     /* Try direct connection first */
     hr = IPin_Connect(ppinOut, ppinIn, NULL);
-    if (SUCCEEDED(hr))
+
+    /* If direct connection succeeded, we should propagate that return value.
+     * If it returned VFW_E_NOT_CONNECTED or VFW_E_NO_AUDIO_HARDWARE, then don't
+     * even bother trying intermediate filters, since they won't succeed. */
+    if (SUCCEEDED(hr) || hr == VFW_E_NOT_CONNECTED || hr == VFW_E_NO_AUDIO_HARDWARE)
         goto out;
 
     TRACE("Direct connection failed, trying to render using extra filters\n");
@@ -1344,6 +1348,9 @@ error:
         }
     }
 
+    if (FAILED(hr))
+        hr = VFW_E_CANNOT_CONNECT;
+
     IEnumMoniker_Release(pEnumMoniker);
 
 out:
@@ -1356,7 +1363,7 @@ out:
     --This->recursioncount;
     LeaveCriticalSection(&This->cs);
     TRACE("--> %08x\n", hr);
-    return SUCCEEDED(hr) ? S_OK : hr;
+    return hr;
 }
 
 /* Render all output pins of the given filter. Helper for FilterGraph2_Render(). */
@@ -2076,8 +2083,34 @@ static HRESULT WINAPI MediaControl_Invoke(IMediaControl *iface, DISPID dispIdMem
 
 typedef HRESULT(WINAPI *fnFoundFilter)(IBaseFilter *, DWORD_PTR data);
 
+static BOOL has_output_pins(IBaseFilter *filter)
+{
+    IEnumPins *enumpins;
+    PIN_DIRECTION dir;
+    IPin *pin;
+
+    if (FAILED(IBaseFilter_EnumPins(filter, &enumpins)))
+        return FALSE;
+
+    while (IEnumPins_Next(enumpins, 1, &pin, NULL) == S_OK)
+    {
+        IPin_QueryDirection(pin, &dir);
+        IPin_Release(pin);
+        if (dir == PINDIR_OUTPUT)
+        {
+            IEnumPins_Release(enumpins);
+            return TRUE;
+        }
+    }
+
+    IEnumPins_Release(enumpins);
+    return FALSE;
+}
+
 static HRESULT ExploreGraph(IFilterGraphImpl* pGraph, IPin* pOutputPin, fnFoundFilter FoundFilter, DWORD_PTR data)
 {
+    IAMFilterMiscFlags *flags;
+    IMediaSeeking *seeking;
     HRESULT hr;
     IPin* pInputPin;
     IPin** ppPins;
@@ -2100,13 +2133,7 @@ static HRESULT ExploreGraph(IFilterGraphImpl* pGraph, IPin* pOutputPin, fnFoundF
 
     if (SUCCEEDED(hr))
     {
-        if (nb == 0)
-        {
-            TRACE("Reached a renderer\n");
-            /* Count renderers for end of stream notification */
-            pGraph->nRenderers++;
-        }
-        else
+        if (nb)
         {
             for(i = 0; i < nb; i++)
             {
@@ -2120,6 +2147,21 @@ static HRESULT ExploreGraph(IFilterGraphImpl* pGraph, IPin* pOutputPin, fnFoundF
             CoTaskMemFree(ppPins);
         }
         TRACE("Doing stuff with filter %p\n", PinInfo.pFilter);
+
+        if (SUCCEEDED(IBaseFilter_QueryInterface(PinInfo.pFilter,
+                &IID_IAMFilterMiscFlags, (void **)&flags)))
+        {
+            if (IAMFilterMiscFlags_GetMiscFlags(flags) & AM_FILTER_MISC_FLAGS_IS_RENDERER)
+                pGraph->nRenderers++;
+            IAMFilterMiscFlags_Release(flags);
+        }
+        else if (SUCCEEDED(IBaseFilter_QueryInterface(PinInfo.pFilter,
+                &IID_IMediaSeeking, (void **)&seeking)))
+        {
+            if (!has_output_pins(PinInfo.pFilter))
+                pGraph->nRenderers++;
+            IMediaSeeking_Release(seeking);
+        }
 
         FoundFilter(PinInfo.pFilter, data);
     }
@@ -2220,111 +2262,34 @@ static HRESULT SendFilterMessage(IFilterGraphImpl *This, fnFoundFilter FoundFilt
     return S_FALSE;
 }
 
-/*** IMediaControl methods ***/
 static HRESULT WINAPI MediaControl_Run(IMediaControl *iface)
 {
-    IFilterGraphImpl *This = impl_from_IMediaControl(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaControl(iface);
 
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    EnterCriticalSection(&This->cs);
-    if (This->state == State_Running)
-        goto out;
-    This->EcCompleteCount = 0;
-
-    if (This->defaultclock && !This->refClock)
-        IFilterGraph2_SetDefaultSyncSource(&This->IFilterGraph2_iface);
-
-    if (This->refClock)
-    {
-        REFERENCE_TIME now;
-        IReferenceClock_GetTime(This->refClock, &now);
-        if (This->state == State_Stopped)
-            This->start_time = now + 500000;
-        else if (This->pause_time >= 0)
-            This->start_time += now - This->pause_time;
-        else
-            This->start_time = now;
-    }
-    else This->start_time = 0;
-
-    SendFilterMessage(This, SendRun, (DWORD_PTR)&This->start_time);
-    This->state = State_Running;
-out:
-    LeaveCriticalSection(&This->cs);
-    return S_FALSE;
+    return IMediaFilter_Run(&graph->IMediaFilter_iface, 0);
 }
 
 static HRESULT WINAPI MediaControl_Pause(IMediaControl *iface)
 {
-    IFilterGraphImpl *This = impl_from_IMediaControl(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaControl(iface);
 
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    EnterCriticalSection(&This->cs);
-    if (This->state == State_Paused)
-        goto out;
-
-    if (This->state == State_Running && This->refClock && This->start_time >= 0)
-        IReferenceClock_GetTime(This->refClock, &This->pause_time);
-    else
-        This->pause_time = -1;
-
-    SendFilterMessage(This, SendPause, 0);
-    This->state = State_Paused;
-out:
-    LeaveCriticalSection(&This->cs);
-    return S_FALSE;
+    return IMediaFilter_Pause(&graph->IMediaFilter_iface);
 }
 
 static HRESULT WINAPI MediaControl_Stop(IMediaControl *iface)
 {
-    IFilterGraphImpl *This = impl_from_IMediaControl(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaControl(iface);
 
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    if (This->state == State_Stopped) return S_OK;
-
-    EnterCriticalSection(&This->cs);
-    if (This->state == State_Running) SendFilterMessage(This, SendPause, 0);
-    SendFilterMessage(This, SendStop, 0);
-    This->state = State_Stopped;
-    LeaveCriticalSection(&This->cs);
-    return S_OK;
+    return IMediaFilter_Stop(&graph->IMediaFilter_iface);
 }
 
-static HRESULT WINAPI MediaControl_GetState(IMediaControl *iface, LONG msTimeout,
-        OAFilterState *pfs)
+static HRESULT WINAPI MediaControl_GetState(IMediaControl *iface, LONG timeout, OAFilterState *state)
 {
-    IFilterGraphImpl *This = impl_from_IMediaControl(iface);
-    DWORD end;
+    IFilterGraphImpl *graph = impl_from_IMediaControl(iface);
 
-    TRACE("(%p/%p)->(%d, %p)\n", This, iface, msTimeout, pfs);
+    if (timeout < 0) timeout = INFINITE;
 
-    if (!pfs)
-        return E_POINTER;
-
-    EnterCriticalSection(&This->cs);
-
-    *pfs = This->state;
-    if (msTimeout > 0)
-    {
-        end = GetTickCount() + msTimeout;
-    }
-    else if (msTimeout < 0)
-    {
-        end = INFINITE;
-    }
-    else
-    {
-        end = 0;
-    }
-    if (end)
-        SendFilterMessage(This, SendGetState, end);
-
-    LeaveCriticalSection(&This->cs);
-
-    return S_OK;
+    return IMediaFilter_GetState(&graph->IMediaFilter_iface, timeout, (FILTER_STATE *)state);
 }
 
 static HRESULT WINAPI MediaControl_RenderFile(IMediaControl *iface, BSTR strFilename)
@@ -5444,34 +5409,119 @@ static HRESULT WINAPI MediaFilter_GetClassID(IMediaFilter *iface, CLSID * pClass
 
 static HRESULT WINAPI MediaFilter_Stop(IMediaFilter *iface)
 {
-    IFilterGraphImpl *This = impl_from_IMediaFilter(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaFilter(iface);
 
-    return MediaControl_Stop(&This->IMediaControl_iface);
+    TRACE("graph %p.\n", graph);
+
+    EnterCriticalSection(&graph->cs);
+
+    if (graph->state == State_Stopped)
+    {
+        LeaveCriticalSection(&graph->cs);
+        return S_OK;
+    }
+
+    if (graph->state == State_Running)
+        SendFilterMessage(graph, SendPause, 0);
+    SendFilterMessage(graph, SendStop, 0);
+    graph->state = State_Stopped;
+
+    LeaveCriticalSection(&graph->cs);
+    return S_OK;
 }
 
 static HRESULT WINAPI MediaFilter_Pause(IMediaFilter *iface)
 {
-    IFilterGraphImpl *This = impl_from_IMediaFilter(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaFilter(iface);
 
-    return MediaControl_Pause(&This->IMediaControl_iface);
+    TRACE("graph %p.\n", graph);
+
+    EnterCriticalSection(&graph->cs);
+
+    if (graph->state == State_Paused)
+    {
+        LeaveCriticalSection(&graph->cs);
+        return S_OK;
+    }
+
+    if (graph->defaultclock && !graph->refClock)
+        IFilterGraph2_SetDefaultSyncSource(&graph->IFilterGraph2_iface);
+
+    if (graph->state == State_Running && graph->refClock && graph->start_time >= 0)
+        IReferenceClock_GetTime(graph->refClock, &graph->pause_time);
+    else
+        graph->pause_time = -1;
+
+    SendFilterMessage(graph, SendPause, 0);
+    graph->state = State_Paused;
+
+    LeaveCriticalSection(&graph->cs);
+    return S_FALSE;
 }
 
-static HRESULT WINAPI MediaFilter_Run(IMediaFilter *iface, REFERENCE_TIME tStart)
+static HRESULT WINAPI MediaFilter_Run(IMediaFilter *iface, REFERENCE_TIME start)
 {
-    IFilterGraphImpl *This = impl_from_IMediaFilter(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaFilter(iface);
 
-    if (tStart)
-        FIXME("Run called with non-null tStart: %s\n", wine_dbgstr_longlong(tStart));
+    TRACE("graph %p, start %s.\n", graph, wine_dbgstr_longlong(start));
 
-    return MediaControl_Run(&This->IMediaControl_iface);
+    EnterCriticalSection(&graph->cs);
+
+    if (graph->state == State_Running)
+    {
+        LeaveCriticalSection(&graph->cs);
+        return S_OK;
+    }
+    graph->EcCompleteCount = 0;
+
+    if (graph->defaultclock && !graph->refClock)
+        IFilterGraph2_SetDefaultSyncSource(&graph->IFilterGraph2_iface);
+
+    if (!start && graph->refClock)
+    {
+        REFERENCE_TIME now;
+        IReferenceClock_GetTime(graph->refClock, &now);
+        if (graph->state == State_Stopped)
+            graph->start_time = now + 500000;
+        else if (graph->pause_time >= 0)
+            graph->start_time += now - graph->pause_time;
+        else
+            graph->start_time = now;
+    }
+    else
+        graph->start_time = start;
+
+    SendFilterMessage(graph, SendRun, (DWORD_PTR)&graph->start_time);
+    graph->state = State_Running;
+
+    LeaveCriticalSection(&graph->cs);
+    return S_FALSE;
 }
 
-static HRESULT WINAPI MediaFilter_GetState(IMediaFilter *iface, DWORD dwMsTimeout,
-        FILTER_STATE *pState)
+static HRESULT WINAPI MediaFilter_GetState(IMediaFilter *iface, DWORD timeout, FILTER_STATE *state)
 {
-    IFilterGraphImpl *This = impl_from_IMediaFilter(iface);
+    IFilterGraphImpl *graph = impl_from_IMediaFilter(iface);
+    DWORD end;
 
-    return MediaControl_GetState(&This->IMediaControl_iface, dwMsTimeout, (OAFilterState*)pState);
+    TRACE("graph %p, timeout %u, state %p.\n", graph, timeout, state);
+
+    if (!state)
+        return E_POINTER;
+
+    EnterCriticalSection(&graph->cs);
+
+    *state = graph->state;
+    if (timeout > 0)
+        end = GetTickCount() + timeout;
+    else if (timeout == INFINITE)
+        end = INFINITE;
+    else
+        end = 0;
+    if (end)
+        SendFilterMessage(graph, SendGetState, end);
+
+    LeaveCriticalSection(&graph->cs);
+    return S_OK;
 }
 
 static HRESULT WINAPI MediaFilter_SetSyncSource(IMediaFilter *iface, IReferenceClock *pClock)

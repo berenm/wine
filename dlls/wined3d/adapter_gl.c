@@ -96,7 +96,6 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_internalformat_query2",        ARB_INTERNALFORMAT_QUERY2     },
     {"GL_ARB_map_buffer_alignment",         ARB_MAP_BUFFER_ALIGNMENT      },
     {"GL_ARB_map_buffer_range",             ARB_MAP_BUFFER_RANGE          },
-    {"GL_ARB_multi_bind",                   ARB_MULTI_BIND                },
     {"GL_ARB_multisample",                  ARB_MULTISAMPLE               },
     {"GL_ARB_multitexture",                 ARB_MULTITEXTURE              },
     {"GL_ARB_occlusion_query",              ARB_OCCLUSION_QUERY           },
@@ -105,6 +104,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_point_parameters",             ARB_POINT_PARAMETERS          },
     {"GL_ARB_point_sprite",                 ARB_POINT_SPRITE              },
     {"GL_ARB_provoking_vertex",             ARB_PROVOKING_VERTEX          },
+    {"GL_ARB_query_buffer_object",          ARB_QUERY_BUFFER_OBJECT       },
     {"GL_ARB_sample_shading",               ARB_SAMPLE_SHADING            },
     {"GL_ARB_sampler_objects",              ARB_SAMPLER_OBJECTS           },
     {"GL_ARB_seamless_cube_map",            ARB_SEAMLESS_CUBE_MAP         },
@@ -115,6 +115,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_shader_storage_buffer_object", ARB_SHADER_STORAGE_BUFFER_OBJECT},
     {"GL_ARB_shader_texture_image_samples", ARB_SHADER_TEXTURE_IMAGE_SAMPLES},
     {"GL_ARB_shader_texture_lod",           ARB_SHADER_TEXTURE_LOD        },
+    {"GL_ARB_shader_viewport_layer_array",  ARB_SHADER_VIEWPORT_LAYER_ARRAY},
     {"GL_ARB_shading_language_100",         ARB_SHADING_LANGUAGE_100      },
     {"GL_ARB_shading_language_420pack",     ARB_SHADING_LANGUAGE_420PACK  },
     {"GL_ARB_shading_language_packing",     ARB_SHADING_LANGUAGE_PACKING  },
@@ -436,11 +437,11 @@ static BOOL match_apple(const struct wined3d_gl_info *gl_info, struct wined3d_ca
      *
      * Detecting this isn't really easy. The vendor string doesn't mention
      * Apple. Compile-time checks aren't sufficient either because a Linux
-     * binary may display on a MacOS X server via remote X11. So try to detect
+     * binary may display on a macOS X server via remote X11. So try to detect
      * the OpenGL implementation by looking at certain Apple extensions. Some
      * extensions like client storage might be supported on other
      * implementations too, but GL_APPLE_flush_render is specific to the
-     * MacOS X window management, and GL_APPLE_ycbcr_422 is QuickTime
+     * macOS X window management, and GL_APPLE_ycbcr_422 is QuickTime
      * specific. So the chance that other implementations support them is
      * rather small since Win32 QuickTime uses DirectDraw, not OpenGL.
      *
@@ -831,13 +832,6 @@ static BOOL match_broken_viewport_subpixel_bits(const struct wined3d_gl_info *gl
     return !wined3d_caps_gl_ctx_test_viewport_subpixel_bits(ctx);
 }
 
-static BOOL match_mesa(const struct wined3d_gl_info *gl_info, struct wined3d_caps_gl_ctx *ctx,
-        const char *gl_renderer, enum wined3d_gl_vendor gl_vendor,
-        enum wined3d_pci_vendor card_vendor, enum wined3d_pci_device device)
-{
-    return gl_vendor == GL_VENDOR_MESA;
-}
-
 static void quirk_apple_glsl_constants(struct wined3d_gl_info *gl_info)
 {
     /* MacOS needs uniforms for relative addressing offsets. This can
@@ -903,11 +897,11 @@ static void quirk_no_np2(struct wined3d_gl_info *gl_info)
 
 static void quirk_texcoord_w(struct wined3d_gl_info *gl_info)
 {
-    /* The Intel GPUs on MacOS set the .w register of texcoords to 0.0 by
+    /* The Intel GPUs on macOS set the .w register of texcoords to 0.0 by
      * default, which causes problems with fixed-function fragment processing.
      * Ideally this flag should be detected with a test shader and OpenGL
-     * feedback mode, but some OpenGL implementations (MacOS ATI at least,
-     * probably all MacOS ones) do not like vertex shaders in feedback mode
+     * feedback mode, but some OpenGL implementations (macOS ATI at least,
+     * probably all macOS ones) do not like vertex shaders in feedback mode
      * and return an error, even though it should be valid according to the
      * spec.
      *
@@ -916,8 +910,8 @@ static void quirk_texcoord_w(struct wined3d_gl_info *gl_info)
      * instruction slots which should be available to the Direct3D
      * application.
      *
-     * ATI Radeon HD 2xxx cards on MacOS have the issue. Instead of checking
-     * for the buggy cards, blacklist all Radeon cards on MacOS and whitelist
+     * ATI Radeon HD 2xxx cards on macOS have the issue. Instead of checking
+     * for the buggy cards, blacklist all Radeon cards on macOS and whitelist
      * the good ones. That way we're prepared for the future. If this
      * workaround is activated on cards that do not need it, it won't break
      * things, just affect performance negatively. */
@@ -990,13 +984,6 @@ static void quirk_broken_viewport_subpixel_bits(struct wined3d_gl_info *gl_info)
         TRACE("Disabling ARB_clip_control.\n");
         gl_info->supported[ARB_CLIP_CONTROL] = FALSE;
     }
-}
-
-static void quirk_use_client_storage_bit(struct wined3d_gl_info *gl_info)
-{
-    // Using ARB_buffer_storage on Mesa requires the GL_CLIENT_STORAGE_BIT to be
-    // set to use GTT for immutable buffers on radeon (see PIPE_USAGE_STREAM).
-    gl_info->quirks |= WINED3D_QUIRK_USE_CLIENT_STORAGE_BIT;
 }
 
 static const struct wined3d_gpu_description *query_gpu_description(const struct wined3d_gl_info *gl_info,
@@ -1151,11 +1138,6 @@ static void fixup_extensions(struct wined3d_gl_info *gl_info, struct wined3d_cap
             match_broken_viewport_subpixel_bits,
             quirk_broken_viewport_subpixel_bits,
             "NVIDIA viewport subpixel bits bug"
-        },
-        {
-            match_mesa,
-            quirk_use_client_storage_bit,
-            "Use GL_CLIENT_STORAGE_BIT for persistent buffers on mesa",
         },
     };
 
@@ -2174,8 +2156,6 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_ARB_map_buffer_range */
     USE_GL_FUNC(glFlushMappedBufferRange)
     USE_GL_FUNC(glMapBufferRange)
-    /* GL_ARB_multi_bind */
-    USE_GL_FUNC(glBindBuffersRange)
     /* GL_ARB_multisample */
     USE_GL_FUNC(glSampleCoverageARB)
     /* GL_ARB_multitexture */
@@ -2849,7 +2829,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
 #undef MAP_GL_FUNCTION_CAST
 }
 
-static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
+static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct wined3d_d3d_info *d3d_info)
 {
     unsigned int i, sampler_count;
     GLfloat gl_floatv[2];
@@ -2891,13 +2871,12 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     }
 
     gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &gl_max);
-    gl_info->limits.texture_size = gl_max;
+    d3d_info->limits.texture_size = gl_max;
     TRACE("Maximum texture size support - max texture size %d.\n", gl_max);
 
     gl_info->gl_ops.gl.p_glGetFloatv(gl_info->supported[WINED3D_GL_LEGACY_CONTEXT]
             ? GL_ALIASED_POINT_SIZE_RANGE : GL_POINT_SIZE_RANGE, gl_floatv);
-    gl_info->limits.pointsize_min = gl_floatv[0];
-    gl_info->limits.pointsize_max = gl_floatv[1];
+    d3d_info->limits.pointsize_max = gl_floatv[1];
     TRACE("Maximum point size support - max point size %f.\n", gl_floatv[1]);
 
     if (gl_info->supported[ARB_MAP_BUFFER_ALIGNMENT])
@@ -3188,8 +3167,8 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     }
     else
     {
-        gl_info->limits.framebuffer_width = gl_info->limits.texture_size;
-        gl_info->limits.framebuffer_height = gl_info->limits.texture_size;
+        gl_info->limits.framebuffer_width = d3d_info->limits.texture_size;
+        gl_info->limits.framebuffer_height = d3d_info->limits.texture_size;
     }
 
     gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL] =
@@ -3346,8 +3325,9 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_TEXTURE_STORAGE_MULTISAMPLE,  MAKEDWORD_VERSION(4, 2)},
         {ARB_TEXTURE_VIEW,                 MAKEDWORD_VERSION(4, 3)},
 
+        {ARB_BUFFER_STORAGE,               MAKEDWORD_VERSION(4, 4)},
         {ARB_CLEAR_TEXTURE,                MAKEDWORD_VERSION(4, 4)},
-        {ARB_MULTI_BIND,                   MAKEDWORD_VERSION(4, 4)},
+        {ARB_QUERY_BUFFER_OBJECT,          MAKEDWORD_VERSION(4, 4)},
 
         {ARB_CLIP_CONTROL,                 MAKEDWORD_VERSION(4, 5)},
         {ARB_CULL_DISTANCE,                MAKEDWORD_VERSION(4, 5)},
@@ -3675,7 +3655,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         gl_info->supported[ARB_TEXTURE_MULTISAMPLE] = FALSE;
     }
 
-    wined3d_adapter_init_limits(gl_info);
+    wined3d_adapter_init_limits(gl_info, d3d_info);
 
     if (gl_info->supported[ARB_VERTEX_PROGRAM] && test_arb_vs_offset_limit(gl_info))
         gl_info->quirks |= WINED3D_QUIRK_ARB_VS_OFFSET_LIMIT;
@@ -3702,7 +3682,6 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
 
     d3d_info->limits.max_rt_count = gl_info->limits.buffers;
     d3d_info->limits.max_clip_distances = gl_info->limits.user_clip_distances;
-    d3d_info->limits.pointsize_max = gl_info->limits.pointsize_max;
 
     adapter->shader_backend->shader_get_caps(gl_info, &shader_caps);
     d3d_info->vs_clipping = shader_caps.wined3d_caps & WINED3D_SHADER_CAP_VS_CLIPPING;

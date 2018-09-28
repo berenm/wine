@@ -4323,11 +4323,7 @@ static void indexbuffer(struct wined3d_context *context, const struct wined3d_st
     else
     {
         struct wined3d_buffer *ib = state->index_buffer;
-        // FIXME(acomminos): disasterous.
-        if (ib->locations & WINED3D_LOCATION_PERSISTENT_MAP)
-            GL_EXTCALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib->buffer_heap->buffer_object));
-        else
-            GL_EXTCALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib->buffer_object));
+        GL_EXTCALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib->buffer_object));
     }
 }
 
@@ -4411,7 +4407,6 @@ static void state_cb(struct wined3d_context *context, const struct wined3d_state
     enum wined3d_shader_type shader_type;
     struct wined3d_buffer *buffer;
     unsigned int i, base, count;
-    struct wined3d_bo_address bo_addr;
 
     TRACE("context %p, state %p, state_id %#x.\n", context, state, state_id);
 
@@ -4421,51 +4416,11 @@ static void state_cb(struct wined3d_context *context, const struct wined3d_state
         shader_type = WINED3D_SHADER_TYPE_COMPUTE;
 
     wined3d_gl_limits_get_uniform_block_range(&gl_info->limits, shader_type, &base, &count);
-
-    if (gl_info->supported[ARB_MULTI_BIND])
+    for (i = 0; i < count; ++i)
     {
-        GLuint buffer_objects[count];
-        GLsizeiptr buffer_offsets[count];
-        GLsizeiptr buffer_sizes[count];
-
-        for (i = 0; i < count; ++i)
-        {
-            buffer = state->cb[shader_type][i];
-            if (buffer)
-            {
-                wined3d_buffer_get_memory(buffer, &bo_addr, buffer->locations);
-                buffer_objects[i] = bo_addr.buffer_object;
-                buffer_offsets[i] = bo_addr.addr;
-                buffer_sizes[i] = bo_addr.length;
-            }
-            else
-            {
-                buffer_objects[i] = buffer_offsets[i] = 0;
-                // The ARB_multi_bind spec states that an error may be thrown if
-                // `size` is less than or equal to zero, Thus, we specify a size for
-                // unused buffers anyway.
-                buffer_sizes[i] = 1;
-            }
-        }
-        GL_EXTCALL(glBindBuffersRange(GL_UNIFORM_BUFFER, base, count, buffer_objects, buffer_offsets, buffer_sizes));
+        buffer = state->cb[shader_type][i];
+        GL_EXTCALL(glBindBufferBase(GL_UNIFORM_BUFFER, base + i, buffer ? buffer->buffer_object : 0));
     }
-    else
-    {
-        for (i = 0; i < count; ++i)
-        {
-            buffer = state->cb[shader_type][i];
-            if (buffer)
-            {
-                wined3d_buffer_get_memory(buffer, &bo_addr, buffer->locations);
-                GL_EXTCALL(glBindBufferRange(GL_UNIFORM_BUFFER, base + i, bo_addr.buffer_object, bo_addr.addr, bo_addr.length));
-            }
-            else
-            {
-                GL_EXTCALL(glBindBufferBase(GL_UNIFORM_BUFFER, base + i, 0));
-            }
-        }
-    }
-
     checkGLcall("bind constant buffers");
 }
 

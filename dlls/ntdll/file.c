@@ -108,7 +108,7 @@
 #include "winioctl.h"
 #include "ddk/ntddk.h"
 #include "ddk/ntddser.h"
-#include "ntifs.h"
+#include "ddk/ntifs.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 WINE_DECLARE_DEBUG_CHANNEL(winediag);

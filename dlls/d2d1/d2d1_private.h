@@ -503,6 +503,14 @@ struct d2d_device
 
 void d2d_device_init(struct d2d_device *device, ID2D1Factory1 *factory, IDXGIDevice *dxgi_device) DECLSPEC_HIDDEN;
 
+struct d2d_effect
+{
+    ID2D1Effect ID2D1Effect_iface;
+    LONG refcount;
+};
+
+void d2d_effect_init(struct d2d_effect *effect) DECLSPEC_HIDDEN;
+
 static inline BOOL d2d_array_reserve(void **elements, size_t *capacity, size_t count, size_t size)
 {
     size_t new_capacity, max_capacity;
@@ -585,6 +593,13 @@ static inline void d2d_rect_expand(D2D1_RECT_F *dst, const D2D1_POINT_2F *point)
         dst->top = point->y;
     if (point->y > dst->bottom)
         dst->bottom = point->y;
+}
+
+static inline const char *debug_d2d_point_2f(const D2D1_POINT_2F *point)
+{
+    if (!point)
+        return "(null)";
+    return wine_dbg_sprintf("{%.8e, %.8e}", point->x, point->y);
 }
 
 static inline const char *debug_d2d_rect_f(const D2D1_RECT_F *rect)

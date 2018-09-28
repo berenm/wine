@@ -38,7 +38,6 @@ static BOOL is_wow64;
 static const char msifile[] = "winetest.msi";
 static const WCHAR msifileW[] = {'w','i','n','e','t','e','s','t','.','m','s','i',0};
 
-static BOOL (WINAPI *pConvertSidToStringSidA)(PSID, LPSTR*);
 static LONG (WINAPI *pRegDeleteKeyExA)(HKEY, LPCSTR, REGSAM, DWORD);
 static BOOL (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
 
@@ -104,7 +103,6 @@ static void init_functionpointers(void)
     GET_PROC(hmsi, MsiEnumComponentsExA)
     GET_PROC(hmsi, MsiSourceListGetInfoA)
 
-    GET_PROC(hadvapi32, ConvertSidToStringSidA)
     GET_PROC(hadvapi32, RegDeleteKeyExA)
     GET_PROC(hkernel32, IsWow64Process)
 
@@ -338,16 +336,18 @@ static const char spf_custom_action_dat[] =
     "Action\tType\tSource\tTarget\tISComments\n"
     "s72\ti2\tS64\tS0\tS255\n"
     "CustomAction\tAction\n"
-    "SetFolderProp\t51\tMSITESTDIR\t[ProgramFilesFolder]\\msitest\\added\t\n";
+    "SetFolderProp\t51\tMSITESTDIR\t[ProgramFilesFolder]\\msitest\\added\t\n"
+    "SetFolderProp2\t51\tMSITESTDIR\t[ProgramFilesFolder]\\msitest\\added\\added2\t\n";
 
 static const char spf_install_exec_seq_dat[] =
     "Action\tCondition\tSequence\n"
     "s72\tS255\tI2\n"
     "InstallExecuteSequence\tAction\n"
-    "CostFinalize\t\t1000\n"
     "CostInitialize\t\t800\n"
     "FileCost\t\t900\n"
     "SetFolderProp\t\t950\n"
+    "SetFolderProp2\t\t960\n"
+    "CostFinalize\t\t1000\n"
     "InstallFiles\t\t4000\n"
     "InstallServices\t\t5000\n"
     "InstallFinalize\t\t6600\n"
@@ -1180,7 +1180,7 @@ static char *get_user_sid(void)
 
     user = HeapAlloc(GetProcessHeap(), 0, size);
     GetTokenInformation(token, TokenUser, user, size, &size);
-    pConvertSidToStringSidA(user->User.Sid, &usersid);
+    ConvertSidToStringSidA(user->User.Sid, &usersid);
     HeapFree(GetProcessHeap(), 0, user);
 
     CloseHandle(token);
@@ -14097,7 +14097,6 @@ static void test_setpropertyfolder(void)
 {
     UINT r;
     CHAR path[MAX_PATH];
-    DWORD attr;
 
     if (is_process_limited())
     {
@@ -14122,19 +14121,10 @@ static void test_setpropertyfolder(void)
         goto error;
     }
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %u\n", r);
-    attr = GetFileAttributesA(path);
-    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
-    {
-        ok(delete_pf("msitest\\added\\maximus", TRUE), "File not installed\n");
-        ok(delete_pf("msitest\\added", FALSE), "Directory not created\n");
-        ok(delete_pf("msitest", FALSE), "Directory not created\n");
-    }
-    else
-    {
-        trace("changing folder property not supported\n");
-        ok(delete_pf("msitest\\maximus", TRUE), "File not installed\n");
-        ok(delete_pf("msitest", FALSE), "Directory not created\n");
-    }
+    ok(delete_pf("msitest\\added\\added2\\maximus", TRUE), "File not installed\n");
+    ok(delete_pf("msitest\\added\\added2", FALSE), "Directory not created\n");
+    ok(delete_pf("msitest\\added", FALSE), "Directory not created\n");
+    ok(delete_pf("msitest", FALSE), "Directory not created\n");
 
 error:
     DeleteFileA(msifile);
@@ -14445,33 +14435,26 @@ START_TEST(msi)
     test_MsiGetFileHash();
     test_MsiSetInternalUI();
     test_MsiSetExternalUI();
-
-    if (!pConvertSidToStringSidA)
-        win_skip("ConvertSidToStringSidA not implemented\n");
-    else
-    {
-        /* These tests rely on get_user_sid that needs ConvertSidToStringSidA */
-        test_MsiQueryProductState();
-        test_MsiQueryFeatureState();
-        test_MsiQueryComponentState();
-        test_MsiGetComponentPath();
-        test_MsiGetComponentPathEx();
-        test_MsiProvideComponent();
-        test_MsiGetProductCode();
-        test_MsiEnumClients();
-        test_MsiGetProductInfo();
-        test_MsiGetProductInfoEx();
-        test_MsiGetUserInfo();
-        test_MsiOpenProduct();
-        test_MsiEnumPatchesEx();
-        test_MsiEnumPatches();
-        test_MsiGetPatchInfoEx();
-        test_MsiGetPatchInfo();
-        test_MsiEnumProducts();
-        test_MsiEnumProductsEx();
-        test_MsiEnumComponents();
-        test_MsiEnumComponentsEx();
-    }
+    test_MsiQueryProductState();
+    test_MsiQueryFeatureState();
+    test_MsiQueryComponentState();
+    test_MsiGetComponentPath();
+    test_MsiGetComponentPathEx();
+    test_MsiProvideComponent();
+    test_MsiGetProductCode();
+    test_MsiEnumClients();
+    test_MsiGetProductInfo();
+    test_MsiGetProductInfoEx();
+    test_MsiGetUserInfo();
+    test_MsiOpenProduct();
+    test_MsiEnumPatchesEx();
+    test_MsiEnumPatches();
+    test_MsiGetPatchInfoEx();
+    test_MsiGetPatchInfo();
+    test_MsiEnumProducts();
+    test_MsiEnumProductsEx();
+    test_MsiEnumComponents();
+    test_MsiEnumComponentsEx();
     test_MsiGetFileVersion();
     test_MsiGetFileSignatureInformation();
     test_MsiConfigureProductEx();
