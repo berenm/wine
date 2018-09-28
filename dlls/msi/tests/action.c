@@ -34,6 +34,7 @@
 #include <shellapi.h>
 #include <winsvc.h>
 #include <odbcinst.h>
+#include <sddl.h>
 
 #include "wine/test.h"
 #include "utils.h"
@@ -50,11 +51,9 @@ static INSTALLSTATE (WINAPI *pMsiGetComponentPathExA)
 static UINT (WINAPI *pMsiQueryFeatureStateExA)
     (LPCSTR, LPCSTR, MSIINSTALLCONTEXT, LPCSTR, INSTALLSTATE *);
 
-static BOOL (WINAPI *pConvertSidToStringSidA)(PSID, LPSTR *);
 static LONG (WINAPI *pRegDeleteKeyExA)(HKEY, LPCSTR, REGSAM, DWORD);
 static BOOL (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
 
-static HMODULE hsrclient;
 static BOOL (WINAPI *pSRRemoveRestorePoint)(DWORD);
 static BOOL (WINAPI *pSRSetRestorePointA)(RESTOREPOINTINFOA *, STATEMGRSTATUS *);
 
@@ -183,6 +182,7 @@ static const char property_dat[] =
     "SERVDISP\tTestServiceDisp\n"
     "SERVDISP2\tTestServiceDisp2\n"
     "MSIFASTINSTALL\t1\n"
+    "ARPNOMODIFY\t1\n"
     "regdata17\t#1\n";
 
 static const char env_install_exec_seq_dat[] =
@@ -2356,6 +2356,7 @@ static void init_functionpointers(void)
     HMODULE hmsi = GetModuleHandleA("msi.dll");
     HMODULE hadvapi32 = GetModuleHandleA("advapi32.dll");
     HMODULE hkernel32 = GetModuleHandleA("kernel32.dll");
+    HMODULE hsrclient = LoadLibraryA("srclient.dll");
 
 #define GET_PROC(mod, func) \
     p ## func = (void*)GetProcAddress(mod, #func); \
@@ -2368,11 +2369,9 @@ static void init_functionpointers(void)
     GET_PROC(hmsi, MsiGetComponentPathExA);
     GET_PROC(hmsi, MsiQueryFeatureStateExA);
 
-    GET_PROC(hadvapi32, ConvertSidToStringSidA);
     GET_PROC(hadvapi32, RegDeleteKeyExA)
     GET_PROC(hkernel32, IsWow64Process)
 
-    hsrclient = LoadLibraryA("srclient.dll");
     GET_PROC(hsrclient, SRRemoveRestorePoint);
     GET_PROC(hsrclient, SRSetRestorePointA);
 
@@ -2386,17 +2385,12 @@ static char *get_user_sid(void)
     TOKEN_USER *user;
     char *usersid = NULL;
 
-    if (!pConvertSidToStringSidA)
-    {
-        win_skip("ConvertSidToStringSidA is not available\n");
-        return NULL;
-    }
     OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token);
     GetTokenInformation(token, TokenUser, NULL, size, &size);
 
     user = HeapAlloc(GetProcessHeap(), 0, size);
     GetTokenInformation(token, TokenUser, user, size, &size);
-    pConvertSidToStringSidA(user->User.Sid, &usersid);
+    ConvertSidToStringSidA(user->User.Sid, &usersid);
     HeapFree(GetProcessHeap(), 0, user);
 
     CloseHandle(token);
@@ -2684,15 +2678,16 @@ static void test_register_product(void)
     CHECK_DEL_REG_STR(hkey, "DisplayVersion", "1.1.1");
     CHECK_DEL_REG_STR(hkey, "InstallDate", date);
     CHECK_DEL_REG_STR(hkey, "InstallSource", temp);
-    CHECK_DEL_REG_ISTR(hkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_ISTR(hkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(hkey, "Publisher", "Wine");
-    CHECK_DEL_REG_STR(hkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_STR(hkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(hkey, "AuthorizedCDFPrefix", NULL);
     CHECK_DEL_REG_STR(hkey, "Comments", NULL);
     CHECK_DEL_REG_STR(hkey, "Contact", NULL);
     CHECK_DEL_REG_STR(hkey, "HelpLink", NULL);
     CHECK_DEL_REG_STR(hkey, "HelpTelephone", NULL);
     CHECK_DEL_REG_STR(hkey, "InstallLocation", NULL);
+    CHECK_DEL_REG_DWORD(hkey, "NoModify", 1);
     CHECK_DEL_REG_STR(hkey, "Readme", NULL);
     CHECK_DEL_REG_STR(hkey, "Size", NULL);
     CHECK_DEL_REG_STR(hkey, "URLInfoAbout", NULL);
@@ -2725,15 +2720,16 @@ static void test_register_product(void)
     CHECK_DEL_REG_STR(props, "DisplayVersion", "1.1.1");
     CHECK_DEL_REG_STR(props, "InstallDate", date);
     CHECK_DEL_REG_STR(props, "InstallSource", temp);
-    CHECK_DEL_REG_ISTR(props, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_ISTR(props, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(props, "Publisher", "Wine");
-    CHECK_DEL_REG_STR(props, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_STR(props, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(props, "AuthorizedCDFPrefix", NULL);
     CHECK_DEL_REG_STR(props, "Comments", NULL);
     CHECK_DEL_REG_STR(props, "Contact", NULL);
     CHECK_DEL_REG_STR(props, "HelpLink", NULL);
     CHECK_DEL_REG_STR(props, "HelpTelephone", NULL);
     CHECK_DEL_REG_STR(props, "InstallLocation", NULL);
+    CHECK_DEL_REG_DWORD(props, "NoModify", 1);
     CHECK_DEL_REG_STR(props, "Readme", NULL);
     CHECK_DEL_REG_STR(props, "Size", NULL);
     CHECK_DEL_REG_STR(props, "URLInfoAbout", NULL);
@@ -2789,15 +2785,16 @@ todo_wine
     CHECK_DEL_REG_STR(hkey, "DisplayVersion", "1.1.1");
     CHECK_DEL_REG_STR(hkey, "InstallDate", date);
     CHECK_DEL_REG_STR(hkey, "InstallSource", temp);
-    CHECK_DEL_REG_ISTR(hkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_ISTR(hkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(hkey, "Publisher", "Wine");
-    CHECK_DEL_REG_STR(hkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_STR(hkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(hkey, "AuthorizedCDFPrefix", NULL);
     CHECK_DEL_REG_STR(hkey, "Comments", NULL);
     CHECK_DEL_REG_STR(hkey, "Contact", NULL);
     CHECK_DEL_REG_STR(hkey, "HelpLink", NULL);
     CHECK_DEL_REG_STR(hkey, "HelpTelephone", NULL);
     CHECK_DEL_REG_STR(hkey, "InstallLocation", NULL);
+    CHECK_DEL_REG_DWORD(hkey, "NoModify", 1);
     CHECK_DEL_REG_STR(hkey, "Readme", NULL);
     CHECK_DEL_REG_STR(hkey, "Size", NULL);
     CHECK_DEL_REG_STR(hkey, "URLInfoAbout", NULL);
@@ -2830,15 +2827,16 @@ todo_wine
     CHECK_DEL_REG_STR(props, "DisplayVersion", "1.1.1");
     CHECK_DEL_REG_STR(props, "InstallDate", date);
     CHECK_DEL_REG_STR(props, "InstallSource", temp);
-    CHECK_DEL_REG_ISTR(props, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_ISTR(props, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(props, "Publisher", "Wine");
-    CHECK_DEL_REG_STR(props, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_DEL_REG_STR(props, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_DEL_REG_STR(props, "AuthorizedCDFPrefix", NULL);
     CHECK_DEL_REG_STR(props, "Comments", NULL);
     CHECK_DEL_REG_STR(props, "Contact", NULL);
     CHECK_DEL_REG_STR(props, "HelpLink", NULL);
     CHECK_DEL_REG_STR(props, "HelpTelephone", NULL);
     CHECK_DEL_REG_STR(props, "InstallLocation", NULL);
+    CHECK_DEL_REG_DWORD(props, "NoModify", 1);
     CHECK_DEL_REG_STR(props, "Readme", NULL);
     CHECK_DEL_REG_STR(props, "Size", NULL);
     CHECK_DEL_REG_STR(props, "URLInfoAbout", NULL);
@@ -3700,15 +3698,16 @@ static void test_publish(void)
     CHECK_REG_STR(prodkey, "DisplayVersion", "1.1.1");
     CHECK_REG_STR(prodkey, "InstallDate", date);
     CHECK_REG_STR(prodkey, "InstallSource", temp);
-    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "Publisher", "Wine");
-    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "AuthorizedCDFPrefix", NULL);
     CHECK_REG_STR(prodkey, "Comments", NULL);
     CHECK_REG_STR(prodkey, "Contact", NULL);
     CHECK_REG_STR(prodkey, "HelpLink", NULL);
     CHECK_REG_STR(prodkey, "HelpTelephone", NULL);
     CHECK_REG_STR(prodkey, "InstallLocation", NULL);
+    CHECK_REG_DWORD(prodkey, "NoModify", 1);
     CHECK_REG_STR(prodkey, "Readme", NULL);
     CHECK_REG_STR(prodkey, "Size", NULL);
     CHECK_REG_STR(prodkey, "URLInfoAbout", NULL);
@@ -3804,15 +3803,16 @@ static void test_publish(void)
     CHECK_REG_STR(prodkey, "DisplayVersion", "1.1.1");
     CHECK_REG_STR(prodkey, "InstallDate", date);
     CHECK_REG_STR(prodkey, "InstallSource", temp);
-    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "Publisher", "Wine");
-    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "AuthorizedCDFPrefix", NULL);
     CHECK_REG_STR(prodkey, "Comments", NULL);
     CHECK_REG_STR(prodkey, "Contact", NULL);
     CHECK_REG_STR(prodkey, "HelpLink", NULL);
     CHECK_REG_STR(prodkey, "HelpTelephone", NULL);
     CHECK_REG_STR(prodkey, "InstallLocation", NULL);
+    CHECK_REG_DWORD(prodkey, "NoModify", 1);
     CHECK_REG_STR(prodkey, "Readme", NULL);
     CHECK_REG_STR(prodkey, "Size", NULL);
     CHECK_REG_STR(prodkey, "URLInfoAbout", NULL);
@@ -3885,15 +3885,16 @@ static void test_publish(void)
     CHECK_REG_STR(prodkey, "DisplayVersion", "1.1.1");
     CHECK_REG_STR(prodkey, "InstallDate", date);
     CHECK_REG_STR(prodkey, "InstallSource", temp);
-    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "Publisher", "Wine");
-    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "AuthorizedCDFPrefix", NULL);
     CHECK_REG_STR(prodkey, "Comments", NULL);
     CHECK_REG_STR(prodkey, "Contact", NULL);
     CHECK_REG_STR(prodkey, "HelpLink", NULL);
     CHECK_REG_STR(prodkey, "HelpTelephone", NULL);
     CHECK_REG_STR(prodkey, "InstallLocation", NULL);
+    CHECK_REG_DWORD(prodkey, "NoModify", 1);
     CHECK_REG_STR(prodkey, "Readme", NULL);
     CHECK_REG_STR(prodkey, "Size", NULL);
     CHECK_REG_STR(prodkey, "URLInfoAbout", NULL);
@@ -3943,15 +3944,16 @@ static void test_publish(void)
     CHECK_REG_STR(prodkey, "DisplayVersion", "1.1.1");
     CHECK_REG_STR(prodkey, "InstallDate", date);
     CHECK_REG_STR(prodkey, "InstallSource", temp);
-    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "Publisher", "Wine");
-    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "AuthorizedCDFPrefix", NULL);
     CHECK_REG_STR(prodkey, "Comments", NULL);
     CHECK_REG_STR(prodkey, "Contact", NULL);
     CHECK_REG_STR(prodkey, "HelpLink", NULL);
     CHECK_REG_STR(prodkey, "HelpTelephone", NULL);
     CHECK_REG_STR(prodkey, "InstallLocation", NULL);
+    CHECK_REG_DWORD(prodkey, "NoModify", 1);
     CHECK_REG_STR(prodkey, "Readme", NULL);
     CHECK_REG_STR(prodkey, "Size", NULL);
     CHECK_REG_STR(prodkey, "URLInfoAbout", NULL);
@@ -4001,15 +4003,16 @@ static void test_publish(void)
     CHECK_REG_STR(prodkey, "DisplayVersion", "1.1.1");
     CHECK_REG_STR(prodkey, "InstallDate", date);
     CHECK_REG_STR(prodkey, "InstallSource", temp);
-    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "Publisher", "Wine");
-    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "AuthorizedCDFPrefix", NULL);
     CHECK_REG_STR(prodkey, "Comments", NULL);
     CHECK_REG_STR(prodkey, "Contact", NULL);
     CHECK_REG_STR(prodkey, "HelpLink", NULL);
     CHECK_REG_STR(prodkey, "HelpTelephone", NULL);
     CHECK_REG_STR(prodkey, "InstallLocation", NULL);
+    CHECK_REG_DWORD(prodkey, "NoModify", 1);
     CHECK_REG_STR(prodkey, "Readme", NULL);
     CHECK_REG_STR(prodkey, "Size", NULL);
     CHECK_REG_STR(prodkey, "URLInfoAbout", NULL);
@@ -4082,15 +4085,16 @@ static void test_publish(void)
     CHECK_REG_STR(prodkey, "DisplayVersion", "1.1.1");
     CHECK_REG_STR(prodkey, "InstallDate", date);
     CHECK_REG_STR(prodkey, "InstallSource", temp);
-    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_ISTR(prodkey, "ModifyPath", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "Publisher", "Wine");
-    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /I{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
+    CHECK_REG_STR(prodkey, "UninstallString", "MsiExec.exe /X{7DF88A48-996F-4EC8-A022-BF956F9B2CBB}");
     CHECK_REG_STR(prodkey, "AuthorizedCDFPrefix", NULL);
     CHECK_REG_STR(prodkey, "Comments", NULL);
     CHECK_REG_STR(prodkey, "Contact", NULL);
     CHECK_REG_STR(prodkey, "HelpLink", NULL);
     CHECK_REG_STR(prodkey, "HelpTelephone", NULL);
     CHECK_REG_STR(prodkey, "InstallLocation", NULL);
+    CHECK_REG_DWORD(prodkey, "NoModify", 1);
     CHECK_REG_STR(prodkey, "Readme", NULL);
     CHECK_REG_STR(prodkey, "Size", NULL);
     CHECK_REG_STR(prodkey, "URLInfoAbout", NULL);
@@ -6467,7 +6471,6 @@ START_TEST(action)
         if (ret)
             remove_restore_point(status.llSequenceNumber);
     }
-    FreeLibrary(hsrclient);
 
     SetCurrentDirectoryA(prev_path);
 }

@@ -1030,6 +1030,7 @@ enum wined3d_shader_type
 #define WINED3DCLEAR_TARGET                                     0x00000001
 #define WINED3DCLEAR_ZBUFFER                                    0x00000002
 #define WINED3DCLEAR_STENCIL                                    0x00000004
+#define WINED3DCLEAR_SYNCHRONOUS                                0x80000000
 
 /* Stream source flags */
 #define WINED3DSTREAMSOURCE_INDEXEDDATA                         (1u << 30)
@@ -2085,7 +2086,6 @@ struct wined3d_shader_desc
     struct wined3d_shader_signature input_signature;
     struct wined3d_shader_signature output_signature;
     struct wined3d_shader_signature patch_constant_signature;
-    unsigned int max_version;
 };
 
 struct wined3d_stream_output_element

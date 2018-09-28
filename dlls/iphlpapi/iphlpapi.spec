@@ -109,7 +109,7 @@
 #@ stub GetIpInterfaceTable
 #@ stub GetIpNetEntry2
 @ stdcall GetIpNetTable( ptr ptr long )
-#@ stub GetIpNetTable2
+@ stdcall GetIpNetTable2( long ptr )
 @ stub GetIpNetTableFromStack
 #@ stub GetIpPathEntry
 #@ stub GetIpPathTable

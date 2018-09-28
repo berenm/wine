@@ -2258,12 +2258,6 @@ static void wined3d_texture_unload(struct wined3d_resource *resource)
 static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags)
 {
-    return E_NOTIMPL;
-}
-
-static HRESULT texture_resource_sub_resource_map_cs(struct wined3d_resource *resource, unsigned int sub_resource_idx,
-        struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags)
-{
     const struct wined3d_format *format = resource->format;
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
@@ -2424,11 +2418,6 @@ static HRESULT texture_resource_sub_resource_map_info(struct wined3d_resource *r
 
 static HRESULT texture_resource_sub_resource_unmap(struct wined3d_resource *resource, unsigned int sub_resource_idx)
 {
-    return E_NOTIMPL;
-}
-
-static HRESULT texture_resource_sub_resource_unmap_cs(struct wined3d_resource *resource, unsigned int sub_resource_idx)
-{
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
     struct wined3d_context *context = NULL;
@@ -2480,8 +2469,6 @@ static const struct wined3d_resource_ops texture_resource_ops =
     texture_resource_sub_resource_map,
     texture_resource_sub_resource_map_info,
     texture_resource_sub_resource_unmap,
-    texture_resource_sub_resource_map_cs,
-    texture_resource_sub_resource_unmap_cs,
 };
 
 /* Context activation is done by the caller. */
@@ -2731,7 +2718,7 @@ static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struc
     texture->pow2_width = pow2_width;
     texture->pow2_height = pow2_height;
 
-    if ((pow2_width > gl_info->limits.texture_size || pow2_height > gl_info->limits.texture_size)
+    if ((pow2_width > d3d_info->limits.texture_size || pow2_height > d3d_info->limits.texture_size)
             && (desc->usage & WINED3DUSAGE_TEXTURE))
     {
         /* One of four options:
@@ -2940,7 +2927,7 @@ static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struc
         TRACE("Created sub-resource %u (level %u, layer %u).\n",
                 i, i % texture->level_count, i / texture->level_count);
 
-        if ((desc->usage & WINED3DUSAGE_OWNDC) || (device->wined3d->flags & WINED3D_NO3D))
+        if (desc->usage & WINED3DUSAGE_OWNDC)
         {
             struct wined3d_texture_idx texture_idx = {texture, i};
 
@@ -3559,7 +3546,7 @@ HRESULT CDECL wined3d_texture_release_dc(struct wined3d_texture *texture, unsign
         return WINED3DERR_INVALIDCALL;
     }
 
-    if (!(texture->resource.usage & WINED3DUSAGE_OWNDC) && !(device->wined3d->flags & WINED3D_NO3D))
+    if (!(texture->resource.usage & WINED3DUSAGE_OWNDC))
     {
         struct wined3d_texture_idx texture_idx = {texture, sub_resource_idx};
 

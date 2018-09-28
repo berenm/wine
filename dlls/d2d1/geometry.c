@@ -2419,8 +2419,8 @@ static void STDMETHODCALLTYPE d2d_geometry_sink_BeginFigure(ID2D1GeometrySink *i
     struct d2d_geometry *geometry = impl_from_ID2D1GeometrySink(iface);
     struct d2d_figure *figure;
 
-    TRACE("iface %p, start_point {%.8e, %.8e}, figure_begin %#x.\n",
-            iface, start_point.x, start_point.y, figure_begin);
+    TRACE("iface %p, start_point %s, figure_begin %#x.\n",
+            iface, debug_d2d_point_2f(&start_point), figure_begin);
 
     if (geometry->u.path.state != D2D_GEOMETRY_STATE_OPEN)
     {
@@ -2882,7 +2882,7 @@ done:
 
 static void STDMETHODCALLTYPE d2d_geometry_sink_AddLine(ID2D1GeometrySink *iface, D2D1_POINT_2F point)
 {
-    TRACE("iface %p, point {%.8e, %.8e}.\n", iface, point.x, point.y);
+    TRACE("iface %p, point %s.\n", iface, debug_d2d_point_2f(&point));
 
     d2d_geometry_sink_AddLines(iface, &point, 1);
 }
@@ -3168,9 +3168,9 @@ static HRESULT STDMETHODCALLTYPE d2d_path_geometry_StrokeContainsPoint(ID2D1Path
         D2D1_POINT_2F point, float stroke_width, ID2D1StrokeStyle *stroke_style, const D2D1_MATRIX_3X2_F *transform,
         float tolerance, BOOL *contains)
 {
-    FIXME("iface %p, point {%.8e, %.8e}, stroke_width %.8e, stroke_style %p, "
+    FIXME("iface %p, point %s, stroke_width %.8e, stroke_style %p, "
             "transform %p, tolerance %.8e, contains %p stub!\n",
-            iface, point.x, point.y, stroke_width, stroke_style, transform, tolerance, contains);
+            iface, debug_d2d_point_2f(&point), stroke_width, stroke_style, transform, tolerance, contains);
 
     return E_NOTIMPL;
 }
@@ -3181,8 +3181,8 @@ static HRESULT STDMETHODCALLTYPE d2d_path_geometry_FillContainsPoint(ID2D1PathGe
     struct d2d_geometry *geometry = impl_from_ID2D1PathGeometry(iface);
     D2D1_MATRIX_3X2_F g_i;
 
-    TRACE("iface %p, point {%.8e, %.8e}, transform %p, tolerance %.8e, contains %p.\n",
-            iface, point.x, point.y, transform, tolerance, contains);
+    TRACE("iface %p, point %s, transform %p, tolerance %.8e, contains %p.\n",
+            iface, debug_d2d_point_2f(&point), transform, tolerance, contains);
 
     if (transform)
     {
@@ -3617,9 +3617,8 @@ static HRESULT STDMETHODCALLTYPE d2d_rectangle_geometry_StrokeContainsPoint(ID2D
         D2D1_POINT_2F point, float stroke_width, ID2D1StrokeStyle *stroke_style, const D2D1_MATRIX_3X2_F *transform,
         float tolerance, BOOL *contains)
 {
-    FIXME("iface %p, point {%.8e, %.8e}, stroke_width %.8e, stroke_style %p, "
-            "transform %p, tolerance %.8e, contains %p stub!\n",
-            iface, point.x, point.y, stroke_width, stroke_style, transform, tolerance, contains);
+    FIXME("iface %p, point %s, stroke_width %.8e, stroke_style %p, transform %p, tolerance %.8e, contains %p stub!\n",
+            iface, debug_d2d_point_2f(&point), stroke_width, stroke_style, transform, tolerance, contains);
 
     return E_NOTIMPL;
 }
@@ -3631,8 +3630,8 @@ static HRESULT STDMETHODCALLTYPE d2d_rectangle_geometry_FillContainsPoint(ID2D1R
     D2D1_RECT_F *rect = &geometry->u.rectangle.rect;
     float dx, dy;
 
-    TRACE("iface %p, point {%.8e, %.8e}, transform %p, tolerance %.8e, contains %p.\n",
-            iface, point.x, point.y, transform, tolerance, contains);
+    TRACE("iface %p, point %s, transform %p, tolerance %.8e, contains %p.\n",
+            iface, debug_d2d_point_2f(&point), transform, tolerance, contains);
 
     if (transform)
     {
@@ -3951,9 +3950,8 @@ static HRESULT STDMETHODCALLTYPE d2d_transformed_geometry_StrokeContainsPoint(ID
     struct d2d_geometry *geometry = impl_from_ID2D1TransformedGeometry(iface);
     D2D1_MATRIX_3X2_F g;
 
-    TRACE("iface %p, point {%.8e, %.8e}, stroke_width %.8e, stroke_style %p, "
-            "transform %p, tolerance %.8e, contains %p.\n",
-            iface, point.x, point.y, stroke_width, stroke_style, transform, tolerance, contains);
+    TRACE("iface %p, point %s, stroke_width %.8e, stroke_style %p, transform %p, tolerance %.8e, contains %p.\n",
+            iface, debug_d2d_point_2f(&point), stroke_width, stroke_style, transform, tolerance, contains);
 
     g = geometry->transform;
     if (transform)
@@ -3969,8 +3967,8 @@ static HRESULT STDMETHODCALLTYPE d2d_transformed_geometry_FillContainsPoint(ID2D
     struct d2d_geometry *geometry = impl_from_ID2D1TransformedGeometry(iface);
     D2D1_MATRIX_3X2_F g;
 
-    TRACE("iface %p, point {%.8e, %.8e}, transform %p, tolerance %.8e, contains %p.\n",
-            iface, point.x, point.y, transform, tolerance, contains);
+    TRACE("iface %p, point %s, transform %p, tolerance %.8e, contains %p.\n",
+            iface, debug_d2d_point_2f(&point), transform, tolerance, contains);
 
     g = geometry->transform;
     if (transform)
