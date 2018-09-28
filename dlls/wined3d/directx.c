@@ -637,7 +637,6 @@ enum wined3d_pci_device wined3d_gpu_from_feature_level(enum wined3d_pci_vendor *
     card_fallback_amd[] =
     {
         {WINED3D_FEATURE_LEVEL_5,     CARD_AMD_RAGE_128PRO},
-        {WINED3D_FEATURE_LEVEL_6,     CARD_AMD_RAGE_128PRO},
         {WINED3D_FEATURE_LEVEL_7,     CARD_AMD_RADEON_7200},
         {WINED3D_FEATURE_LEVEL_8,     CARD_AMD_RADEON_8500},
         {WINED3D_FEATURE_LEVEL_9_SM2, CARD_AMD_RADEON_9500},
@@ -649,10 +648,7 @@ enum wined3d_pci_device wined3d_gpu_from_feature_level(enum wined3d_pci_vendor *
     card_fallback_intel[] =
     {
         {WINED3D_FEATURE_LEVEL_5,     CARD_INTEL_845G},
-        {WINED3D_FEATURE_LEVEL_6,     CARD_INTEL_845G},
-        {WINED3D_FEATURE_LEVEL_7,     CARD_INTEL_845G},
         {WINED3D_FEATURE_LEVEL_8,     CARD_INTEL_915G},
-        {WINED3D_FEATURE_LEVEL_9_SM2, CARD_INTEL_915G},
         {WINED3D_FEATURE_LEVEL_9_SM3, CARD_INTEL_945G},
         {WINED3D_FEATURE_LEVEL_10,    CARD_INTEL_G45},
         {WINED3D_FEATURE_LEVEL_11,    CARD_INTEL_IVBD},
@@ -2140,8 +2136,8 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
      * idea how generating the smoothing alpha values works; the result is different
      */
 
-    caps->MaxTextureWidth = gl_info->limits.texture_size;
-    caps->MaxTextureHeight = gl_info->limits.texture_size;
+    caps->MaxTextureWidth = d3d_info->limits.texture_size;
+    caps->MaxTextureHeight = d3d_info->limits.texture_size;
 
     if (gl_info->supported[EXT_TEXTURE3D])
         caps->MaxVolumeExtent = gl_info->limits.texture3d_size;
@@ -2149,7 +2145,7 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
         caps->MaxVolumeExtent = 0;
 
     caps->MaxTextureRepeat = 32768;
-    caps->MaxTextureAspectRatio = gl_info->limits.texture_size;
+    caps->MaxTextureAspectRatio = d3d_info->limits.texture_size;
     caps->MaxVertexW = 1.0f;
 
     caps->GuardBandLeft = 0.0f;
@@ -2392,24 +2388,24 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     caps->ddraw_caps.ssb_color_key_caps = ckey_caps;
     caps->ddraw_caps.ssb_fx_caps = fx_caps;
 
-    caps->ddraw_caps.dds_caps =         WINEDDSCAPS_ALPHA                   |
-                                        WINEDDSCAPS_BACKBUFFER              |
-                                        WINEDDSCAPS_FLIP                    |
-                                        WINEDDSCAPS_FRONTBUFFER             |
-                                        WINEDDSCAPS_OFFSCREENPLAIN          |
-                                        WINEDDSCAPS_PALETTE                 |
-                                        WINEDDSCAPS_PRIMARYSURFACE          |
-                                        WINEDDSCAPS_SYSTEMMEMORY            |
-                                        WINEDDSCAPS_VIDEOMEMORY             |
-                                        WINEDDSCAPS_VISIBLE;
+    caps->ddraw_caps.dds_caps = WINEDDSCAPS_ALPHA
+            | WINEDDSCAPS_BACKBUFFER
+            | WINEDDSCAPS_FLIP
+            | WINEDDSCAPS_FRONTBUFFER
+            | WINEDDSCAPS_OFFSCREENPLAIN
+            | WINEDDSCAPS_PALETTE
+            | WINEDDSCAPS_PRIMARYSURFACE
+            | WINEDDSCAPS_SYSTEMMEMORY
+            | WINEDDSCAPS_VISIBLE;
 
     if (!(wined3d->flags & WINED3D_NO3D))
     {
-        caps->ddraw_caps.dds_caps |=    WINEDDSCAPS_3DDEVICE                |
-                                        WINEDDSCAPS_MIPMAP                  |
-                                        WINEDDSCAPS_TEXTURE                 |
-                                        WINEDDSCAPS_ZBUFFER;
-        caps->ddraw_caps.caps |=        WINEDDCAPS_3D;
+        caps->ddraw_caps.dds_caps |= WINEDDSCAPS_3DDEVICE
+                | WINEDDSCAPS_MIPMAP
+                | WINEDDSCAPS_TEXTURE
+                | WINEDDSCAPS_VIDEOMEMORY
+                | WINEDDSCAPS_ZBUFFER;
+        caps->ddraw_caps.caps |= WINEDDCAPS_3D;
     }
 
     caps->shader_double_precision = d3d_info->shader_double_precision;
@@ -2466,7 +2462,16 @@ static const struct wined3d_adapter_ops wined3d_adapter_no3d_ops =
     wined3d_adapter_no3d_create_context,
 };
 
-static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter)
+static void wined3d_adapter_no3d_init_d3d_info(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
+{
+    struct wined3d_d3d_info *d3d_info = &adapter->d3d_info;
+
+    d3d_info->wined3d_creation_flags = wined3d_creation_flags;
+    d3d_info->texture_npot = TRUE;
+    d3d_info->feature_level = WINED3D_FEATURE_LEVEL_5;
+}
+
+static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
 {
     static const struct wined3d_gpu_description gpu_description =
     {
@@ -2487,6 +2492,8 @@ static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter)
     adapter->fragment_pipe = &none_fragment_pipe;
     adapter->shader_backend = &none_shader_backend;
     adapter->adapter_ops = &wined3d_adapter_no3d_ops;
+
+    wined3d_adapter_no3d_init_d3d_info(adapter, wined3d_creation_flags);
 
     return TRUE;
 }
@@ -2513,7 +2520,7 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int o
     adapter->formats = NULL;
 
     if (wined3d_creation_flags & WINED3D_NO3D)
-        return wined3d_adapter_no3d_init(adapter);
+        return wined3d_adapter_no3d_init(adapter, wined3d_creation_flags);
     return wined3d_adapter_gl_init(adapter, wined3d_creation_flags);
 }
 

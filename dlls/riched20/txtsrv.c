@@ -35,10 +35,10 @@
 
 #ifdef __i386__  /* thiscall functions are i386-specific */
 
-#define THISCALL(func) __thiscall_ ## func
+#define THISCALL(func) (void *) __thiscall_ ## func
 #define DEFINE_THISCALL_WRAPPER(func,args) \
-   extern typeof(func) THISCALL(func); \
-   __ASM_STDCALL_FUNC(__thiscall_ ## func, args, \
+   extern HRESULT __thiscall_ ## func(void); \
+   __ASM_GLOBAL_FUNC(__thiscall_ ## func, \
                    "popl %eax\n\t" \
                    "pushl %ecx\n\t" \
                    "pushl %eax\n\t" \
@@ -78,12 +78,13 @@ static HRESULT WINAPI ITextServicesImpl_QueryInterface(IUnknown *iface, REFIID r
       *ppv = &This->IUnknown_inner;
    else if (IsEqualIID(riid, &IID_ITextServices))
       *ppv = &This->ITextServices_iface;
-   else if (IsEqualIID(riid, &IID_IRichEditOle) || IsEqualIID(riid, &IID_ITextDocument)) {
+   else if (IsEqualIID(riid, &IID_IRichEditOle) || IsEqualIID(riid, &IID_ITextDocument) ||
+            IsEqualIID(riid, &IID_ITextDocument2Old)) {
       if (!This->editor->reOle)
          if (!CreateIRichEditOle(This->outer_unk, This->editor, (void **)(&This->editor->reOle)))
             return E_OUTOFMEMORY;
-      if (IsEqualIID(riid, &IID_ITextDocument))
-         ME_GetITextDocumentInterface(This->editor->reOle, ppv);
+      if (IsEqualIID(riid, &IID_ITextDocument) || IsEqualIID(riid, &IID_ITextDocument2Old))
+         ME_GetITextDocument2OldInterface(This->editor->reOle, ppv);
       else
          *ppv = This->editor->reOle;
    } else {

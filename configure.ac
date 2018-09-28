@@ -2275,7 +2275,6 @@ AC_CHECK_FUNCS(\
 	getpwuid \
 	gettimeofday \
 	getuid \
-	isnanf \
 	kqueue \
 	lstat \
 	memmove \
@@ -3589,6 +3588,7 @@ WINE_CONFIG_MAKEFILE(dlls/msdmo)
 WINE_CONFIG_MAKEFILE(dlls/msdmo/tests)
 WINE_CONFIG_MAKEFILE(dlls/msdrm)
 WINE_CONFIG_MAKEFILE(dlls/msftedit)
+WINE_CONFIG_MAKEFILE(dlls/msftedit/tests)
 WINE_CONFIG_MAKEFILE(dlls/msg711.acm)
 WINE_CONFIG_MAKEFILE(dlls/msgsm32.acm)
 WINE_CONFIG_MAKEFILE(dlls/mshtml.tlb)
