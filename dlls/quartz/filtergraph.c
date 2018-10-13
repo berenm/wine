@@ -973,68 +973,6 @@ static HRESULT GetFilterInfo(IMoniker* pMoniker, VARIANT* pvar)
     return hr;
 }
 
-static HRESULT GetInternalConnections(IBaseFilter* pfilter, IPin* pinputpin, IPin*** pppins, ULONG* pnb)
-{
-    HRESULT hr;
-    ULONG nb = 0;
-
-    TRACE("(%p, %p, %p, %p)\n", pfilter, pinputpin, pppins, pnb);
-    hr = IPin_QueryInternalConnections(pinputpin, NULL, &nb);
-    if (hr == S_OK) {
-        /* Rendered input */
-    } else if (hr == S_FALSE) {
-        *pppins = CoTaskMemAlloc(sizeof(IPin*)*nb);
-        hr = IPin_QueryInternalConnections(pinputpin, *pppins, &nb);
-        if (hr != S_OK) {
-            WARN("Error (%x)\n", hr);
-        }
-    } else if (hr == E_NOTIMPL) {
-        /* Input connected to all outputs */
-        IEnumPins* penumpins;
-        IPin* ppin;
-        int i = 0;
-        TRACE("E_NOTIMPL\n");
-        hr = IBaseFilter_EnumPins(pfilter, &penumpins);
-        if (FAILED(hr)) {
-            WARN("filter Enumpins failed (%x)\n", hr);
-            return hr;
-        }
-        i = 0;
-        /* Count output pins */
-        while(IEnumPins_Next(penumpins, 1, &ppin, &nb) == S_OK) {
-            PIN_DIRECTION pindir;
-            IPin_QueryDirection(ppin, &pindir);
-            if (pindir == PINDIR_OUTPUT)
-                i++;
-            IPin_Release(ppin);
-        }
-        *pppins = CoTaskMemAlloc(sizeof(IPin*)*i);
-        /* Retrieve output pins */
-        IEnumPins_Reset(penumpins);
-        i = 0;
-        while(IEnumPins_Next(penumpins, 1, &ppin, &nb) == S_OK) {
-            PIN_DIRECTION pindir;
-            IPin_QueryDirection(ppin, &pindir);
-            if (pindir == PINDIR_OUTPUT)
-                (*pppins)[i++] = ppin;
-            else
-                IPin_Release(ppin);
-        }
-        IEnumPins_Release(penumpins);
-        nb = i;
-        if (FAILED(hr)) {
-            WARN("Next failed (%x)\n", hr);
-            return hr;
-        }
-    } else if (FAILED(hr)) {
-        WARN("Cannot get internal connection (%x)\n", hr);
-        return hr;
-    }
-
-    *pnb = nb;
-    return S_OK;
-}
-
 /* Attempt to connect one of the output pins on filter to sink. Helper for
  * FilterGraph2_Connect(). */
 static HRESULT connect_output_pin(IFilterGraphImpl *graph, IBaseFilter *filter, IPin *sink)
@@ -1090,7 +1028,6 @@ static HRESULT WINAPI FilterGraph2_Connect(IFilterGraph2 *iface, IPin *ppinOut, 
     GUID tab[2];
     IMoniker* pMoniker;
     PIN_INFO PinInfo;
-    CLSID FilterCLSID;
     PIN_DIRECTION dir;
     IFilterMapper2 *pFilterMapper2 = NULL;
 
@@ -1183,15 +1120,6 @@ static HRESULT WINAPI FilterGraph2_Connect(IFilterGraph2 *iface, IPin *ppinOut, 
         IEnumPins_Release(penumpins);
     }
 
-    hr = IPin_QueryPinInfo(ppinIn, &PinInfo);
-    if (FAILED(hr))
-        goto out;
-
-    hr = IBaseFilter_GetClassID(PinInfo.pFilter, &FilterCLSID);
-    IBaseFilter_Release(PinInfo.pFilter);
-    if (FAILED(hr))
-        goto out;
-
     /* Find the appropriate transform filter than can transform the minor media type of output pin of the upstream 
      * filter to the minor mediatype of input pin of the renderer */
     hr = IPin_EnumMediaTypes(ppinOut, &penummt);
@@ -1235,7 +1163,6 @@ static HRESULT WINAPI FilterGraph2_Connect(IFilterGraph2 *iface, IPin *ppinOut, 
     while (IEnumMoniker_Next(pEnumMoniker, 1, &pMoniker, NULL) == S_OK)
     {
         VARIANT var;
-        GUID clsid;
         IPin* ppinfilter = NULL;
         IBaseFilter* pfilter = NULL;
         IAMGraphBuilderCallback *callback = NULL;
@@ -1250,20 +1177,6 @@ static HRESULT WINAPI FilterGraph2_Connect(IFilterGraph2 *iface, IPin *ppinOut, 
         IMoniker_Release(pMoniker);
         if (FAILED(hr)) {
             WARN("Unable to create filter (%x), trying next one\n", hr);
-            goto error;
-        }
-
-        hr = IBaseFilter_GetClassID(pfilter, &clsid);
-        if (FAILED(hr))
-        {
-            IBaseFilter_Release(pfilter);
-            goto error;
-	}
-
-        if (IsEqualGUID(&clsid, &FilterCLSID)) {
-            /* Skip filter (same as the one the output pin belongs to) */
-            IBaseFilter_Release(pfilter);
-            pfilter = NULL;
             goto error;
         }
 
@@ -2111,12 +2024,12 @@ static HRESULT ExploreGraph(IFilterGraphImpl* pGraph, IPin* pOutputPin, fnFoundF
 {
     IAMFilterMiscFlags *flags;
     IMediaSeeking *seeking;
+    IEnumPins *enumpins;
+    PIN_DIRECTION dir;
     HRESULT hr;
     IPin* pInputPin;
-    IPin** ppPins;
-    ULONG nb;
-    ULONG i;
     PIN_INFO PinInfo;
+    IPin *pin;
 
     TRACE("%p %p\n", pGraph, pOutputPin);
     PinInfo.pFilter = NULL;
@@ -2126,26 +2039,23 @@ static HRESULT ExploreGraph(IFilterGraphImpl* pGraph, IPin* pOutputPin, fnFoundF
     if (SUCCEEDED(hr))
     {
         hr = IPin_QueryPinInfo(pInputPin, &PinInfo);
-        if (SUCCEEDED(hr))
-            hr = GetInternalConnections(PinInfo.pFilter, pInputPin, &ppPins, &nb);
         IPin_Release(pInputPin);
     }
 
     if (SUCCEEDED(hr))
-    {
-        if (nb)
-        {
-            for(i = 0; i < nb; i++)
-            {
-                /* Explore the graph downstream from this pin
-                 * FIXME: We should prevent exploring from a pin more than once. This can happens when
-                 * several input pins are connected to the same output (a MUX for instance). */
-                ExploreGraph(pGraph, ppPins[i], FoundFilter, data);
-                IPin_Release(ppPins[i]);
-            }
+        hr = IBaseFilter_EnumPins(PinInfo.pFilter, &enumpins);
 
-            CoTaskMemFree(ppPins);
+    if (SUCCEEDED(hr))
+    {
+        while (IEnumPins_Next(enumpins, 1, &pin, NULL) == S_OK)
+        {
+            IPin_QueryDirection(pin, &dir);
+            if (dir == PINDIR_OUTPUT)
+                ExploreGraph(pGraph, pin, FoundFilter, data);
+            IPin_Release(pin);
         }
+
+        IEnumPins_Release(enumpins);
         TRACE("Doing stuff with filter %p\n", PinInfo.pFilter);
 
         if (SUCCEEDED(IBaseFilter_QueryInterface(PinInfo.pFilter,

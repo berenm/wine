@@ -104,6 +104,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_pixel_buffer_object",          ARB_PIXEL_BUFFER_OBJECT       },
     {"GL_ARB_point_parameters",             ARB_POINT_PARAMETERS          },
     {"GL_ARB_point_sprite",                 ARB_POINT_SPRITE              },
+    {"GL_ARB_polygon_offset_clamp",         ARB_POLYGON_OFFSET_CLAMP      },
     {"GL_ARB_provoking_vertex",             ARB_PROVOKING_VERTEX          },
     {"GL_ARB_query_buffer_object",          ARB_QUERY_BUFFER_OBJECT       },
     {"GL_ARB_sample_shading",               ARB_SAMPLE_SHADING            },
@@ -184,7 +185,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_EXT_packed_depth_stencil",         EXT_PACKED_DEPTH_STENCIL      },
     {"GL_EXT_packed_float",                 EXT_PACKED_FLOAT              },
     {"GL_EXT_point_parameters",             EXT_POINT_PARAMETERS          },
-    {"GL_EXT_polygon_offset_clamp",         EXT_POLYGON_OFFSET_CLAMP      },
+    {"GL_EXT_polygon_offset_clamp",         ARB_POLYGON_OFFSET_CLAMP      },
     {"GL_EXT_provoking_vertex",             EXT_PROVOKING_VERTEX          },
     {"GL_EXT_secondary_color",              EXT_SECONDARY_COLOR           },
     {"GL_EXT_stencil_two_side",             EXT_STENCIL_TWO_SIDE          },
@@ -1286,7 +1287,15 @@ static enum wined3d_feature_level feature_level_from_caps(const struct wined3d_g
     shader_model = min(shader_model, max(shader_caps->hs_version, 4));
     shader_model = min(shader_model, max(shader_caps->ds_version, 4));
 
-    if (gl_info->supported[WINED3D_GL_VERSION_3_2] && gl_info->supported[ARB_SAMPLER_OBJECTS])
+    /*
+     * Legacy nVidia driver doesn't the the ARB_POLYGON_OFFSET_CLAMP support.
+     * There is an implied support for Depth Bias Clamping in DirectX 10 but no real documenation for either case
+     * On the same hardware, on windows, it supports DirectX 10 without the need for this extension, So
+     *  removing this check and users can deal with the fact they might have minor artifacts from time to time.
+     */
+    if (gl_info->supported[WINED3D_GL_VERSION_3_2]
+/*            && gl_info->supported[ARB_POLYGON_OFFSET_CLAMP]*/
+            && gl_info->supported[ARB_SAMPLER_OBJECTS])
     {
         if (shader_model >= 5
                 && gl_info->supported[ARB_DRAW_INDIRECT]
@@ -1746,6 +1755,7 @@ cards_nvidia_mesa[] =
     {"NV117",                       CARD_NVIDIA_GEFORCE_GTX750},
     /* Kepler */
     {"NV108",                       CARD_NVIDIA_GEFORCE_GT740M},
+    {"NV106",                       CARD_NVIDIA_GEFORCE_GT720},
     {"NVF1",                        CARD_NVIDIA_GEFORCE_GTX780TI},
     {"NVF0",                        CARD_NVIDIA_GEFORCE_GTX780},
     {"NVE6",                        CARD_NVIDIA_GEFORCE_GTX770M},
@@ -2205,6 +2215,8 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_ARB_point_parameters */
     USE_GL_FUNC(glPointParameterfARB)
     USE_GL_FUNC(glPointParameterfvARB)
+    /* GL_ARB_polgyon_offset_clamp */
+    USE_GL_FUNC(glPolygonOffsetClamp)
     /* GL_ARB_provoking_vertex */
     USE_GL_FUNC(glProvokingVertex)
     /* GL_ARB_sample_shading */
@@ -2509,7 +2521,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_EXT_point_parameters */
     USE_GL_FUNC(glPointParameterfEXT)
     USE_GL_FUNC(glPointParameterfvEXT)
-    /* GL_EXT_polygon_offset_clamp */
+    /* GL_EXT_polgyon_offset_clamp */
     USE_GL_FUNC(glPolygonOffsetClampEXT)
     /* GL_EXT_provoking_vertex */
     USE_GL_FUNC(glProvokingVertexEXT)
@@ -2804,6 +2816,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     MAP_GL_FUNCTION(glLinkProgram, glLinkProgramARB);
     MAP_GL_FUNCTION(glMapBuffer, glMapBufferARB);
     MAP_GL_FUNCTION(glMinSampleShading, glMinSampleShadingARB);
+    MAP_GL_FUNCTION(glPolygonOffsetClamp, glPolygonOffsetClampEXT);
     MAP_GL_FUNCTION_CAST(glShaderSource, glShaderSourceARB);
     MAP_GL_FUNCTION(glTexBuffer, glTexBufferARB);
     MAP_GL_FUNCTION_CAST(glTexImage3D, glTexImage3DEXT);
@@ -3111,9 +3124,18 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct 
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS_ARB, &gl_max);
         gl_info->limits.glsl_ps_float_constants = gl_max / 4;
         TRACE("Max ARB_FRAGMENT_SHADER float constants: %u.\n", gl_info->limits.glsl_ps_float_constants);
-        gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_VARYING_FLOATS_ARB, &gl_max);
-        gl_info->limits.glsl_varyings = gl_max;
-        TRACE("Max GLSL varyings: %u (%u 4 component varyings).\n", gl_max, gl_max / 4);
+        if (gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
+        {
+            gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_VARYING_FLOATS_ARB, &gl_max);
+            gl_info->limits.glsl_varyings = gl_max;
+        }
+        else
+        {
+            gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_FRAGMENT_INPUT_COMPONENTS, &gl_max);
+            gl_info->limits.glsl_varyings = gl_max - 4;
+        }
+        TRACE("Max GLSL varyings: %u (%u 4 component varyings).\n", gl_info->limits.glsl_varyings,
+                gl_info->limits.glsl_varyings / 4);
 
         if (gl_info->supported[ARB_UNIFORM_BUFFER_OBJECT])
         {
@@ -3358,6 +3380,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_SHADER_TEXTURE_IMAGE_SAMPLES, MAKEDWORD_VERSION(4, 5)},
 
         {ARB_PIPELINE_STATISTICS_QUERY,    MAKEDWORD_VERSION(4, 6)},
+        {ARB_POLYGON_OFFSET_CLAMP,         MAKEDWORD_VERSION(4, 6)},
         {ARB_TEXTURE_FILTER_ANISOTROPIC,   MAKEDWORD_VERSION(4, 6)},
     };
     struct wined3d_driver_info *driver_info = &adapter->driver_info;
@@ -3718,6 +3741,8 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     d3d_info->limits.ps_uniform_count = shader_caps.ps_uniform_count;
     d3d_info->limits.varying_count = shader_caps.varying_count;
     d3d_info->shader_double_precision = !!(shader_caps.wined3d_caps & WINED3D_SHADER_CAP_DOUBLE_PRECISION);
+
+    d3d_info->viewport_array_index_any_shader = !!gl_info->supported[ARB_SHADER_VIEWPORT_LAYER_ARRAY];
 
     adapter->vertex_pipe->vp_get_caps(gl_info, &vertex_caps);
     d3d_info->xyzrhw = vertex_caps.xyzrhw;
@@ -4223,22 +4248,6 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc
     }
 }
 
-static DWORD get_max_gl_version(const struct wined3d_gl_info *gl_info, DWORD flags)
-{
-    const char *gl_vendor, *gl_renderer;
-
-    if (wined3d_settings.explicit_gl_version)
-        return wined3d_settings.max_gl_version;
-
-    gl_vendor = (const char *)gl_info->gl_ops.gl.p_glGetString(GL_VENDOR);
-    gl_renderer = (const char *)gl_info->gl_ops.gl.p_glGetString(GL_RENDERER);
-    if (!gl_vendor || !gl_renderer
-            || wined3d_guess_card_vendor(gl_vendor, gl_renderer) == HW_VENDOR_NVIDIA)
-        return MAKEDWORD_VERSION(1, 0);
-
-    return wined3d_settings.max_gl_version;
-}
-
 static const struct wined3d_adapter_ops wined3d_adapter_gl_ops =
 {
     wined3d_adapter_gl_create_context,
@@ -4254,7 +4263,6 @@ BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_crea
     };
     struct wined3d_gl_info *gl_info = &adapter->gl_info;
     struct wined3d_caps_gl_ctx caps_gl_ctx = {0};
-    DWORD max_gl_version;
     unsigned int i;
 
     TRACE("adapter %p, wined3d_creation_flags %#x.\n", adapter, wined3d_creation_flags);
@@ -4290,16 +4298,15 @@ BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_crea
         return FALSE;
     }
 
-    max_gl_version = get_max_gl_version(gl_info, wined3d_creation_flags);
     for (i = 0; i < ARRAY_SIZE(supported_gl_versions); ++i)
     {
-        if (supported_gl_versions[i] <= max_gl_version)
+        if (supported_gl_versions[i] <= wined3d_settings.max_gl_version)
             break;
     }
     if (i == ARRAY_SIZE(supported_gl_versions))
     {
         ERR_(winediag)("Requested invalid GL version %u.%u.\n",
-                max_gl_version >> 16, max_gl_version & 0xffff);
+                wined3d_settings.max_gl_version >> 16, wined3d_settings.max_gl_version & 0xffff);
         i = ARRAY_SIZE(supported_gl_versions) - 1;
     }
 

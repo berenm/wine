@@ -63,7 +63,6 @@ static const WCHAR default_windirW[] = {'C',':','\\','w','i','n','d','o','w','s'
 
 extern void DECLSPEC_NORETURN __wine_syscall_dispatcher( void );
 
-PUNHANDLED_EXCEPTION_FILTER unhandled_exception_filter = NULL;
 void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) = NULL;
 
 /* info passed to a starting thread */

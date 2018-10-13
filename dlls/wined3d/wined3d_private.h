@@ -199,6 +199,7 @@ struct wined3d_d3d_info
     unsigned int vs_clipping : 1;
     unsigned int shader_color_key : 1;
     unsigned int shader_double_precision : 1;
+    unsigned int viewport_array_index_any_shader : 1;
     unsigned int texture_npot : 1;
     unsigned int texture_npot_conditional : 1;
     enum wined3d_feature_level feature_level;
@@ -377,7 +378,6 @@ static inline void wined3d_pause(void)
 struct wined3d_settings
 {
     unsigned int cs_multithreaded;
-    BOOL explicit_gl_version;
     DWORD max_gl_version;
     BOOL use_glsl;
     int offscreen_rendering_mode;
@@ -399,6 +399,12 @@ struct wined3d_settings
 };
 
 extern struct wined3d_settings wined3d_settings DECLSPEC_HIDDEN;
+
+enum wined3d_shader_byte_code_format
+{
+    WINED3D_SHADER_BYTE_CODE_FORMAT_SM1,
+    WINED3D_SHADER_BYTE_CODE_FORMAT_SM4,
+};
 
 enum wined3d_shader_resource_type
 {
@@ -1257,8 +1263,8 @@ struct wined3d_shader_frontend
 extern const struct wined3d_shader_frontend sm1_shader_frontend DECLSPEC_HIDDEN;
 extern const struct wined3d_shader_frontend sm4_shader_frontend DECLSPEC_HIDDEN;
 
-enum wined3d_shader_type wined3d_get_sm4_shader_type(const DWORD *byte_code,
-        size_t byte_code_size) DECLSPEC_HIDDEN;
+HRESULT shader_extract_from_dxbc(struct wined3d_shader *shader,
+        unsigned int max_shader_version, enum wined3d_shader_byte_code_format *format);
 
 typedef void (*SHADER_HANDLER)(const struct wined3d_shader_instruction *);
 
@@ -1349,8 +1355,9 @@ struct ps_compile_args
     DWORD flatshading : 1;
     DWORD alpha_test_func : 3;
     DWORD render_offscreen : 1;
+    DWORD rt_alpha_swizzle : 8; /* MAX_RENDER_TARGET_VIEWS, 8 */
     DWORD dual_source_blend : 1;
-    DWORD padding : 25;
+    DWORD padding : 17;
 };
 
 enum fog_src_type
@@ -2387,6 +2394,7 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX675MX    = 0x11a7,
     CARD_NVIDIA_GEFORCE_GTX680      = 0x1180,
     CARD_NVIDIA_GEFORCE_GTX690      = 0x1188,
+    CARD_NVIDIA_GEFORCE_GT720       = 0x128b,
     CARD_NVIDIA_GEFORCE_GT730       = 0x1287,
     CARD_NVIDIA_GEFORCE_GT730M      = 0x0fe1,
     CARD_NVIDIA_GEFORCE_GT740M      = 0x1292,
@@ -3087,6 +3095,9 @@ static inline BOOL isStateDirty(const struct wined3d_context *context, DWORD sta
 }
 
 const char *wined3d_debug_resource_access(DWORD access) DECLSPEC_HIDDEN;
+const char *wined3d_debug_bind_flags(DWORD bind_flags) DECLSPEC_HIDDEN;
+const char *wined3d_debug_view_desc(const struct wined3d_view_desc *d,
+        const struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 
 static inline BOOL wined3d_resource_access_is_managed(unsigned int access)
 {
@@ -3384,6 +3395,10 @@ void wined3d_texture_bind_and_dirtify(struct wined3d_texture *texture,
         struct wined3d_context *context, BOOL srgb) DECLSPEC_HIDDEN;
 HRESULT wined3d_texture_check_box_dimensions(const struct wined3d_texture *texture,
         unsigned int level, const struct wined3d_box *box) DECLSPEC_HIDDEN;
+void wined3d_texture_download_data(struct wined3d_texture *texture, unsigned int sub_resource_idx,
+        struct wined3d_context *context, const struct wined3d_bo_address *data) DECLSPEC_HIDDEN;
+void wined3d_texture_download_from_texture(struct wined3d_texture *dst_texture, unsigned int dst_sub_resource_idx,
+        struct wined3d_texture *src_texture, unsigned int src_sub_resource_idx) DECLSPEC_HIDDEN;
 GLenum wined3d_texture_get_gl_buffer(const struct wined3d_texture *texture) DECLSPEC_HIDDEN;
 void wined3d_texture_get_memory(struct wined3d_texture *texture, unsigned int sub_resource_idx,
         struct wined3d_bo_address *data, DWORD locations) DECLSPEC_HIDDEN;
@@ -3413,6 +3428,8 @@ void wined3d_texture_upload_from_texture(struct wined3d_texture *dst_texture, un
         unsigned int src_sub_resource_idx, const struct wined3d_box *src_box) DECLSPEC_HIDDEN;
 void wined3d_texture_validate_location(struct wined3d_texture *texture,
         unsigned int sub_resource_idx, DWORD location) DECLSPEC_HIDDEN;
+
+void wined3d_gl_texture_swizzle_from_color_fixup(GLint swizzle[4], struct color_fixup_desc fixup) DECLSPEC_HIDDEN;
 
 #define WINED3D_LOCATION_DISCARDED      0x00000001
 #define WINED3D_LOCATION_SYSMEM         0x00000002
@@ -4190,8 +4207,10 @@ struct wined3d_shader
 {
     LONG ref;
     const struct wined3d_shader_limits *limits;
-    DWORD *function;
-    UINT functionLength;
+    const DWORD *function;
+    unsigned int functionLength;
+    void *byte_code;
+    unsigned int byte_code_size;
     BOOL load_local_constsF;
     const struct wined3d_shader_frontend *frontend;
     void *frontend_data;
@@ -4213,7 +4232,6 @@ struct wined3d_shader
     struct wined3d_shader_signature input_signature;
     struct wined3d_shader_signature output_signature;
     struct wined3d_shader_signature patch_constant_signature;
-    char *signature_strings;
 
     /* Pointer to the parent device */
     struct wined3d_device *device;

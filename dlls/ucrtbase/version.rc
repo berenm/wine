@@ -1,7 +1,5 @@
 /*
- * XML parsing library
- *
- * Copyright 2009 Christian Costa
+ * Copyright 2018 Louis Lenders
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,28 +16,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
+#define WINE_FILEDESCRIPTION_STR "Wine runtime library"
+#define WINE_FILENAME_STR "ucrtbase.dll"
+#define WINE_FILEVERSION 10,0,14393,2247
+#define WINE_FILEVERSION_STR "10.0.14393.2247"
+#define WINE_PRODUCTVERSION 10,0,14393,2247
+#define WINE_PRODUCTVERSION_STR "10.0.14393.2247"
 
-#include <stdarg.h>
-
-#include "windef.h"
-#include "winbase.h"
-#include "wine/debug.h"
-
-WINE_DEFAULT_DEBUG_CHANNEL(xmllite);
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
-{
-    TRACE("(%p, %u, %p)\n", hinstDLL, fdwReason, lpvReserved);
-
-    switch (fdwReason)
-    {
-        case DLL_WINE_PREATTACH:
-            return FALSE;    /* prefer native version */
-        case DLL_PROCESS_ATTACH:
-            DisableThreadLibraryCalls(hinstDLL);
-            break;
-    }
-
-    return TRUE;
-}
+#include "wine/wine_common_ver.rc"
