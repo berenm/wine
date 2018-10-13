@@ -778,7 +778,7 @@ static void register_avicap_devices(void)
     WCHAR friendlyname[] = {'v','i','d','e','o','0',0};
     IPropertyBag *prop_bag = NULL;
     WCHAR name[32], version[32];
-    REGFILTERPINS2 rgpins;
+    REGFILTERPINS2 rgpins = {0};
     REGPINTYPES rgtypes;
     REGFILTER2 rgf;
     VARIANT var;
@@ -791,7 +791,7 @@ static void register_avicap_devices(void)
 
     for (i = 0; i < 10; ++i)
     {
-        if (!capGetDriverDescriptionW(i, name, sizeof(name), version, sizeof(version)))
+        if (!capGetDriverDescriptionW(i, name, ARRAY_SIZE(name), version, ARRAY_SIZE(version)))
             break;
 
         friendlyname[5] = '0' + i;

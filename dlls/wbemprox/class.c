@@ -532,8 +532,11 @@ static HRESULT WINAPI class_object_Next(
             SysFreeString( prop );
             return hr;
         }
+
         obj->index_property = i + 1;
-        *strName = prop;
+        if (strName) *strName = prop;
+        else SysFreeString( prop );
+
         return S_OK;
     }
     return WBEM_S_NO_MORE_DATA;
@@ -907,11 +910,6 @@ static HRESULT WINAPI class_object_BeginMethodEnumeration(
 
     if (lEnumFlags) FIXME("flags 0x%08x not supported\n", lEnumFlags);
 
-    if (co->iter)
-    {
-        WARN("not allowed on instance\n");
-        return WBEM_E_ILLEGAL_OPERATION;
-    }
     co->index_method = 0;
     return S_OK;
 }

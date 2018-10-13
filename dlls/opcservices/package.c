@@ -1723,7 +1723,8 @@ static HRESULT opc_package_collect_content_types(IOpcPackage *package, struct co
         if (FAILED(hr))
             break;
 
-        IOpcPartEnumerator_MoveNext(enumerator, &has_next);
+        if (FAILED(hr = IOpcPartEnumerator_MoveNext(enumerator, &has_next)))
+            break;
     }
 
     IOpcPartEnumerator_Release(enumerator);
@@ -1890,8 +1891,8 @@ static HRESULT opc_package_write_rels(struct zip_archive *archive, IOpcRelations
             'p','a','c','k','a','g','e','/','2','0','0','6','/','r','e','l','a','t','i','o','n','s','h','i','p','s',0};
     static const WCHAR relationshipsW[] = {'R','e','l','a','t','i','o','n','s','h','i','p','s',0};
     IOpcRelationshipEnumerator *enumerator;
+    BSTR rels_part_uri = NULL;
     IOpcPartUri *rels_uri;
-    BSTR rels_part_uri;
     IStream *content;
     BOOL has_next;
     HRESULT hr;
@@ -1940,7 +1941,8 @@ static HRESULT opc_package_write_rels(struct zip_archive *archive, IOpcRelations
     if (SUCCEEDED(hr))
         hr = IXmlWriter_Flush(writer);
 
-    hr = IOpcUri_GetRelationshipsPartUri(uri, &rels_uri);
+    if (SUCCEEDED(hr))
+        hr = IOpcUri_GetRelationshipsPartUri(uri, &rels_uri);
     if (SUCCEEDED(hr))
         hr = IOpcPartUri_GetRawUri(rels_uri, &rels_part_uri);
     if (SUCCEEDED(hr))

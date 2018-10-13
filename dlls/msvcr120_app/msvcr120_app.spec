@@ -48,9 +48,9 @@
 @ cdecl -arch=arm ??0_Scheduler@details@Concurrency@@QAA@PAVScheduler@2@@Z(ptr ptr) msvcr120.??0_Scheduler@details@Concurrency@@QAA@PAVScheduler@2@@Z
 @ thiscall -arch=i386 ??0_Scheduler@details@Concurrency@@QAE@PAVScheduler@2@@Z(ptr ptr) msvcr120.??0_Scheduler@details@Concurrency@@QAE@PAVScheduler@2@@Z
 @ cdecl -arch=win64 ??0_Scheduler@details@Concurrency@@QEAA@PEAVScheduler@2@@Z(ptr ptr) msvcr120.??0_Scheduler@details@Concurrency@@QEAA@PEAVScheduler@2@@Z
-@ stub -arch=arm ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@AAV123@@Z
-@ stub -arch=i386 ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@AAV123@@Z
-@ stub -arch=win64 ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@AEAV123@@Z
+@ cdecl -arch=arm ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@AAV123@@Z(ptr) msvcr120.??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@AAV123@@Z
+@ thiscall -arch=i386 ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@AAV123@@Z(ptr) msvcr120.??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@AAV123@@Z
+@ cdecl -arch=win64 ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@AEAV123@@Z(ptr) msvcr120.??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@AEAV123@@Z
 @ cdecl -arch=arm ??0_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAA@AAV123@@Z(ptr ptr) msvcr120.??0_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAA@AAV123@@Z
 @ thiscall -arch=i386 ??0_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAE@AAV123@@Z(ptr ptr) msvcr120.??0_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAE@AAV123@@Z
 @ cdecl -arch=win64 ??0_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QEAA@AEAV123@@Z(ptr ptr) msvcr120.??0_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QEAA@AEAV123@@Z
@@ -279,9 +279,9 @@
 @ cdecl -arch=arm ??1_ReentrantBlockingLock@details@Concurrency@@QAA@XZ(ptr) msvcr120.??1_ReentrantBlockingLock@details@Concurrency@@QAA@XZ
 @ thiscall -arch=i386 ??1_ReentrantBlockingLock@details@Concurrency@@QAE@XZ(ptr) msvcr120.??1_ReentrantBlockingLock@details@Concurrency@@QAE@XZ
 @ cdecl -arch=win64 ??1_ReentrantBlockingLock@details@Concurrency@@QEAA@XZ(ptr) msvcr120.??1_ReentrantBlockingLock@details@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@XZ
+@ cdecl -arch=arm ??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@XZ(ptr) msvcr120.??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@XZ
+@ thiscall -arch=i386 ??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@XZ(ptr) msvcr120.??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@XZ
+@ cdecl -arch=win64 ??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@XZ(ptr) msvcr120.??1_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@XZ
 @ cdecl -arch=arm ??1_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAA@XZ(ptr) msvcr120.??1_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAA@XZ
 @ thiscall -arch=i386 ??1_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAE@XZ(ptr) msvcr120.??1_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QAE@XZ
 @ cdecl -arch=win64 ??1_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QEAA@XZ(ptr) msvcr120.??1_Scoped_lock@_ReentrantPPLLock@details@Concurrency@@QEAA@XZ
@@ -818,7 +818,7 @@
 @ cdecl -arch=i386 _CIsqrt() msvcr120._CIsqrt
 @ cdecl -arch=i386 _CItan() msvcr120._CItan
 @ cdecl -arch=i386 _CItanh() msvcr120._CItanh
-@ stub _Cbuild
+@ cdecl _Cbuild(ptr double double) msvcr120._Cbuild
 @ cdecl _CreateFrameInfo(ptr ptr) msvcr120._CreateFrameInfo
 @ stdcall _CxxThrowException(ptr ptr) msvcr120._CxxThrowException
 @ cdecl -arch=i386 -norelay _EH_prolog() msvcr120._EH_prolog
@@ -1769,7 +1769,7 @@
 @ stub cproj
 @ stub cprojf
 @ stub cprojl
-@ stub creal
+@ cdecl creal(int128) msvcr120.creal
 @ stub crealf
 @ stub creall
 @ stub csin

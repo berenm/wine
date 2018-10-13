@@ -1772,17 +1772,17 @@ static void state_depthbias(struct wined3d_context *context, const struct wined3
             || state->render_states[WINED3D_RS_DEPTHBIAS])
     {
         const struct wined3d_rendertarget_view *depth = state->fb->depth_stencil;
-        float factor, units, scale;
+        float factor, units, scale, clamp;
 
         union
         {
             DWORD d;
             float f;
-        } scale_bias, const_bias, bias_clamp;
+        } scale_bias, const_bias;
 
+        clamp = state->rasterizer_state ? state->rasterizer_state->desc.depth_bias_clamp : 0.0f;
         scale_bias.d = state->render_states[WINED3D_RS_SLOPESCALEDEPTHBIAS];
         const_bias.d = state->render_states[WINED3D_RS_DEPTHBIAS];
-        bias_clamp.d = state->render_states[WINED3D_RS_DEPTHBIASCLAMP];
 
         if (context->d3d_info->wined3d_creation_flags & WINED3D_LEGACY_DEPTH_BIAS)
         {
@@ -1809,16 +1809,14 @@ static void state_depthbias(struct wined3d_context *context, const struct wined3
         }
 
         gl_info->gl_ops.gl.p_glEnable(GL_POLYGON_OFFSET_FILL);
-        if (gl_info->supported[EXT_POLYGON_OFFSET_CLAMP])
+        if (gl_info->supported[ARB_POLYGON_OFFSET_CLAMP])
         {
-            GL_EXTCALL(glPolygonOffsetClampEXT(factor, units, bias_clamp.f));
-            checkGLcall("glPolygonOffsetClampEXT(...)");
+            gl_info->gl_ops.ext.p_glPolygonOffsetClamp(factor, units, clamp);
         }
         else
         {
-            if (bias_clamp.f)
-                WARN("EXT_polygon_offset_clamp extension missing, no support for depth bias clamping.\n");
-
+            if (clamp != 0.0f)
+                WARN("Ignoring depth bias clamp %.8e.\n", clamp);
             gl_info->gl_ops.gl.p_glPolygonOffset(factor, units);
         }
     }
@@ -4358,6 +4356,8 @@ static void rasterizer(struct wined3d_context *context, const struct wined3d_sta
 
     gl_info->gl_ops.gl.p_glFrontFace(mode);
     checkGLcall("glFrontFace");
+    if (!isStateDirty(context, STATE_RENDER(WINED3D_RS_DEPTHBIAS)))
+        state_depthbias(context, state, STATE_RENDER(WINED3D_RS_DEPTHBIAS));
     depth_clip(state->rasterizer_state, gl_info);
 }
 
@@ -4370,6 +4370,8 @@ static void rasterizer_cc(struct wined3d_context *context, const struct wined3d_
 
     gl_info->gl_ops.gl.p_glFrontFace(mode);
     checkGLcall("glFrontFace");
+    if (!isStateDirty(context, STATE_RENDER(WINED3D_RS_DEPTHBIAS)))
+        state_depthbias(context, state, STATE_RENDER(WINED3D_RS_DEPTHBIAS));
     depth_clip(state->rasterizer_state, gl_info);
 }
 
@@ -4740,7 +4742,6 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_RENDER(WINED3D_RS_BLENDFACTOR),               { STATE_RENDER(WINED3D_RS_BLENDFACTOR),               state_blendfactor   }, EXT_BLEND_COLOR                 },
     { STATE_RENDER(WINED3D_RS_BLENDFACTOR),               { STATE_RENDER(WINED3D_RS_BLENDFACTOR),               state_blendfactor_w }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_DEPTHBIAS),                 { STATE_RENDER(WINED3D_RS_DEPTHBIAS),                 state_depthbias     }, WINED3D_GL_EXT_NONE             },
-    { STATE_RENDER(WINED3D_RS_DEPTHBIASCLAMP),            { STATE_RENDER(WINED3D_RS_DEPTHBIAS),                 NULL                }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_ZVISIBLE),                  { STATE_RENDER(WINED3D_RS_ZVISIBLE),                  state_zvisible      }, WINED3D_GL_EXT_NONE             },
     /* Samplers */
     { STATE_SAMPLER(0),                                   { STATE_SAMPLER(0),                                   sampler             }, WINED3D_GL_EXT_NONE             },

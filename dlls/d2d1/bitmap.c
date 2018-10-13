@@ -70,6 +70,8 @@ static ULONG STDMETHODCALLTYPE d2d_bitmap_Release(ID2D1Bitmap1 *iface)
     if (!refcount)
     {
         ID3D10ShaderResourceView_Release(bitmap->view);
+        if (bitmap->rtv)
+            ID3D10RenderTargetView_Release(bitmap->rtv);
         if (bitmap->surface)
             IDXGISurface_Release(bitmap->surface);
         ID2D1Factory_Release(bitmap->factory);
@@ -274,6 +276,10 @@ static BOOL format_supported(const D2D1_PIXEL_FORMAT *format)
 static void d2d_bitmap_init(struct d2d_bitmap *bitmap, struct d2d_device_context *context,
         ID3D10ShaderResourceView *view, D2D1_SIZE_U size, const D2D1_BITMAP_PROPERTIES1 *desc)
 {
+    ID3D10Resource *resource;
+    ID3D10Device *d3d_device;
+    HRESULT hr;
+
     bitmap->ID2D1Bitmap1_iface.lpVtbl = &d2d_bitmap_vtbl;
     bitmap->refcount = 1;
     ID2D1Factory_AddRef(bitmap->factory = context->factory);
@@ -283,14 +289,21 @@ static void d2d_bitmap_init(struct d2d_bitmap *bitmap, struct d2d_device_context
     bitmap->dpi_x = desc->dpiX;
     bitmap->dpi_y = desc->dpiY;
     bitmap->options = desc->bitmapOptions;
-    if (d2d_device_context_is_dxgi_target(context))
-    {
-        ID3D10Resource *resource;
 
-        ID3D10ShaderResourceView_GetResource(bitmap->view, &resource);
+    ID3D10ShaderResourceView_GetResource(bitmap->view, &resource);
+
+    if (d2d_device_context_is_dxgi_target(context))
         ID3D10Resource_QueryInterface(resource, &IID_IDXGISurface, (void **)&bitmap->surface);
-        ID3D10Resource_Release(resource);
+
+    if (bitmap->options & D2D1_BITMAP_OPTIONS_TARGET)
+    {
+        ID3D10Resource_GetDevice(resource, &d3d_device);
+        if (FAILED(hr = ID3D10Device_CreateRenderTargetView(d3d_device, resource, NULL, &bitmap->rtv)))
+            WARN("Failed to create rtv, hr %#x.\n", hr);
+        ID3D10Device_Release(d3d_device);
     }
+
+    ID3D10Resource_Release(resource);
 
     if (bitmap->dpi_x == 0.0f && bitmap->dpi_y == 0.0f)
     {
@@ -317,15 +330,23 @@ HRESULT d2d_bitmap_create(struct d2d_device_context *context, D2D1_SIZE_U size, 
 
     texture_desc.Width = size.width;
     texture_desc.Height = size.height;
+    if (!texture_desc.Width || !texture_desc.Height)
+        texture_desc.Width = texture_desc.Height = 1;
     texture_desc.MipLevels = 1;
     texture_desc.ArraySize = 1;
     texture_desc.Format = desc->pixelFormat.format;
     texture_desc.SampleDesc.Count = 1;
     texture_desc.SampleDesc.Quality = 0;
     texture_desc.Usage = D3D10_USAGE_DEFAULT;
-    texture_desc.BindFlags = D3D10_BIND_SHADER_RESOURCE;
+    texture_desc.BindFlags = 0;
+    if (desc->bitmapOptions & D2D1_BITMAP_OPTIONS_TARGET)
+        texture_desc.BindFlags |= D3D10_BIND_RENDER_TARGET;
+    if (!(desc->bitmapOptions & D2D1_BITMAP_OPTIONS_CANNOT_DRAW))
+        texture_desc.BindFlags |= D3D10_BIND_SHADER_RESOURCE;
     texture_desc.CPUAccessFlags = 0;
     texture_desc.MiscFlags = 0;
+    if (desc->bitmapOptions & D2D1_BITMAP_OPTIONS_GDI_COMPATIBLE)
+        texture_desc.MiscFlags |= D3D10_RESOURCE_MISC_GDI_COMPATIBLE;
 
     resource_data.pSysMem = src_data;
     resource_data.SysMemPitch = pitch;
@@ -605,5 +626,5 @@ struct d2d_bitmap *unsafe_impl_from_ID2D1Bitmap(ID2D1Bitmap *iface)
     if (!iface)
         return NULL;
     assert(iface->lpVtbl == (ID2D1BitmapVtbl *)&d2d_bitmap_vtbl);
-    return CONTAINING_RECORD(iface, struct d2d_bitmap, ID2D1Bitmap1_iface);
+    return CONTAINING_RECORD((ID2D1Bitmap1*)iface, struct d2d_bitmap, ID2D1Bitmap1_iface);
 }
