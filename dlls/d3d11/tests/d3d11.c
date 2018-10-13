@@ -935,6 +935,11 @@ static void *get_readback_data(struct resource_readback *rb,
     return (BYTE *)rb->map_desc.pData + z * rb->map_desc.DepthPitch + y * rb->map_desc.RowPitch + x * byte_width;
 }
 
+static BYTE get_readback_byte(struct resource_readback *rb, unsigned int x, unsigned int y, unsigned int z)
+{
+    return *(BYTE *)get_readback_data(rb, x, y, z, sizeof(BYTE));
+}
+
 static DWORD get_readback_color(struct resource_readback *rb, unsigned int x, unsigned int y, unsigned int z)
 {
     return *(DWORD *)get_readback_data(rb, x, y, z, sizeof(DWORD));
@@ -972,6 +977,45 @@ static DWORD get_texture_color(ID3D11Texture2D *texture, unsigned int x, unsigne
     release_resource_readback(&rb);
 
     return color;
+}
+
+#define check_readback_data_byte(a, b, c, d) check_readback_data_byte_(__LINE__, a, b, c, d)
+static void check_readback_data_byte_(unsigned int line, struct resource_readback *rb,
+        const RECT *rect, BYTE expected_value, BYTE max_diff)
+{
+    unsigned int x = 0, y = 0, z = 0;
+    BOOL all_match = TRUE;
+    RECT default_rect;
+    BYTE value = 0;
+
+    if (!rect)
+    {
+        SetRect(&default_rect, 0, 0, rb->width, rb->height);
+        rect = &default_rect;
+    }
+
+    for (z = 0; z < rb->depth; ++z)
+    {
+        for (y = rect->top; y < rect->bottom; ++y)
+        {
+            for (x = rect->left; x < rect->right; ++x)
+            {
+                value = get_readback_byte(rb, x, y, z);
+                if (!compare_color(value, expected_value, max_diff))
+                {
+                    all_match = FALSE;
+                    break;
+                }
+            }
+            if (!all_match)
+                break;
+        }
+        if (!all_match)
+            break;
+    }
+    ok_(__FILE__, line)(all_match,
+            "Got 0x%02x, expected 0x%02x at (%u, %u, %u), sub-resource %u.\n",
+            value, expected_value, x, y, z, rb->sub_resource_idx);
 }
 
 #define check_readback_data_color(a, b, c, d) check_readback_data_color_(__LINE__, a, b, c, d)
@@ -1407,6 +1451,16 @@ static BOOL check_compute_shaders_via_sm4_support(ID3D11Device *device)
             D3D11_FEATURE_D3D10_X_HARDWARE_OPTIONS, &options, sizeof(options))))
         return FALSE;
     return options.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x;
+}
+
+static BOOL check_viewport_array_index_from_any_shader_support(ID3D11Device *device)
+{
+    D3D11_FEATURE_DATA_D3D11_OPTIONS3 options;
+
+    if (FAILED(ID3D11Device_CheckFeatureSupport(device,
+            D3D11_FEATURE_D3D11_OPTIONS3, &options, sizeof(options))))
+        return FALSE;
+    return options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer;
 }
 
 static BOOL is_buffer(ID3D11Resource *resource)
@@ -9317,12 +9371,38 @@ static void test_layered_rendering(void)
     ID3D11RenderTargetView *rtv;
     ID3D11Texture2D *texture;
     ID3D11GeometryShader *gs;
+    ID3D11VertexShader *vs;
     ID3D11PixelShader *ps;
     ID3D11Device *device;
     ID3D11Buffer *cb;
     HRESULT hr;
     BOOL warp;
 
+    static const DWORD vs_code[] =
+    {
+#if 0
+        uint layer_offset;
+
+        void main(float4 position : POSITION,
+                out float4 out_position : SV_POSITION,
+                out uint layer : SV_RenderTargetArrayIndex)
+        {
+            out_position = position;
+            layer = layer_offset;
+        }
+#endif
+        0x43425844, 0x71f7b9cd, 0x2ab8c713, 0x53e77663, 0x54a9ba68, 0x00000001, 0x00000158, 0x00000004,
+        0x00000030, 0x00000064, 0x000000cc, 0x00000148, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008,
+        0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x49534f50, 0x4e4f4954,
+        0xababab00, 0x4e47534f, 0x00000060, 0x00000002, 0x00000008, 0x00000038, 0x00000000, 0x00000001,
+        0x00000003, 0x00000000, 0x0000000f, 0x00000044, 0x00000000, 0x00000004, 0x00000001, 0x00000001,
+        0x00000e01, 0x505f5653, 0x5449534f, 0x004e4f49, 0x525f5653, 0x65646e65, 0x72615472, 0x41746567,
+        0x79617272, 0x65646e49, 0xabab0078, 0x52444853, 0x00000074, 0x00010040, 0x0000001d, 0x04000059,
+        0x00208e46, 0x00000000, 0x00000001, 0x0300005f, 0x001010f2, 0x00000000, 0x04000067, 0x001020f2,
+        0x00000000, 0x00000001, 0x04000067, 0x00102012, 0x00000001, 0x00000004, 0x05000036, 0x001020f2,
+        0x00000000, 0x00101e46, 0x00000000, 0x06000036, 0x00102012, 0x00000001, 0x0020800a, 0x00000000,
+        0x00000000, 0x0100003e, 0x30494653, 0x00000008, 0x00002000, 0x00000000,
+    };
     static const DWORD gs_5_code[] =
     {
 #if 0
@@ -9454,6 +9534,7 @@ static void test_layered_rendering(void)
         {4.0f, 1.0f}, {4.0f, 3.0f}, {3.0f,  7.0f}, {5.0f, 1.0f}, {5.0f, 3.0f}, {3.0f,  6.0f},
         {6.0f, 1.0f}, {6.0f, 3.0f}, {3.0f,  5.0f}, {7.0f, 1.0f}, {7.0f, 3.0f}, {3.0f,  4.0f},
     };
+    static const struct vec4 vs_expected_value = {1.0f, 42.0f};
 
     if (!init_test_context(&test_context, NULL))
         return;
@@ -9465,6 +9546,7 @@ static void test_layered_rendering(void)
 
     memset(&constant, 0, sizeof(constant));
     cb = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, sizeof(constant), &constant);
+    ID3D11DeviceContext_VSSetConstantBuffers(context, 0, 1, &cb);
     ID3D11DeviceContext_GSSetConstantBuffers(context, 0, 1, &cb);
     ID3D11DeviceContext_PSSetConstantBuffers(context, 0, 1, &cb);
 
@@ -9568,6 +9650,35 @@ static void test_layered_rendering(void)
         check_texture_sub_resource_vec4(texture, i, NULL, &expected_values[i], 1);
     }
 
+    /* layered rendering without GS */
+    if (!check_viewport_array_index_from_any_shader_support(device))
+    {
+        hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &vs);
+        todo_wine ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+        if (SUCCEEDED(hr))
+            ID3D11VertexShader_Release(vs);
+        skip("Viewport array index not supported in vertex shaders.\n");
+        goto done;
+    }
+
+    ID3D11DeviceContext_GSSetShader(context, NULL, NULL, 0);
+
+    constant.layer_offset = 1;
+    constant.draw_id = 42;
+    ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)cb, 0, NULL, &constant, 0, 0);
+    rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+    U(rtv_desc).Texture2DArray.MipSlice = 0;
+    U(rtv_desc).Texture2DArray.FirstArraySlice = 0;
+    U(rtv_desc).Texture2DArray.ArraySize = ~0u;
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)texture, &rtv_desc, &rtv);
+    ok(hr == S_OK, "Failed to create render target view, hr %#x.\n", hr);
+    ID3D11DeviceContext_OMSetRenderTargets(context, 1, &rtv, NULL);
+    draw_quad_vs(&test_context, vs_code, sizeof(vs_code));
+    check_texture_sub_resource_vec4(texture,
+            constant.layer_offset * texture_desc.MipLevels, NULL, &vs_expected_value, 1);
+    ID3D11RenderTargetView_Release(rtv);
+
+done:
     ID3D11Texture2D_Release(texture);
 
     ID3D11Buffer_Release(cb);
@@ -24645,6 +24756,15 @@ static void test_gather_c(void)
     release_test_context(&test_context);
 }
 
+static float clamp_depth_bias(float bias, float clamp)
+{
+    if (clamp > 0.0f)
+        return min(bias, clamp);
+    if (clamp < 0.0f)
+        return max(bias, clamp);
+    return bias;
+}
+
 static void test_depth_bias(void)
 {
     struct vec3 vertices[] =
@@ -24658,15 +24778,15 @@ static void test_depth_bias(void)
     D3D11_RASTERIZER_DESC rasterizer_desc;
     struct swapchain_desc swapchain_desc;
     D3D11_TEXTURE2D_DESC texture_desc;
-    double m, r, bias, depth, data;
     ID3D11DeviceContext *context;
+    double m, bias, depth, data;
     struct resource_readback rb;
     ID3D11DepthStencilView *dsv;
     unsigned int expected_value;
+    unsigned int x, y, i, j, k;
     ID3D11RasterizerState *rs;
     ID3D11Texture2D *texture;
     unsigned int format_idx;
-    unsigned int x, y, i, j;
     unsigned int shift = 0;
     ID3D11Device *device;
     float *depth_values;
@@ -24692,6 +24812,10 @@ static void test_depth_bias(void)
     {
         -10000, -1000, -100, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1,
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 50, 100, 200, 500, 1000, 10000,
+    };
+    static const float bias_clamp_tests[] =
+    {
+        0.0f, -1e-5f, 1e-5f,
     };
     static const float quad_slopes[] =
     {
@@ -24745,11 +24869,11 @@ static void test_depth_bias(void)
         ok(SUCCEEDED(hr), "Failed to create render depth stencil view, hr %#x.\n", hr);
         ID3D11DeviceContext_OMSetRenderTargets(context, 1, &test_context.backbuffer_rtv, dsv);
         ID3D11DeviceContext_ClearDepthStencilView(context, dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-        draw_quad(&test_context);
+        draw_quad_z(&test_context, 1.0f);
         switch (format)
         {
             case DXGI_FORMAT_D32_FLOAT:
-                check_texture_float(texture, 0.0f, 0);
+                check_texture_float(texture, 1.0f, 0);
                 break;
             case DXGI_FORMAT_D24_UNORM_S8_UINT:
                 /* FIXME: Depth/stencil byte order is reversed in wined3d. */
@@ -24773,6 +24897,7 @@ static void test_depth_bias(void)
                 trace("Unhandled format %#x.\n", format);
                 break;
         }
+        draw_quad(&test_context);
 
         /* DepthBias */
         for (i = 0; i < ARRAY_SIZE(quads); ++i)
@@ -24785,63 +24910,69 @@ static void test_depth_bias(void)
             for (j = 0; j < ARRAY_SIZE(bias_tests); ++j)
             {
                 rasterizer_desc.DepthBias = bias_tests[j];
-                ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
-                ok(SUCCEEDED(hr), "Failed to create rasterizer state, hr %#x.\n", hr);
-                ID3D11DeviceContext_RSSetState(context, rs);
-                ID3D11DeviceContext_ClearDepthStencilView(context, dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
-                draw_quad(&test_context);
-                switch (format)
+
+                for (k = 0; k < ARRAY_SIZE(bias_clamp_tests); ++k)
                 {
-                    case DXGI_FORMAT_D32_FLOAT:
-                        bias = rasterizer_desc.DepthBias * pow(2.0f, quads[i].exponent - 23.0f);
-                        depth = min(max(0.0f, quads[i].z + bias), 1.0f);
+                    rasterizer_desc.DepthBiasClamp = bias_clamp_tests[k];
+                    ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
+                    ok(SUCCEEDED(hr), "Failed to create rasterizer state, hr %#x.\n", hr);
+                    ID3D11DeviceContext_RSSetState(context, rs);
+                    ID3D11DeviceContext_ClearDepthStencilView(context, dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
+                    draw_quad(&test_context);
+                    switch (format)
+                    {
+                        case DXGI_FORMAT_D32_FLOAT:
+                            bias = rasterizer_desc.DepthBias * pow(2.0f, quads[i].exponent - 23.0f);
+                            bias = clamp_depth_bias(bias, rasterizer_desc.DepthBiasClamp);
+                            depth = min(max(0.0f, quads[i].z + bias), 1.0f);
 
-                        check_texture_float(texture, depth, 2);
-                        break;
-                    case DXGI_FORMAT_D24_UNORM_S8_UINT:
-                        r = 1.0f / 16777215.0f;
-                        bias = rasterizer_desc.DepthBias * r;
-                        depth = min(max(0.0f, quads[i].z + bias), 1.0f);
+                            check_texture_float(texture, depth, 2);
+                            break;
+                        case DXGI_FORMAT_D24_UNORM_S8_UINT:
+                            bias = clamp_depth_bias(rasterizer_desc.DepthBias / 16777215.0f,
+                                    rasterizer_desc.DepthBiasClamp);
+                            depth = min(max(0.0f, quads[i].z + bias), 1.0f);
 
-                        get_texture_readback(texture, 0, &rb);
-                        for (y = 0; y < texture_desc.Height; ++y)
-                        {
-                            expected_value = depth * 16777215.0f + 0.5f;
-                            for (x = 0; x < texture_desc.Width; ++x)
+                            get_texture_readback(texture, 0, &rb);
+                            for (y = 0; y < texture_desc.Height; ++y)
                             {
-                                u32 = get_readback_data(&rb, x, y, 0, sizeof(*u32));
-                                u32_value = *u32 >> shift;
-                                ok(abs(u32_value - expected_value) <= 1,
-                                        "Got value %#x (%.8e), expected %#x (%.8e).\n",
-                                        u32_value, u32_value / 16777215.0f,
-                                        expected_value, expected_value / 16777215.0f);
+                                expected_value = depth * 16777215.0f + 0.5f;
+                                for (x = 0; x < texture_desc.Width; ++x)
+                                {
+                                    u32 = get_readback_data(&rb, x, y, 0, sizeof(*u32));
+                                    u32_value = *u32 >> shift;
+                                    ok(abs(u32_value - expected_value) <= 1,
+                                            "Got value %#x (%.8e), expected %#x (%.8e).\n",
+                                            u32_value, u32_value / 16777215.0f,
+                                            expected_value, expected_value / 16777215.0f);
+                                }
                             }
-                        }
-                        release_resource_readback(&rb);
-                        break;
-                    case DXGI_FORMAT_D16_UNORM:
-                        r = 1.0f / 65535.0f;
-                        bias = rasterizer_desc.DepthBias * r;
-                        depth = min(max(0.0f, quads[i].z + bias), 1.0f);
+                            release_resource_readback(&rb);
+                            break;
+                        case DXGI_FORMAT_D16_UNORM:
+                            bias = clamp_depth_bias(rasterizer_desc.DepthBias / 65535.0f,
+                                    rasterizer_desc.DepthBiasClamp);
+                            depth = min(max(0.0f, quads[i].z + bias), 1.0f);
 
-                        get_texture_readback(texture, 0, &rb);
-                        for (y = 0; y < texture_desc.Height; ++y)
-                        {
-                            expected_value = depth * 65535.0f + 0.5f;
-                            for (x = 0; x < texture_desc.Width; ++x)
+                            get_texture_readback(texture, 0, &rb);
+                            for (y = 0; y < texture_desc.Height; ++y)
                             {
-                                u16 = get_readback_data(&rb, x, y, 0, sizeof(*u16));
-                                ok(abs(*u16 - expected_value) <= 1,
-                                        "Got value %#x (%.8e), expected %#x (%.8e).\n",
-                                        *u16, *u16 / 65535.0f, expected_value, expected_value / 65535.0f);
+                                expected_value = depth * 65535.0f + 0.5f;
+                                for (x = 0; x < texture_desc.Width; ++x)
+                                {
+                                    u16 = get_readback_data(&rb, x, y, 0, sizeof(*u16));
+                                    ok(abs(*u16 - expected_value) <= 1,
+                                            "Got value %#x (%.8e), expected %#x (%.8e).\n",
+                                            *u16, *u16 / 65535.0f, expected_value, expected_value / 65535.0f);
+                                }
                             }
-                        }
-                        release_resource_readback(&rb);
-                        break;
-                    default:
-                        break;
+                            release_resource_readback(&rb);
+                            break;
+                        default:
+                            break;
+                    }
+                    ID3D11RasterizerState_Release(rs);
                 }
-                ID3D11RasterizerState_Release(rs);
             }
         }
 
@@ -24883,47 +25014,52 @@ static void test_depth_bias(void)
             for (j = 0; j < ARRAY_SIZE(slope_scaled_bias_tests); ++j)
             {
                 rasterizer_desc.SlopeScaledDepthBias = slope_scaled_bias_tests[j];
-                ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
-                ok(SUCCEEDED(hr), "Failed to create rasterizer state, hr %#x.\n", hr);
-                ID3D11DeviceContext_RSSetState(context, rs);
-                ID3D11DeviceContext_ClearDepthStencilView(context, dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
-                draw_quad(&test_context);
 
-                m = quad_slopes[i] / texture_desc.Height;
-                bias = rasterizer_desc.SlopeScaledDepthBias * m;
-                get_texture_readback(texture, 0, &rb);
-                for (y = 0; y < texture_desc.Height; ++y)
+                for (k = 0; k < ARRAY_SIZE(bias_clamp_tests); ++k)
                 {
-                    depth = min(max(0.0f, depth_values[y] + bias), 1.0f);
-                    switch (format)
+                    rasterizer_desc.DepthBiasClamp = bias_clamp_tests[k];
+                    ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
+                    ok(SUCCEEDED(hr), "Failed to create rasterizer state, hr %#x.\n", hr);
+                    ID3D11DeviceContext_RSSetState(context, rs);
+                    ID3D11DeviceContext_ClearDepthStencilView(context, dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
+                    draw_quad(&test_context);
+
+                    m = quad_slopes[i] / texture_desc.Height;
+                    bias = clamp_depth_bias(rasterizer_desc.SlopeScaledDepthBias * m, rasterizer_desc.DepthBiasClamp);
+                    get_texture_readback(texture, 0, &rb);
+                    for (y = 0; y < texture_desc.Height; ++y)
                     {
-                        case DXGI_FORMAT_D32_FLOAT:
-                            data = get_readback_float(&rb, 0, y);
-                            ok(compare_float(data, depth, 64),
-                                    "Got depth %.8e, expected %.8e.\n", data, depth);
-                            break;
-                        case DXGI_FORMAT_D24_UNORM_S8_UINT:
-                            u32 = get_readback_data(&rb, 0, y, 0, sizeof(*u32));
-                            u32_value = *u32 >> shift;
-                            expected_value = depth * 16777215.0f + 0.5f;
-                            ok(abs(u32_value - expected_value) <= 3,
-                                    "Got value %#x (%.8e), expected %#x (%.8e).\n",
-                                    u32_value, u32_value / 16777215.0f,
-                                    expected_value, expected_value / 16777215.0f);
-                            break;
-                        case DXGI_FORMAT_D16_UNORM:
-                            u16 = get_readback_data(&rb, 0, y, 0, sizeof(*u16));
-                            expected_value = depth * 65535.0f + 0.5f;
-                            ok(abs(*u16 - expected_value) <= 1,
-                                    "Got value %#x (%.8e), expected %#x (%.8e).\n",
-                                    *u16, *u16 / 65535.0f, expected_value, expected_value / 65535.0f);
-                            break;
-                        default:
-                            break;
+                        depth = min(max(0.0f, depth_values[y] + bias), 1.0f);
+                        switch (format)
+                        {
+                            case DXGI_FORMAT_D32_FLOAT:
+                                data = get_readback_float(&rb, 0, y);
+                                ok(compare_float(data, depth, 64),
+                                        "Got depth %.8e, expected %.8e.\n", data, depth);
+                                break;
+                            case DXGI_FORMAT_D24_UNORM_S8_UINT:
+                                u32 = get_readback_data(&rb, 0, y, 0, sizeof(*u32));
+                                u32_value = *u32 >> shift;
+                                expected_value = depth * 16777215.0f + 0.5f;
+                                ok(abs(u32_value - expected_value) <= 3,
+                                        "Got value %#x (%.8e), expected %#x (%.8e).\n",
+                                        u32_value, u32_value / 16777215.0f,
+                                        expected_value, expected_value / 16777215.0f);
+                                break;
+                            case DXGI_FORMAT_D16_UNORM:
+                                u16 = get_readback_data(&rb, 0, y, 0, sizeof(*u16));
+                                expected_value = depth * 65535.0f + 0.5f;
+                                ok(abs(*u16 - expected_value) <= 1,
+                                        "Got value %#x (%.8e), expected %#x (%.8e).\n",
+                                        *u16, *u16 / 65535.0f, expected_value, expected_value / 65535.0f);
+                                break;
+                            default:
+                                break;
+                        }
                     }
+                    release_resource_readback(&rb);
+                    ID3D11RasterizerState_Release(rs);
                 }
-                release_resource_readback(&rb);
-                ID3D11RasterizerState_Release(rs);
             }
         }
 
@@ -28184,6 +28320,73 @@ static void test_staging_buffers(void)
     release_test_context(&test_context);
 }
 
+static void test_render_a8(void)
+{
+    static const float black[] = {0.0f, 0.0f, 0.0f, 0.0f};
+    struct d3d11_test_context test_context;
+    D3D11_TEXTURE2D_DESC texture_desc;
+    ID3D11DeviceContext *context;
+    ID3D11RenderTargetView *rtv;
+    struct resource_readback rb;
+    ID3D11Texture2D *texture;
+    ID3D11PixelShader *ps;
+    ID3D11Device *device;
+    unsigned int i;
+    HRESULT hr;
+
+    static const DWORD ps_code[] =
+    {
+#if 0
+        void main(out float4 target : SV_Target)
+        {
+            target = float4(0.0f, 0.25f, 0.5f, 1.0f);
+        }
+#endif
+        0x43425844, 0x8a06129f, 0x3041bde2, 0x09389749, 0xb339ba8b, 0x00000001, 0x000000b0, 0x00000003,
+        0x0000002c, 0x0000003c, 0x00000070, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x52444853, 0x00000038, 0x00000040, 0x0000000e,
+        0x03000065, 0x001020f2, 0x00000000, 0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x00000000,
+        0x3e800000, 0x3f000000, 0x3f800000, 0x0100003e,
+    };
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &ps);
+    ok(hr == S_OK, "Failed to create pixel shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    ID3D11Texture2D_GetDesc(test_context.backbuffer, &texture_desc);
+    texture_desc.Format = DXGI_FORMAT_A8_UNORM;
+    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &texture);
+    ok(hr == S_OK, "Failed to create texture, hr %#x.\n", hr);
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)texture, NULL, &rtv);
+    ok(hr == S_OK, "Failed to create render target view, hr %#x.\n", hr);
+
+    for (i = 0; i < 2; ++i)
+    {
+        ID3D11DeviceContext_ClearRenderTargetView(context, rtv, black);
+        ID3D11DeviceContext_OMSetRenderTargets(context, 1, &rtv, NULL);
+        draw_quad(&test_context);
+        get_texture_readback(texture, 0, &rb);
+        check_readback_data_byte(&rb, NULL, 0xff, 0);
+        release_resource_readback(&rb);
+
+        ID3D11DeviceContext_ClearRenderTargetView(context, test_context.backbuffer_rtv, black);
+        ID3D11DeviceContext_OMSetRenderTargets(context, 1, &test_context.backbuffer_rtv, NULL);
+        draw_quad(&test_context);
+        check_texture_sub_resource_color(test_context.backbuffer, 0, NULL, 0xff7f4000, 1);
+    }
+
+    ID3D11PixelShader_Release(ps);
+    ID3D11Texture2D_Release(texture);
+    ID3D11RenderTargetView_Release(rtv);
+    release_test_context(&test_context);
+}
+
 static void test_dual_blending(void)
 {
     struct d3d11_test_context test_context;
@@ -28501,6 +28704,7 @@ START_TEST(d3d11)
     queue_test(test_sample_mask);
     queue_test(test_depth_clip);
     queue_test(test_staging_buffers);
+    queue_test(test_render_a8);
 
     run_queued_tests();
 }

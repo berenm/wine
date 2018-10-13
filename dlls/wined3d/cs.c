@@ -1102,9 +1102,17 @@ void wined3d_cs_emit_set_scissor_rects(struct wined3d_cs *cs, unsigned int rect_
 static void wined3d_cs_exec_set_rendertarget_view(struct wined3d_cs *cs, const void *data)
 {
     const struct wined3d_cs_set_rendertarget_view *op = data;
+    BOOL prev_alpha_swizzle, curr_alpha_swizzle;
+    struct wined3d_rendertarget_view *prev;
 
+    prev = cs->state.fb->render_targets[op->view_idx];
     cs->fb.render_targets[op->view_idx] = op->view;
     device_invalidate_state(cs->device, STATE_FRAMEBUFFER);
+
+    prev_alpha_swizzle = prev && prev->format->id == WINED3DFMT_A8_UNORM;
+    curr_alpha_swizzle = op->view && op->view->format->id == WINED3DFMT_A8_UNORM;
+    if (prev_alpha_swizzle != curr_alpha_swizzle)
+        device_invalidate_state(cs->device, STATE_SHADER(WINED3D_SHADER_TYPE_PIXEL));
 }
 
 void wined3d_cs_emit_set_rendertarget_view(struct wined3d_cs *cs, unsigned int view_idx,
@@ -1145,7 +1153,6 @@ static void wined3d_cs_exec_set_depth_stencil_view(struct wined3d_cs *cs, const 
         device_invalidate_state(device, STATE_RENDER(WINED3D_RS_STENCILENABLE));
         device_invalidate_state(device, STATE_RENDER(WINED3D_RS_STENCILWRITEMASK));
         device_invalidate_state(device, STATE_RENDER(WINED3D_RS_DEPTHBIAS));
-        device_invalidate_state(device, STATE_RENDER(WINED3D_RS_DEPTHBIASCLAMP));
     }
     else if (prev && prev->format->depth_bias_scale != op->view->format->depth_bias_scale)
     {

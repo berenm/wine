@@ -2125,6 +2125,7 @@ INT WINAPI MsiProcessMessage( MSIHANDLE hInstall, INSTALLMESSAGE eMessageType,
 
     ret = MSI_ProcessMessage( package, eMessageType, record );
 
+    msiobj_release( &record->hdr );
     msiobj_release( &package->hdr );
     return ret;
 }
@@ -2153,22 +2154,14 @@ end:
     return r;
 }
 
-void msi_reset_folders( MSIPACKAGE *package, BOOL source )
+void msi_reset_source_folders( MSIPACKAGE *package )
 {
     MSIFOLDER *folder;
 
     LIST_FOR_EACH_ENTRY( folder, &package->folders, MSIFOLDER, entry )
     {
-        if ( source )
-        {
-            msi_free( folder->ResolvedSource );
-            folder->ResolvedSource = NULL;
-        }
-        else
-        {
-            msi_free( folder->ResolvedTarget );
-            folder->ResolvedTarget = NULL;
-        }
+        msi_free( folder->ResolvedSource );
+        folder->ResolvedSource = NULL;
     }
 }
 
@@ -2262,7 +2255,7 @@ UINT WINAPI MsiSetPropertyW( MSIHANDLE hInstall, LPCWSTR szName, LPCWSTR szValue
 
     ret = msi_set_property( package->db, szName, szValue, -1 );
     if (ret == ERROR_SUCCESS && !strcmpW( szName, szSourceDir ))
-        msi_reset_folders( package, TRUE );
+        msi_reset_source_folders( package );
 
     msiobj_release( &package->hdr );
     return ret;
@@ -2689,7 +2682,10 @@ UINT __cdecl s_remote_FormatRecord(MSIHANDLE hinst, struct wire_record *remote_r
     {
         *value = midl_user_allocate(++size * sizeof(WCHAR));
         if (!*value)
+        {
+            MsiCloseHandle(rec);
             return ERROR_OUTOFMEMORY;
+        }
         r = MsiFormatRecordW(hinst, rec, *value, &size);
     }
 

@@ -2,7 +2,7 @@
  * Unit tests for security functions
  *
  * Copyright (c) 2004 Mike McCormack
- * Copyright (c) 2011,2013,2014,2016 Dmitry Timoshkov
+ * Copyright (c) 2011 Dmitry Timoshkov
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -167,6 +167,12 @@ static const char* debugstr_sid(PSID sid)
     return res;
 }
 
+struct sidRef
+{
+    SID_IDENTIFIER_AUTHORITY auth;
+    const char *refStr;
+};
+
 static void init(void)
 {
     HMODULE hntdll;
@@ -285,11 +291,7 @@ static void test_group_equal(HANDLE Handle, PSID expected, int line)
 
 static void test_sid(void)
 {
-    static struct
-    {
-        SID_IDENTIFIER_AUTHORITY auth;
-        const char *refStr;
-    } refs[] = {
+    struct sidRef refs[] = {
      { { {0x00,0x00,0x33,0x44,0x55,0x66} }, "S-1-860116326-1" },
      { { {0x00,0x00,0x01,0x02,0x03,0x04} }, "S-1-16909060-1"  },
      { { {0x00,0x00,0x00,0x01,0x02,0x03} }, "S-1-66051-1"     },
@@ -299,58 +301,60 @@ static void test_sid(void)
     };
     static const struct
     {
-        const char *str;
-        WELL_KNOWN_SID_TYPE sid_type;
-        BOOL optional;
-    } strsid_table[] = {
-        /* Please keep the list sorted. */
-        { "AC", WinBuiltinAnyPackageSid, TRUE },
-        { "AN", WinAnonymousSid },
-        { "AO", WinBuiltinAccountOperatorsSid },
-        { "AU", WinAuthenticatedUserSid },
-        { "BA", WinBuiltinAdministratorsSid },
-        { "BG", WinBuiltinGuestsSid },
-        { "BO", WinBuiltinBackupOperatorsSid },
-        { "BU", WinBuiltinUsersSid },
-        { "CA", WinAccountCertAdminsSid, TRUE},
-        { "CG", WinCreatorGroupSid },
-        { "CO", WinCreatorOwnerSid },
-        { "DA", WinAccountDomainAdminsSid, TRUE},
-        { "DC", WinAccountComputersSid, TRUE},
-        { "DD", WinAccountControllersSid, TRUE},
-        { "DG", WinAccountDomainGuestsSid, TRUE},
-        { "DU", WinAccountDomainUsersSid, TRUE},
-        { "EA", WinAccountEnterpriseAdminsSid, TRUE},
-        { "ED", WinEnterpriseControllersSid },
-        { "IU", WinInteractiveSid },
-        { "LA", WinAccountAdministratorSid },
-        { "LG", WinAccountGuestSid },
-        { "LS", WinLocalServiceSid },
-        { "NO", WinBuiltinNetworkConfigurationOperatorsSid },
-        { "NS", WinNetworkServiceSid },
-        { "NU", WinNetworkSid },
-        { "PA", WinAccountPolicyAdminsSid, TRUE},
-        { "PO", WinBuiltinPrintOperatorsSid },
-        { "PS", WinSelfSid },
-        { "PU", WinBuiltinPowerUsersSid },
-        { "RC", WinRestrictedCodeSid },
-        { "RD", WinBuiltinRemoteDesktopUsersSid },
-        { "RE", WinBuiltinReplicatorSid },
-        { "RS", WinAccountRasAndIasServersSid, TRUE },
-        { "RU", WinBuiltinPreWindows2000CompatibleAccessSid },
-        { "SA", WinAccountSchemaAdminsSid, TRUE },
-        { "SO", WinBuiltinSystemOperatorsSid },
-        { "SU", WinServiceSid },
-        { "SY", WinLocalSystemSid },
-        { "WD", WinWorldSid },
+        const char *name;
+        const char *sid;
+        unsigned int optional;
+    }
+    str_to_sid_tests[] =
+    {
+        { "WD", "S-1-1-0" },
+        { "CO", "S-1-3-0" },
+        { "CG", "S-1-3-1" },
+        { "OW", "S-1-3-4", 1 }, /* Vista+ */
+        { "NU", "S-1-5-2" },
+        { "IU", "S-1-5-4" },
+        { "SU", "S-1-5-6" },
+        { "AN", "S-1-5-7" },
+        { "ED", "S-1-5-9" },
+        { "PS", "S-1-5-10" },
+        { "AU", "S-1-5-11" },
+        { "RC", "S-1-5-12" },
+        { "SY", "S-1-5-18" },
+        { "LS", "S-1-5-19" },
+        { "NS", "S-1-5-20" },
+        { "LA", "S-1-5-21-*-*-*-500" },
+        { "LG", "S-1-5-21-*-*-*-501" },
+        { "BO", "S-1-5-32-551" },
+        { "BA", "S-1-5-32-544" },
+        { "BU", "S-1-5-32-545" },
+        { "BG", "S-1-5-32-546" },
+        { "PU", "S-1-5-32-547" },
+        { "AO", "S-1-5-32-548" },
+        { "SO", "S-1-5-32-549" },
+        { "PO", "S-1-5-32-550" },
+        { "RE", "S-1-5-32-552" },
+        { "RU", "S-1-5-32-554" },
+        { "RD", "S-1-5-32-555" },
+        { "NO", "S-1-5-32-556" },
+        { "AC", "S-1-15-2-1", 1 }, /* Win8+ */
+        { "CA", "", 1 },
+        { "DA", "", 1 },
+        { "DC", "", 1 },
+        { "DD", "", 1 },
+        { "DG", "", 1 },
+        { "DU", "", 1 },
+        { "EA", "", 1 },
+        { "PA", "", 1 },
+        { "RS", "", 1 },
+        { "SA", "", 1 },
     };
-    SID_IDENTIFIER_AUTHORITY domain_ident = { SECURITY_NT_AUTHORITY };
+
     const char noSubAuthStr[] = "S-1-5";
     unsigned int i;
-    PSID psid, domain_sid;
+    PSID psid = NULL;
     SID *pisid;
-    BOOL r;
-    LPSTR str;
+    BOOL r, ret;
+    LPSTR str = NULL;
 
     if( !pConvertStringSidToSidA )
     {
@@ -429,72 +433,31 @@ static void test_sid(void)
             LocalFree( psid );
     }
 
-    /* string constant format not supported before XP */
-    r = pConvertStringSidToSidA("AN", &psid);
-    if(!r)
+    for (i = 0; i < ARRAY_SIZE(str_to_sid_tests); i++)
     {
-        win_skip("String constant format not supported\n");
-        return;
-    }
-    LocalFree(psid);
+        char *str;
 
-    AllocateAndInitializeSid(&domain_ident, 4, SECURITY_NT_NON_UNIQUE, 0, 0, 0, 0, 0, 0, 0, &domain_sid);
-
-    for(i = 0; i < ARRAY_SIZE(strsid_table); i++)
-    {
-        SetLastError(0xdeadbeef);
-        r = pConvertStringSidToSidA(strsid_table[i].str, &psid);
-
-        if (!(strsid_table[i].optional))
+        ret = ConvertStringSidToSidA(str_to_sid_tests[i].name, &psid);
+        if (!ret && str_to_sid_tests[i].optional)
         {
-            ok(r, "%s: got %u\n", strsid_table[i].str, GetLastError());
+            skip("%u: failed to convert %s.\n", i, str_to_sid_tests[i].name);
+            continue;
         }
+        ok(ret, "%u: failed to convert string to sid.\n", i);
 
-        if (r)
+        if (str_to_sid_tests[i].optional || !strcmp(str_to_sid_tests[i].name, "LA") ||
+            !strcmp(str_to_sid_tests[i].name, "LG"))
         {
-            char buf[SECURITY_MAX_SID_SIZE];
-            char *sid_string, *well_known_sid_string;
-            DWORD n, size;
-
-            /* zero out domain id before comparison to simplify things */
-            if (strsid_table[i].sid_type == WinAccountAdministratorSid ||
-                strsid_table[i].sid_type == WinAccountGuestSid)
-            {
-                for (n = 1; n <= 3; n++)
-                    *GetSidSubAuthority(psid, n) = 0;
-            }
-
-            r = ConvertSidToStringSidA(psid, &sid_string);
-            ok(r, "%s: ConvertSidToStringSid error %u\n", strsid_table[i].str, GetLastError());
-            if (winetest_debug > 1)
-                trace("%s => %s\n", strsid_table[i].str, sid_string);
-
-            size = sizeof(buf);
-            r = pCreateWellKnownSid(strsid_table[i].sid_type, domain_sid, buf, &size);
-            ok(r, "%u: CreateWellKnownSid(%u) error %u\n", i, strsid_table[i].sid_type, GetLastError());
-
-            r = ConvertSidToStringSidA(buf, &well_known_sid_string);
-            ok(r, "%u: ConvertSidToStringSi(%u) error %u\n", i, strsid_table[i].sid_type, GetLastError());
-            if (winetest_debug > 1)
-                trace("%u => %s\n", strsid_table[i].sid_type, well_known_sid_string);
-
-            ok(strcmp(sid_string, well_known_sid_string) == 0,
-               "%u: (%u) expected %s, got %s\n", i, strsid_table[i].sid_type, well_known_sid_string, sid_string);
-
-            LocalFree(well_known_sid_string);
-            LocalFree(sid_string);
             LocalFree(psid);
+            continue;
         }
-        else
-        {
-            if (GetLastError() != ERROR_INVALID_SID)
-                trace(" %s: couldn't be converted, returned %d\n", strsid_table[i].str, GetLastError());
-            else
-                trace(" %s: couldn't be converted\n", strsid_table[i].str);
-        }
-    }
 
-    LocalFree(domain_sid);
+        ret = ConvertSidToStringSidA(psid, &str);
+        ok(ret, "%u: failed to convert SID to string.\n", i);
+        ok(!strcmp(str, str_to_sid_tests[i].sid), "%u: unexpected sid %s.\n", i, str);
+        LocalFree(psid);
+        LocalFree(str);
+    }
 }
 
 static void test_trustee(void)
@@ -2365,7 +2328,7 @@ static void test_LookupAccountSid(void)
     if (pCreateWellKnownSid)
     {
         trace("Well Known SIDs:\n");
-        for (i = 0; i <= 84; i++)
+        for (i = 0; i <= 60; i++)
         {
             size = SECURITY_MAX_SID_SIZE;
             if (pCreateWellKnownSid(i, NULL, &max_sid.sid, &size))

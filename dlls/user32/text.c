@@ -1383,7 +1383,9 @@ static LONG TEXT_TabbedTextOut( HDC hdc, INT x, INT y, LPCWSTR lpstr,
             }
         } else
             x += extent.cx;
-        
+
+        if (!extent.cy) extent.cy = tm.tmHeight;
+
         if (fDisplayText)
         {
             r.top    = y;
@@ -1395,9 +1397,6 @@ static LONG TEXT_TabbedTextOut( HDC hdc, INT x, INT y, LPCWSTR lpstr,
         count -= j;
         lpstr += j;
     }
-
-    if(!extent.cy)
-        extent.cy = tm.tmHeight;
 
     return MAKELONG(x - start, extent.cy);
 }

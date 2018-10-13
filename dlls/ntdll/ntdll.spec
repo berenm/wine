@@ -308,6 +308,7 @@
 @ stub NtReleaseProcessMutant
 @ stdcall NtReleaseSemaphore(long long ptr)
 @ stdcall NtRemoveIoCompletion(ptr ptr ptr ptr ptr)
+@ stdcall NtRemoveIoCompletionEx(ptr ptr long ptr ptr long)
 # @ stub NtRemoveProcessDebug
 @ stdcall NtRenameKey(long ptr)
 @ stdcall NtReplaceKey(ptr long ptr)
@@ -511,6 +512,7 @@
 @ stdcall RtlCreateEnvironment(long ptr)
 @ stdcall RtlCreateHeap(long ptr long long ptr ptr)
 @ stdcall RtlCreateProcessParameters(ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr)
+@ stdcall RtlCreateProcessParametersEx(ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr long)
 @ stub RtlCreatePropertySet
 @ stdcall RtlCreateQueryDebugBuffer(long long)
 @ stdcall RtlCreateRegistryKey(long wstr)
@@ -1246,6 +1248,7 @@
 @ stub ZwReleaseProcessMutant
 @ stdcall -private ZwReleaseSemaphore(long long ptr) NtReleaseSemaphore
 @ stdcall -private ZwRemoveIoCompletion(ptr ptr ptr ptr ptr) NtRemoveIoCompletion
+@ stdcall -private ZwRemoveIoCompletionEx(ptr ptr long ptr ptr long) NtRemoveIoCompletionEx
 # @ stub ZwRemoveProcessDebug
 @ stdcall -private ZwRenameKey(long ptr) NtRenameKey
 @ stdcall -private ZwReplaceKey(ptr long ptr) NtReplaceKey

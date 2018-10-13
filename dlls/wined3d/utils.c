@@ -1519,7 +1519,8 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             ARB_TEXTURE_RG,             NULL},
     {WINED3DFMT_A8_UNORM,               GL_R8,                            GL_R8,                                  0,
             GL_RED,                     GL_UNSIGNED_BYTE,                 0,
-            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING
+            | WINED3DFMT_FLAG_RENDERTARGET,
             ARB_TEXTURE_RG,             NULL},
     {WINED3DFMT_A8_UNORM,               GL_ALPHA8,                        GL_ALPHA8,                              0,
             GL_ALPHA,                   GL_UNSIGNED_BYTE,                 0,
@@ -4446,6 +4447,52 @@ const char *wined3d_debug_resource_access(DWORD access)
     return wine_dbg_sprintf("%s", buffer.str);
 }
 
+const char *wined3d_debug_bind_flags(DWORD bind_flags)
+{
+    struct debug_buffer buffer;
+
+    init_debug_buffer(&buffer, "0");
+#define BIND_FLAG_TO_STR(x) if (bind_flags & x) { debug_append(&buffer, #x, " | "); bind_flags &= ~x; }
+    BIND_FLAG_TO_STR(WINED3D_BIND_VERTEX_BUFFER);
+    BIND_FLAG_TO_STR(WINED3D_BIND_INDEX_BUFFER);
+    BIND_FLAG_TO_STR(WINED3D_BIND_CONSTANT_BUFFER);
+    BIND_FLAG_TO_STR(WINED3D_BIND_SHADER_RESOURCE);
+    BIND_FLAG_TO_STR(WINED3D_BIND_STREAM_OUTPUT);
+    BIND_FLAG_TO_STR(WINED3D_BIND_RENDER_TARGET);
+    BIND_FLAG_TO_STR(WINED3D_BIND_DEPTH_STENCIL);
+    BIND_FLAG_TO_STR(WINED3D_BIND_UNORDERED_ACCESS);
+#undef BIND_FLAG_TO_STR
+    if (bind_flags)
+        FIXME("Unrecognised bind flag(s) %#x.\n", bind_flags);
+
+    return wine_dbg_sprintf("%s", buffer.str);
+}
+
+const char *wined3d_debug_view_desc(const struct wined3d_view_desc *d, const struct wined3d_resource *resource)
+{
+    struct debug_buffer buffer;
+    unsigned int flags = d->flags;
+
+    init_debug_buffer(&buffer, "0");
+#define VIEW_FLAG_TO_STR(x) if (flags & x) { debug_append(&buffer, #x, " | "); flags &= ~x; }
+    VIEW_FLAG_TO_STR(WINED3D_VIEW_BUFFER_RAW);
+    VIEW_FLAG_TO_STR(WINED3D_VIEW_BUFFER_APPEND);
+    VIEW_FLAG_TO_STR(WINED3D_VIEW_BUFFER_COUNTER);
+    VIEW_FLAG_TO_STR(WINED3D_VIEW_TEXTURE_CUBE);
+    VIEW_FLAG_TO_STR(WINED3D_VIEW_TEXTURE_ARRAY);
+#undef VIEW_FLAG_TO_STR
+    if (flags)
+        FIXME("Unrecognised view flag(s) %#x.\n", flags);
+
+    if (resource->type == WINED3D_RTYPE_BUFFER)
+        return wine_dbg_sprintf("format %s, flags %s, start_idx %u, count %u",
+                debug_d3dformat(d->format_id), buffer.str, d->u.buffer.start_idx, d->u.buffer.count);
+    else
+        return wine_dbg_sprintf("format %s, flags %s, level_idx %u, level_count %u, layer_idx %u, layer_count %u",
+                debug_d3dformat(d->format_id), buffer.str, d->u.texture.level_idx, d->u.texture.level_count,
+                d->u.texture.layer_idx, d->u.texture.layer_count);
+}
+
 const char *debug_d3dusage(DWORD usage)
 {
     struct debug_buffer buffer;
@@ -4722,7 +4769,6 @@ const char *debug_d3drenderstate(enum wined3d_render_state state)
         D3DSTATE_TO_STR(WINED3D_RS_BLENDFACTOR);
         D3DSTATE_TO_STR(WINED3D_RS_SRGBWRITEENABLE);
         D3DSTATE_TO_STR(WINED3D_RS_DEPTHBIAS);
-        D3DSTATE_TO_STR(WINED3D_RS_DEPTHBIASCLAMP);
         D3DSTATE_TO_STR(WINED3D_RS_WRAP8);
         D3DSTATE_TO_STR(WINED3D_RS_WRAP9);
         D3DSTATE_TO_STR(WINED3D_RS_WRAP10);

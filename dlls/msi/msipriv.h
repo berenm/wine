@@ -141,8 +141,8 @@ typedef struct tagMSIFIELD
 typedef struct tagMSIRECORD
 {
     MSIOBJECTHDR hdr;
-    MSIQUERY *query;
     UINT count;       /* as passed to MsiCreateRecord */
+    UINT64 cookie;
     MSIFIELD fields[1]; /* nb. array size is count+1 */
 } MSIRECORD;
 
@@ -565,8 +565,6 @@ typedef struct tagMSIFOLDER
     LPWSTR ResolvedSource;
     enum folder_state State;
     BOOL persistent;
-    INT Cost;
-    INT Space;
 } MSIFOLDER;
 
 typedef struct tagFolderList
@@ -1026,7 +1024,7 @@ extern void msi_resolve_target_folder(MSIPACKAGE *package, const WCHAR *name, BO
 extern WCHAR *msi_normalize_path(const WCHAR *) DECLSPEC_HIDDEN;
 extern WCHAR *msi_resolve_file_source(MSIPACKAGE *package, MSIFILE *file) DECLSPEC_HIDDEN;
 extern const WCHAR *msi_get_target_folder(MSIPACKAGE *package, const WCHAR *name) DECLSPEC_HIDDEN;
-extern void msi_reset_folders( MSIPACKAGE *package, BOOL source ) DECLSPEC_HIDDEN;
+extern void msi_reset_source_folders( MSIPACKAGE *package ) DECLSPEC_HIDDEN;
 extern MSICOMPONENT *msi_get_loaded_component(MSIPACKAGE *package, const WCHAR *Component) DECLSPEC_HIDDEN;
 extern MSIFEATURE *msi_get_loaded_feature(MSIPACKAGE *package, const WCHAR *Feature) DECLSPEC_HIDDEN;
 extern MSIFILE *msi_get_loaded_file(MSIPACKAGE *package, const WCHAR *file) DECLSPEC_HIDDEN;

@@ -64,7 +64,7 @@ from enum import Enum
 LOGGER = logging.Logger("vulkan")
 LOGGER.addHandler(logging.StreamHandler())
 
-VK_XML_VERSION = "1.1.76"
+VK_XML_VERSION = "1.1.86"
 WINE_VK_VERSION = (1, 0)
 
 # Filenames to create.
@@ -322,22 +322,26 @@ class VkEnum(object):
         for v in enum.findall("enum"):
             # Value is either a value or a bitpos, only one can exist.
             value = v.attrib.get("value")
-            if value is None:
-                # bitmask
-                value = 1 << int(v.attrib.get("bitpos"))
-                values.append(VkEnumValue(v.attrib.get("name"), value, hex=True))
-            else:
+            alias_name = v.attrib.get("alias")
+            if alias_name:
+                alias = next(x for x in values if x.name == alias_name)
+                values.append(VkEnumValue(v.attrib.get("name"), alias.value, alias.hex))
+            elif value:
                 # Some values are in hex form. We want to preserve the hex representation
                 # at least when we convert back to a string. Internally we want to use int.
                 if "0x" in value:
                     values.append(VkEnumValue(v.attrib.get("name"), int(value, 0), hex=True))
                 else:
                     values.append(VkEnumValue(v.attrib.get("name"), int(value, 0)))
+            else:
+                # bitmask
+                value = 1 << int(v.attrib.get("bitpos"))
+                values.append(VkEnumValue(v.attrib.get("name"), value, hex=True))
 
         # vulkan.h contains a *_MAX_ENUM value set to 32-bit at the time of writing,
         # which is to prepare for extensions as they can add values and hence affect
         # the size definition.
-        max_name = re.sub(r'([0-9a-z_])([A-Z0-9])',r'\1_\2',name).upper() + "_MAX_ENUM"
+        max_name = re.sub(r'([0-9a-z_])([A-Z0-9])',r'\1_\2', name).upper() + "_MAX_ENUM"
         values.append(VkEnumValue(max_name, 0x7fffffff, hex=True))
 
         return VkEnum(name, values)
@@ -869,7 +873,7 @@ class VkHandle(object):
 
 class VkMember(object):
     def __init__(self, const=False, struct_fwd_decl=False,_type=None, pointer=None, name=None, array_len=None,
-            dyn_array_len=None, optional=False, extension_structs=None):
+            dyn_array_len=None, optional=False):
         self.const = const
         self.struct_fwd_decl = struct_fwd_decl
         self.name = name
@@ -879,7 +883,6 @@ class VkMember(object):
         self.array_len = array_len
         self.dyn_array_len = dyn_array_len
         self.optional = optional
-        self.extension_structs = extension_structs
 
     def __eq__(self, other):
         """ Compare member based on name against a string.
@@ -927,12 +930,7 @@ class VkMember(object):
 
         # Name of other member within, which stores the number of
         # elements pointed to be by this member.
-        dyn_array_len = member.get("len", None)
-
-        if "validextensionstructs" in member.attrib:
-            extension_structs = member.get("validextensionstructs").split(",")
-        else:
-            extension_structs = None
+        dyn_array_len = member.get("len")
 
         # Some members are optional, which is important for conversion code e.g. not dereference NULL pointer.
         optional = True if member.get("optional") else False
@@ -956,7 +954,7 @@ class VkMember(object):
                 array_len = name_elem.tail.strip("[]")
 
         return VkMember(const=const, struct_fwd_decl=struct_fwd_decl, _type=member_type, pointer=pointer, name=name_elem.text,
-                array_len=array_len, dyn_array_len=dyn_array_len, optional=optional, extension_structs=extension_structs)
+                array_len=array_len, dyn_array_len=dyn_array_len, optional=optional)
 
     def copy(self, input, output, direction):
         """ Helper method for use by conversion logic to generate a C-code statement to copy this member. """
@@ -1034,8 +1032,11 @@ class VkMember(object):
         # Collect any conversion for any member structs.
         struct = self.type_info["data"]
         for m in struct:
+            m.needs_struct_extensions_conversion()
             if m.needs_conversion():
                 conversions.extend(m.get_conversions())
+
+        struct.needs_struct_extensions_conversion()
 
         struct = self.type_info["data"]
         direction = Direction.OUTPUT if struct.returnedonly else Direction.INPUT
@@ -1124,6 +1125,13 @@ class VkMember(object):
         # TODO: some non-pointer structs and optional pointer structs may need freeing,
         # though none of this type have been encountered yet.
         return False
+
+    def needs_struct_extensions_conversion(self):
+        if not self.is_struct():
+            return False
+
+        struct = self.type_info["data"]
+        return struct.needs_struct_extensions_conversion()
 
     def set_type_info(self, type_info):
         """ Helper function to set type information from the type registry.
@@ -1362,6 +1370,10 @@ class VkParam(object):
         if not self.is_struct():
             return None
 
+        self.struct.needs_struct_extensions_conversion()
+        for m in self.struct:
+            m.needs_struct_extensions_conversion()
+
         if not self.needs_conversion():
             return None
 
@@ -1491,14 +1503,16 @@ class VkParam(object):
 class VkStruct(Sequence):
     """ Class which represents the type union and struct. """
 
-    def __init__(self, name, members, returnedonly, alias=None, union=False):
+    def __init__(self, name, members, returnedonly, structextends, alias=None, union=False):
         self.name = name
         self.members = members
         self.returnedonly = returnedonly
+        self.structextends = structextends
         self.required = False
         self.alias = alias
         self.union = union
         self.type_info = None # To be set later.
+        self.struct_extensions = []
 
     def __getitem__(self, i):
         return self.members[i]
@@ -1509,7 +1523,7 @@ class VkStruct(Sequence):
     @staticmethod
     def from_alias(struct, alias):
         name = struct.attrib.get("name")
-        return VkStruct(name, alias.members, alias.returnedonly, alias=alias)
+        return VkStruct(name, alias.members, alias.returnedonly, alias.structextends, alias=alias)
 
     @staticmethod
     def from_xml(struct):
@@ -1517,18 +1531,21 @@ class VkStruct(Sequence):
         # know which one we are dealing with later on for code generation.
         union = True if struct.attrib["category"] == "union" else False
 
-        name = struct.attrib.get("name", None)
+        name = struct.attrib.get("name")
 
         # 'Output' structures for which data is filled in by the API are
         # marked as 'returnedonly'.
         returnedonly = True if struct.attrib.get("returnedonly") else False
+
+        structextends = struct.attrib.get("structextends")
+        structextends = structextends.split(",") if structextends else []
 
         members = []
         for member in struct.findall("member"):
             vk_member = VkMember.from_xml(member)
             members.append(vk_member)
 
-        return VkStruct(name, members, returnedonly, union=union)
+        return VkStruct(name, members, returnedonly, structextends, union=union)
 
     @staticmethod
     def decouple_structs(structs):
@@ -1654,6 +1671,16 @@ class VkStruct(Sequence):
 
         return False
 
+    def needs_struct_extensions_conversion(self):
+        """ Checks if structure extensions in pNext chain need conversion. """
+
+        for e in self.struct_extensions:
+            if e.required and e.needs_conversion():
+                LOGGER.error("Unhandled pNext chain conversion for {0}".format(e.name))
+                return True
+
+        return False
+
     def set_type_info(self, types):
         """ Helper function to set type information from the type registry.
         This is needed, because not all type data is available at time of
@@ -1751,10 +1778,8 @@ class ConversionFunction(object):
 
         if self.direction == Direction.OUTPUT:
             params = ["const {0}_host *in".format(self.type), "{0} *out".format(self.type), "uint32_t count"]
-            return_type = self.type
         else:
             params = ["const {0} *in".format(self.type), "{0} *out_host".format(self.type), "uint32_t count"]
-            return_type = "{0}_host".format(self.type)
 
         # Generate function prototype.
         body = "static inline void {0}(".format(self.name)
@@ -2761,6 +2786,10 @@ class VkRegistry(object):
         # the data now.
         for struct in structs:
             struct.set_type_info(self.types)
+
+            for structextend in struct.structextends:
+                s = self.types[structextend]["data"]
+                s.struct_extensions.append(struct)
 
         # Guarantee everything is sorted, so code generation doesn't have
         # to deal with this.

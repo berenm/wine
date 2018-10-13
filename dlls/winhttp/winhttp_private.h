@@ -73,14 +73,6 @@ typedef struct
     struct list cookies;
 } domain_t;
 
-typedef struct
-{
-    struct list entry;
-    WCHAR *name;
-    WCHAR *value;
-    WCHAR *path;
-} cookie_t;
-
 typedef struct {
     struct list entry;
     LONG ref;
@@ -93,6 +85,7 @@ typedef struct {
 typedef struct
 {
     object_header_t hdr;
+    CRITICAL_SECTION cs;
     LPWSTR agent;
     DWORD access;
     int resolve_timeout;
@@ -305,7 +298,15 @@ BOOL set_server_for_hostname( connect_t *, LPCWSTR, INTERNET_PORT ) DECLSPEC_HID
 void destroy_authinfo( struct authinfo * ) DECLSPEC_HIDDEN;
 
 void release_host( hostdata_t *host ) DECLSPEC_HIDDEN;
-DWORD escape_string( WCHAR *, const WCHAR *, DWORD ) DECLSPEC_HIDDEN;
+
+enum escape_flags
+{
+    ESCAPE_FLAG_REMOVE_CRLF = 0x01,
+    ESCAPE_FLAG_SPACE_ONLY  = 0x02,
+    ESCAPE_FLAG_PERCENT     = 0x04,
+    ESCAPE_FLAG_TILDE       = 0x08,
+};
+DWORD escape_string( WCHAR *, const WCHAR *, DWORD, enum escape_flags ) DECLSPEC_HIDDEN;
 
 BOOL process_header( request_t *request, LPCWSTR field, LPCWSTR value, DWORD flags, BOOL request_only ) DECLSPEC_HIDDEN;
 

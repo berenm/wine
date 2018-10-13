@@ -14,7 +14,7 @@
 @ cdecl -arch=i386 _CIsqrt()
 @ cdecl -arch=i386 _CItan()
 @ cdecl -arch=i386 _CItanh()
-@ stub _Cbuild
+@ cdecl _Cbuild(ptr double double) MSVCR120__Cbuild
 @ stub _Cmulcc
 @ stub _Cmulcr
 @ cdecl _CreateFrameInfo(ptr ptr)
@@ -2246,7 +2246,7 @@
 @ stub cproj
 @ stub cprojf
 @ stub cprojl
-@ stub creal
+@ cdecl creal(int128) MSVCR120_creal
 @ stub crealf
 @ stub creall
 @ stub csin
