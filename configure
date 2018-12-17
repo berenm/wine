@@ -644,6 +644,8 @@ PROCSTAT_LIBS
 KSTAT_LIBS
 LIBAVCODEC_LIBS
 LIBAVCODEC_CFLAGS
+LIBAVFORMAT_LIBS
+LIBAVFORMAT_CFLAGS
 LIBAVUTIL_LIBS
 LIBAVUTIL_CFLAGS
 MPG123_LIBS
@@ -809,6 +811,7 @@ infodir
 docdir
 oldincludedir
 includedir
+runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -1860,6 +1863,8 @@ MPG123_CFLAGS
 MPG123_LIBS
 LIBAVUTIL_CFLAGS
 LIBAVUTIL_LIBS
+LIBAVFORMAT_CFLAGS
+LIBAVFORMAT_LIBS
 LIBAVCODEC_CFLAGS
 LIBAVCODEC_LIBS
 NETAPI_CFLAGS
@@ -1906,6 +1911,7 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
+runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE_TARNAME}'
@@ -2158,6 +2164,15 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
+  -runstatedir | --runstatedir | --runstatedi | --runstated \
+  | --runstate | --runstat | --runsta | --runst | --runs \
+  | --run | --ru | --r)
+    ac_prev=runstatedir ;;
+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
+  | --run=* | --ru=* | --r=*)
+    runstatedir=$ac_optarg ;;
+
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -2295,7 +2310,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir
+		libdir localedir mandir runstatedir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -2448,6 +2463,7 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -2642,6 +2658,10 @@ Some influential environment variables:
               C compiler flags for libavutil, overriding pkg-config
   LIBAVUTIL_LIBS
               Linker flags for libavutil, overriding pkg-config
+  LIBAVFORMAT_CFLAGS
+              C compiler flags for libavformat, overriding pkg-config
+  LIBAVFORMAT_LIBS
+              Linker flags for libavformat, overriding pkg-config
   LIBAVCODEC_CFLAGS
               C compiler flags for libavcodec, overriding pkg-config
   LIBAVCODEC_LIBS
@@ -15526,6 +15546,91 @@ fi
 
 if test "x$with_ffmpeg" != "xno" -a "x$ac_cv_lib_avutil_av_frame_alloc" = "xyes"
 then
+    if ${LIBAVFORMAT_CFLAGS:+false} :; then :
+  if ${PKG_CONFIG+:} false; then :
+  LIBAVFORMAT_CFLAGS=`$PKG_CONFIG --cflags libavformat 2>/dev/null`
+fi
+fi
+
+if ${LIBAVFORMAT_LIBS:+false} :; then :
+  if ${PKG_CONFIG+:} false; then :
+  LIBAVFORMAT_LIBS=`$PKG_CONFIG --libs libavformat 2>/dev/null`
+fi
+fi
+
+LIBAVFORMAT_LIBS=${LIBAVFORMAT_LIBS:-"-llibavformat"}
+$as_echo "$as_me:${as_lineno-$LINENO}: libavformat cflags: $LIBAVFORMAT_CFLAGS" >&5
+$as_echo "$as_me:${as_lineno-$LINENO}: libavformat libs: $LIBAVFORMAT_LIBS" >&5
+ac_save_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS $LIBAVFORMAT_CFLAGS"
+for ac_header in libavformat/avformat.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "libavformat/avformat.h" "ac_cv_header_libavformat_avformat_h" "$ac_includes_default"
+if test "x$ac_cv_header_libavformat_avformat_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBAVFORMAT_AVFORMAT_H 1
+_ACEOF
+
+fi
+
+done
+
+        if test "$ac_cv_header_libavformat_avformat_h" = "yes"
+        then
+            { $as_echo "$as_me:${as_lineno-$LINENO}: checking for avformat_alloc_context in -lavformat" >&5
+$as_echo_n "checking for avformat_alloc_context in -lavformat... " >&6; }
+if ${ac_cv_lib_avformat_avformat_alloc_context+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lavformat $LIBAVFORMAT_LIBS $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char avformat_alloc_context ();
+int
+main ()
+{
+return avformat_alloc_context ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_avformat_avformat_alloc_context=yes
+else
+  ac_cv_lib_avformat_avformat_alloc_context=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_avformat_avformat_alloc_context" >&5
+$as_echo "$ac_cv_lib_avformat_avformat_alloc_context" >&6; }
+if test "x$ac_cv_lib_avformat_avformat_alloc_context" = xyes; then :
+  :
+else
+  LIBAVFORMAT_LIBS=""
+fi
+
+        else
+            LIBAVFORMAT_CFLAGS=""
+            LIBAVFORMAT_LIBS=""
+        fi
+CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$LIBAVFORMAT_CFLAGS" || LIBAVFORMAT_CFLAGS=`echo " $LIBAVFORMAT_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$LIBAVFORMAT_LIBS" || LIBAVFORMAT_LIBS=`echo " $LIBAVFORMAT_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
+
+fi
+
+if test "x$with_ffmpeg" != "xno" -a "x$ac_cv_lib_avutil_av_frame_alloc" = "xyes"
+then
     if ${LIBAVCODEC_CFLAGS:+false} :; then :
   if ${PKG_CONFIG+:} false; then :
   LIBAVCODEC_CFLAGS=`$PKG_CONFIG --cflags libavcodec 2>/dev/null`
@@ -15563,7 +15668,7 @@ if ${ac_cv_lib_avcodec_avcodec_send_packet+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-lavcodec $LIBAVUTIL_LIBS $LIBAVCODEC_LIBS $LIBS"
+LIBS="-lavcodec $LIBAVUTIL_LIBS $LIBAVFORMAT_LIBS $LIBAVCODEC_LIBS $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -19813,6 +19918,8 @@ MPG123_CFLAGS = $MPG123_CFLAGS
 MPG123_LIBS = $MPG123_LIBS
 LIBAVUTIL_CFLAGS = $LIBAVUTIL_CFLAGS
 LIBAVUTIL_LIBS = $LIBAVUTIL_LIBS
+LIBAVFORMAT_CFLAGS = $LIBAVFORMAT_CFLAGS
+LIBAVFORMAT_LIBS = $LIBAVFORMAT_LIBS
 LIBAVCODEC_CFLAGS = $LIBAVCODEC_CFLAGS
 LIBAVCODEC_LIBS = $LIBAVCODEC_LIBS
 KSTAT_LIBS = $KSTAT_LIBS

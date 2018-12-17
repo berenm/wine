@@ -1857,6 +1857,20 @@ then
         fi])
 fi
 
+dnl **** Check for FFmpeg's libavformat ****
+if test "x$with_ffmpeg" != "xno" -a "x$ac_cv_lib_avutil_av_frame_alloc" = "xyes"
+then
+    WINE_PACKAGE_FLAGS(LIBAVFORMAT,[libavformat],[-llibavformat],,,
+        [AC_CHECK_HEADERS([libavformat/avformat.h])
+        if test "$ac_cv_header_libavformat_avformat_h" = "yes"
+        then
+            AC_CHECK_LIB(avformat,avformat_alloc_context,[:],[LIBAVFORMAT_LIBS=""],[$LIBAVFORMAT_LIBS])
+        else
+            LIBAVFORMAT_CFLAGS=""
+            LIBAVFORMAT_LIBS=""
+        fi])
+fi
+
 dnl **** Check for FFmpeg's libavcodec ****
 if test "x$with_ffmpeg" != "xno" -a "x$ac_cv_lib_avutil_av_frame_alloc" = "xyes"
 then
@@ -1866,7 +1880,7 @@ then
         then
             AC_CHECK_LIB(avcodec,avcodec_send_packet,
                          [AC_DEFINE(HAVE_FFMPEG, 1, [Define to 1 if you have libavutil and libavcodec from ffmpeg.])],
-                         [LIBAVCODEC_LIBS=""], [$LIBAVUTIL_LIBS $LIBAVCODEC_LIBS])
+                         [LIBAVCODEC_LIBS=""], [$LIBAVUTIL_LIBS $LIBAVFORMAT_LIBS $LIBAVCODEC_LIBS])
         else
             LIBAVCODEC_CFLAGS=""
             LIBAVCODEC_LIBS=""

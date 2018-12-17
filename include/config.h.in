@@ -92,6 +92,9 @@
 /* Define to 1 if you have the <CL/cl.h> header file. */
 #undef HAVE_CL_CL_H
 
+/* Define to 1 if you have the <CL/opencl.h> header file. */
+#undef HAVE_CL_OPENCL_H
+
 /* Define to 1 if you have the <CommonCrypto/CommonCryptor.h> header file. */
 #undef HAVE_COMMONCRYPTO_COMMONCRYPTOR_H
 
@@ -420,6 +423,9 @@
 /* Define to 1 if you have the <libavcodec/avcodec.h> header file. */
 #undef HAVE_LIBAVCODEC_AVCODEC_H
 
+/* Define to 1 if you have the <libavformat/avformat.h> header file. */
+#undef HAVE_LIBAVFORMAT_AVFORMAT_H
+
 /* Define to 1 if you have the <libavutil/avutil.h> header file. */
 #undef HAVE_LIBAVUTIL_AVUTIL_H
 
@@ -725,9 +731,6 @@
 
 /* Define to 1 if you have the <OpenAL/al.h> header file. */
 #undef HAVE_OPENAL_AL_H
-
-/* Define to 1 if you have the <OpenCL/opencl.h> header file. */
-#undef HAVE_OPENCL_OPENCL_H
 
 /* Define to 1 if `numaudioengines' is a member of `oss_sysinfo'. */
 #undef HAVE_OSS_SYSINFO_NUMAUDIOENGINES
