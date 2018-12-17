@@ -35,6 +35,7 @@
 #include "wine/heap.h"
 #include "wine/debug.h"
 #include "wine/unicode.h"
+#include "wine/mfplat.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
@@ -678,6 +679,12 @@ static HRESULT WINAPI mfattributes_SetUINT32(IMFAttributes *iface, REFGUID key, 
 
     FIXME("%p, %s, %d\n", This, debugstr_guid(key), value);
 
+    if (IsEqualGUID(key, &MF_SOURCE_READER_DISABLE_DXVA))
+        return S_OK;
+
+    if (IsEqualGUID(key, &MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING))
+        return S_OK;
+
     return E_NOTIMPL;
 }
 
@@ -731,6 +738,9 @@ static HRESULT WINAPI mfattributes_SetUnknown(IMFAttributes *iface, REFGUID key,
     mfattributes *This = impl_from_IMFAttributes(iface);
 
     FIXME("%p, %s, %p\n", This, debugstr_guid(key), unknown);
+
+    if (IsEqualGUID(key, &MF_SOURCE_READER_ASYNC_CALLBACK))
+        return S_OK;
 
     return E_NOTIMPL;
 }
@@ -1653,6 +1663,7 @@ typedef struct _mfsource
 {
     IMFMediaSource IMFMediaSource_iface;
     LONG ref;
+    IMFByteStream *stream;
 } mfsource;
 
 static inline mfsource *impl_from_IMFMediaSource(IMFMediaSource *iface)
@@ -1702,6 +1713,8 @@ static ULONG WINAPI mfsource_Release(IMFMediaSource *iface)
 
     if (!ref)
     {
+        if (This->stream)
+            IMFByteStream_Release(This->stream);
         HeapFree(GetProcessHeap(), 0, This);
     }
 
@@ -1827,6 +1840,13 @@ static const IMFMediaSourceVtbl mfsourcevtbl =
     mfsource_Shutdown,
 };
 
+IMFByteStream* WINAPI IMFMediaSource_GetStream(IMFMediaSource* iface)
+{
+    mfsource *This = impl_from_IMFMediaSource(iface);
+
+    return This->stream;
+}
+
 typedef struct _mfsourceresolver
 {
     IMFSourceResolver IMFSourceResolver_iface;
@@ -1913,6 +1933,8 @@ static HRESULT WINAPI mfsourceresolver_CreateObjectFromByteStream(IMFSourceResol
 
         new_object->IMFMediaSource_iface.lpVtbl = &mfsourcevtbl;
         new_object->ref = 1;
+        new_object->stream = stream;
+        IMFByteStream_AddRef(stream);
 
         *object = (IUnknown *)&new_object->IMFMediaSource_iface;
         *obj_type = MF_OBJECT_MEDIASOURCE;
@@ -2015,6 +2037,10 @@ typedef struct _mfmediatype
 {
     mfattributes attributes;
     IMFMediaType IMFMediaType_iface;
+    MFT_REGISTER_TYPE_INFO typeInfo;
+    UINT64 frameSize;
+    UINT64 frameRate;
+    UINT64 pixelAspectRatio;
 } mfmediatype;
 
 static inline mfmediatype *impl_from_IMFMediaType(IMFMediaType *iface)
@@ -2098,12 +2124,44 @@ static HRESULT WINAPI mediatype_Compare(IMFMediaType *iface, IMFAttributes *attr
 static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT32 *value)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_PAN_SCAN_ENABLED))
+    {
+        *value = FALSE;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_DEFAULT_STRIDE))
+    {
+        *value = 0;
+        return S_OK;
+    }
+
     return IMFAttributes_GetUINT32(&This->attributes.IMFAttributes_iface, key, value);
 }
 
 static HRESULT WINAPI mediatype_GetUINT64(IMFMediaType *iface, REFGUID key, UINT64 *value)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_FRAME_SIZE))
+    {
+        *value = This->frameSize;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_FRAME_RATE))
+    {
+        *value = This->frameRate;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_PIXEL_ASPECT_RATIO))
+    {
+        *value = This->pixelAspectRatio;
+        return S_OK;
+    }
+
     return IMFAttributes_GetUINT64(&This->attributes.IMFAttributes_iface, key, value);
 }
 
@@ -2116,6 +2174,19 @@ static HRESULT WINAPI mediatype_GetDouble(IMFMediaType *iface, REFGUID key, doub
 static HRESULT WINAPI mediatype_GetGUID(IMFMediaType *iface, REFGUID key, GUID *value)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_MAJOR_TYPE))
+    {
+        *value = This->typeInfo.guidMajorType;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_SUBTYPE))
+    {
+        *value = This->typeInfo.guidSubtype;
+        return S_OK;
+    }
+
     return IMFAttributes_GetGUID(&This->attributes.IMFAttributes_iface, key, value);
 }
 
@@ -2142,6 +2213,21 @@ static HRESULT WINAPI mediatype_GetAllocatedString(IMFMediaType *iface, REFGUID 
 static HRESULT WINAPI mediatype_GetBlobSize(IMFMediaType *iface, REFGUID key, UINT32 *size)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_PAN_SCAN_APERTURE))
+    {
+        if (size)
+            *size = sizeof(MFVideoArea);
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_MINIMUM_DISPLAY_APERTURE))
+    {
+        if (size)
+            *size = sizeof(MFVideoArea);
+        return S_OK;
+    }
+
     return IMFAttributes_GetBlobSize(&This->attributes.IMFAttributes_iface, key, size);
 }
 
@@ -2149,6 +2235,23 @@ static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 
                 UINT32 bufsize, UINT32 *blobsize)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_PAN_SCAN_APERTURE))
+    {
+        memset(buf, 0, bufsize);
+        if (blobsize)
+            *blobsize = sizeof(MFVideoArea);
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_MINIMUM_DISPLAY_APERTURE))
+    {
+        memset(buf, 0, bufsize);
+        if (blobsize)
+            *blobsize = sizeof(MFVideoArea);
+        return S_OK;
+    }
+
     return IMFAttributes_GetBlob(&This->attributes.IMFAttributes_iface, key, buf, bufsize, blobsize);
 }
 
@@ -2191,6 +2294,25 @@ static HRESULT WINAPI mediatype_SetUINT32(IMFMediaType *iface, REFGUID key, UINT
 static HRESULT WINAPI mediatype_SetUINT64(IMFMediaType *iface, REFGUID key, UINT64 value)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_FRAME_SIZE))
+    {
+        This->frameSize = value;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_FRAME_RATE))
+    {
+        This->frameRate = value;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_PIXEL_ASPECT_RATIO))
+    {
+        This->pixelAspectRatio = value;
+        return S_OK;
+    }
+
     return IMFAttributes_SetUINT64(&This->attributes.IMFAttributes_iface, key, value);
 }
 
@@ -2203,6 +2325,19 @@ static HRESULT WINAPI mediatype_SetDouble(IMFMediaType *iface, REFGUID key, doub
 static HRESULT WINAPI mediatype_SetGUID(IMFMediaType *iface, REFGUID key, REFGUID value)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_MAJOR_TYPE))
+    {
+        This->typeInfo.guidMajorType = *value;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_SUBTYPE))
+    {
+        This->typeInfo.guidSubtype = *value;
+        return S_OK;
+    }
+
     return IMFAttributes_SetGUID(&This->attributes.IMFAttributes_iface, key, value);
 }
 

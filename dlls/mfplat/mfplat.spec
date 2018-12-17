@@ -154,3 +154,4 @@
 @ stub MFllMulDiv
 @ stub PropVariantFromStream
 @ stub PropVariantToStream
+@ stdcall IMFMediaSource_GetStream(ptr)

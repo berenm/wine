@@ -26,8 +26,18 @@
 #include "winbase.h"
 #include "initguid.h"
 #include "mfreadwrite.h"
+#include "mfapi.h"
+#include "mferror.h"
 
 #include "wine/debug.h"
+#include "wine/mfplat.h"
+
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#endif
+
+#include <assert.h>
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
@@ -45,20 +55,39 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     return TRUE;
 }
 
-
-HRESULT WINAPI MFCreateSourceReaderFromMediaSource(IMFMediaSource *source, IMFAttributes *attributes,
-                                                   IMFSourceReader **reader)
-{
-    FIXME("%p %p %p stub.\n", source, attributes, reader);
-
-    return E_NOTIMPL;
-}
-
 typedef struct _srcreader
 {
     IMFSourceReader IMFSourceReader_iface;
     LONG ref;
+    IMFByteStream *stream;
+
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+    LPVOID buffer;
+    SIZE_T buffer_size;
+    AVIOContext *avio_ctx;
+    AVFormatContext *fmt_ctx;
+#endif
 } srcreader;
+
+static AVStream *GetStreamFromIndex(srcreader* reader, DWORD index)
+{
+    int stream_index = -1;
+
+    if (!reader->fmt_ctx)
+        return NULL;
+
+    if (index == MF_SOURCE_READER_MEDIASOURCE)
+        stream_index = 0;
+    else if (index == MF_SOURCE_READER_FIRST_VIDEO_STREAM)
+        stream_index = av_find_best_stream(reader->fmt_ctx, AVMEDIA_TYPE_VIDEO, 0, -1, NULL, 0);
+    else if (index == MF_SOURCE_READER_FIRST_AUDIO_STREAM)
+        stream_index = av_find_best_stream(reader->fmt_ctx, AVMEDIA_TYPE_AUDIO, 0, -1, NULL, 0);
+
+    if (stream_index < 0 || stream_index >= reader->fmt_ctx->nb_streams)
+        return NULL;
+
+    return reader->fmt_ctx->streams[stream_index];
+}
 
 static inline srcreader *impl_from_IMFSourceReader(IMFSourceReader *iface)
 {
@@ -106,6 +135,16 @@ static ULONG WINAPI src_reader_Release(IMFSourceReader *iface)
 
     if (!ref)
     {
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+        if (This->fmt_ctx)
+            avformat_close_input(&This->fmt_ctx);
+        if (This->avio_ctx)
+            av_freep(&This->avio_ctx);
+        if (This->buffer)
+            av_freep(This->buffer);
+#endif
+        if (This->stream)
+            IMFByteStream_Release(This->stream);
         HeapFree(GetProcessHeap(), 0, This);
     }
 
@@ -116,36 +155,138 @@ static HRESULT WINAPI src_reader_GetStreamSelection(IMFSourceReader *iface, DWOR
 {
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %p\n", This, index, selected);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI src_reader_SetStreamSelection(IMFSourceReader *iface, DWORD index, BOOL selected)
 {
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %d\n", This, index, selected);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI src_reader_GetNativeMediaType(IMFSourceReader *iface, DWORD index, DWORD typeindex,
             IMFMediaType **type)
 {
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+    AVStream *stream;
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %d, %p\n", This, index, typeindex, type);
+
+    stream = GetStreamFromIndex(This, index);
+    if (!stream)
+        return MF_E_INVALIDSTREAMNUMBER;
+
+    if (typeindex > 0)
+        return MF_E_NO_MORE_TYPES;
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        stream->codecpar->codec_id == AV_CODEC_ID_H264)
+    {
+        MFCreateMediaType(type);
+        IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+        IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFVideoFormat_H264);
+        IMFMediaType_SetUINT64(*type, &MF_MT_FRAME_SIZE,
+                               (((UINT64)stream->codecpar->width & 0xffffffff) << 32) |
+                               (((UINT64)stream->codecpar->height & 0xffffffff) << 0));
+        IMFMediaType_SetUINT64(*type, &MF_MT_FRAME_RATE,
+                               (((UINT64)stream->time_base.den & 0xffffffff) << 32) |
+                               (((UINT64)stream->time_base.num & 0xffffffff) << 0));
+        IMFMediaType_SetUINT64(*type, &MF_MT_PIXEL_ASPECT_RATIO,
+                               (((UINT64)stream->codecpar->sample_aspect_ratio.num & 0xffffffff) << 32) |
+                               (((UINT64)stream->codecpar->sample_aspect_ratio.den & 0xffffffff) << 0));
+        return S_OK;
+    }
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+        stream->codecpar->codec_id == AV_CODEC_ID_AAC)
+    {
+        MFCreateMediaType(type);
+        IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
+        IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFAudioFormat_AAC);
+        return S_OK;
+    }
+#else
+    srcreader *This = impl_from_IMFSourceReader(iface);
+    FIXME("%p, 0x%08x, %d, %p\n", This, index, typeindex, type);
+#endif
+
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI src_reader_GetCurrentMediaType(IMFSourceReader *iface, DWORD index, IMFMediaType **type)
 {
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+    AVStream *stream;
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %p\n", This, index, type);
+
+    stream = GetStreamFromIndex(This, index);
+    if (stream == NULL)
+        return MF_E_INVALIDSTREAMNUMBER;
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        stream->codecpar->format == AV_PIX_FMT_YUV420P)
+    {
+        MFCreateMediaType(type);
+        IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+        IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFVideoFormat_YV12);
+        return S_OK;
+    }
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+        stream->codecpar->format == AV_SAMPLE_FMT_FLT)
+    {
+        MFCreateMediaType(type);
+        IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
+        IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFAudioFormat_Float);
+        return S_OK;
+    }
+#else
+    srcreader *This = impl_from_IMFSourceReader(iface);
+    FIXME("%p, 0x%08x, %p\n", This, index, type);
+#endif
+
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI src_reader_SetCurrentMediaType(IMFSourceReader *iface, DWORD index, DWORD *reserved,
         IMFMediaType *type)
 {
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+    AVStream *stream;
+    GUID majorType;
+    GUID subType;
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %p, %p\n", This, index, reserved, type);
+
+    stream = GetStreamFromIndex(This, index);
+    if (stream == NULL)
+        return MF_E_INVALIDSTREAMNUMBER;
+
+    IMFMediaType_GetGUID(type, &MF_MT_MAJOR_TYPE, &majorType);
+    IMFMediaType_GetGUID(type, &MF_MT_SUBTYPE, &subType);
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        IsEqualGUID(&majorType, &MFMediaType_Video) &&
+        IsEqualGUID(&subType, &MFVideoFormat_YV12))
+    {
+        stream->codecpar->format = AV_PIX_FMT_YUV420P;
+        return S_OK;
+    }
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+        IsEqualGUID(&majorType, &MFMediaType_Audio) &&
+        IsEqualGUID(&subType, &MFAudioFormat_Float))
+    {
+        stream->codecpar->format = AV_SAMPLE_FMT_FLT;
+        return S_OK;
+    }
+#else
+    srcreader *This = impl_from_IMFSourceReader(iface);
+    FIXME("%p, 0x%08x, %p\n", This, index, type);
+#endif
+
     return E_NOTIMPL;
 }
 
@@ -186,6 +327,25 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
 {
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %s, %p\n", This, index, debugstr_guid(guid), attr);
+
+    if (IsEqualGUID(guid, &MF_PD_DURATION))
+    {
+        AVStream* stream = GetStreamFromIndex(This, index);
+        if (!stream)
+            return E_INVALIDARG;
+
+        attr->vt = VT_UI8;
+        attr->uhVal.QuadPart = 10000000 * stream->duration * stream->time_base.num / stream->time_base.den;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(guid, &MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS))
+    {
+        attr->vt = VT_UI4;
+        attr->ulVal = 0;
+        return S_OK;
+    }
+
     return E_NOTIMPL;
 }
 
@@ -206,6 +366,16 @@ struct IMFSourceReaderVtbl srcreader_vtbl =
     src_reader_GetPresentationAttribute
 };
 
+static int srcreader_ByteStreamReadPacket(void *opaque, uint8_t *buf, int buf_size)
+{
+    srcreader *This = (srcreader *)opaque;
+
+    ULONG byte_read;
+    IMFByteStream_Read(This->stream, buf, buf_size, &byte_read);
+
+    return byte_read;
+}
+
 HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttributes *attributes, IMFSourceReader **reader)
 {
     srcreader *object;
@@ -218,7 +388,59 @@ HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttr
 
     object->ref = 1;
     object->IMFSourceReader_iface.lpVtbl = &srcreader_vtbl;
+    object->stream = stream;
+    IMFByteStream_AddRef(stream);
+
+#if HAVE_LIBAVFORMAT_AVFORMAT_H
+    // av_register_all();
+
+    object->buffer_size = 4096;
+    object->buffer = av_malloc(object->buffer_size);
+    if (!object->buffer)
+    {
+        HeapFree(GetProcessHeap(), 0, object);
+        return E_OUTOFMEMORY;
+    }
+
+    object->avio_ctx = avio_alloc_context(object->buffer, object->buffer_size, 0, object, &srcreader_ByteStreamReadPacket, NULL, NULL);
+    if (!object->avio_ctx)
+    {
+        av_freep(object->buffer);
+        HeapFree(GetProcessHeap(), 0, object);
+        return E_OUTOFMEMORY;
+    }
+
+    object->fmt_ctx = avformat_alloc_context();
+    if (!object->fmt_ctx)
+    {
+        av_freep(&object->avio_ctx);
+        av_freep(object->buffer);
+        HeapFree(GetProcessHeap(), 0, object);
+        return E_OUTOFMEMORY;
+    }
+
+    object->fmt_ctx->pb = object->avio_ctx;
+    object->fmt_ctx->probesize = object->buffer_size;
+
+    if (avformat_open_input(&object->fmt_ctx, NULL, NULL, NULL) < 0) {
+        fprintf(stderr, "Could not open input\n");
+        assert(0);
+    }
+
+    if (avformat_find_stream_info(object->fmt_ctx, NULL) < 0) {
+        fprintf(stderr, "Could not find stream information\n");
+        assert(0);
+    }
+
+    av_dump_format(object->fmt_ctx, 0, "stream", 0);
+#endif
 
     *reader = &object->IMFSourceReader_iface;
     return S_OK;
+}
+
+HRESULT WINAPI MFCreateSourceReaderFromMediaSource(IMFMediaSource *source, IMFAttributes *attributes,
+                                                   IMFSourceReader **reader)
+{
+    return MFCreateSourceReaderFromByteStream(IMFMediaSource_GetStream(source), attributes, reader);
 }
