@@ -2057,6 +2057,7 @@ typedef struct _mfmediatype
     UINT64 frameSize;
     UINT64 frameRate;
     UINT64 pixelAspectRatio;
+    UINT32 audioNumChannels;
 } mfmediatype;
 
 static inline mfmediatype *impl_from_IMFMediaType(IMFMediaType *iface)
@@ -2152,6 +2153,13 @@ static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT
     {
         TRACE("%p, MF_MT_DEFAULT_STRIDE, %p *value = 0\n", This, value);
         *value = 0;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_AUDIO_NUM_CHANNELS))
+    {
+        FIXME("%p, MF_MT_AUDIO_NUM_CHANNELS, %p *value = %d\n", This, value, This->audioNumChannels);
+        *value = This->audioNumChannels;
         return S_OK;
     }
 
@@ -2315,6 +2323,14 @@ static HRESULT WINAPI mediatype_DeleteAllItems(IMFMediaType *iface)
 static HRESULT WINAPI mediatype_SetUINT32(IMFMediaType *iface, REFGUID key, UINT32 value)
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
+
+    if (IsEqualGUID(key, &MF_MT_AUDIO_NUM_CHANNELS))
+    {
+        FIXME("%p, MF_MT_AUDIO_NUM_CHANNELS, This->audioNumChannels = %d\n", This, value);
+        This->audioNumChannels = value;
+        return S_OK;
+    }
+
     return IMFAttributes_SetUINT32(&This->attributes.IMFAttributes_iface, key, value);
 }
 

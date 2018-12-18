@@ -276,6 +276,7 @@ static HRESULT WINAPI src_reader_GetNativeMediaType(IMFSourceReader *iface, DWOR
         MFCreateMediaType(type);
         IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
         IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFAudioFormat_AAC);
+        IMFMediaType_SetUINT32(*type, &MF_MT_AUDIO_NUM_CHANNELS, stream->codecpar->channels);
         return S_OK;
     }
 #else
@@ -482,6 +483,10 @@ static HRESULT WINAPI src_reader_ReadSample(IMFSourceReader *iface, DWORD index,
             return E_INVALIDARG;
         if (timestamp)
             return E_INVALIDARG;
+
+        IMFSourceReaderCallback_OnReadSample(This->callback, S_OK, stream->index, MF_SOURCE_READERF_ENDOFSTREAM, 0, NULL);
+
+        return S_OK;
     }
     else
     {
