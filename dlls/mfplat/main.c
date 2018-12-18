@@ -2057,7 +2057,9 @@ typedef struct _mfmediatype
     UINT64 frameSize;
     UINT64 frameRate;
     UINT64 pixelAspectRatio;
+    UINT32 defaultStride;
     UINT32 audioNumChannels;
+    UINT32 audioSamplesPerSecond;
 } mfmediatype;
 
 static inline mfmediatype *impl_from_IMFMediaType(IMFMediaType *iface)
@@ -2144,15 +2146,15 @@ static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT
 
     if (IsEqualGUID(key, &MF_MT_PAN_SCAN_ENABLED))
     {
-        TRACE("%p, MF_MT_PAN_SCAN_ENABLED, %p *value = FALSE\n", This, value);
+        FIXME("%p, MF_MT_PAN_SCAN_ENABLED, %p *value = FALSE\n", This, value);
         *value = FALSE;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_DEFAULT_STRIDE))
     {
-        TRACE("%p, MF_MT_DEFAULT_STRIDE, %p *value = 0\n", This, value);
-        *value = 0;
+        FIXME("%p, MF_MT_DEFAULT_STRIDE, %p *value = %d\n", This, value, This->defaultStride);
+        *value = This->defaultStride;
         return S_OK;
     }
 
@@ -2160,6 +2162,13 @@ static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT
     {
         FIXME("%p, MF_MT_AUDIO_NUM_CHANNELS, %p *value = %d\n", This, value, This->audioNumChannels);
         *value = This->audioNumChannels;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_AUDIO_SAMPLES_PER_SECOND))
+    {
+        FIXME("%p, MF_MT_AUDIO_SAMPLES_PER_SECOND, %p *value = %d\n", This, value, This->audioSamplesPerSecond);
+        *value = This->audioSamplesPerSecond;
         return S_OK;
     }
 
@@ -2267,12 +2276,19 @@ static HRESULT WINAPI mediatype_GetBlobSize(IMFMediaType *iface, REFGUID key, UI
 static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 *buf,
                 UINT32 bufsize, UINT32 *blobsize)
 {
+    MFVideoArea area;
     mfmediatype *This = impl_from_IMFMediaType(iface);
 
     if (IsEqualGUID(key, &MF_MT_PAN_SCAN_APERTURE))
     {
         TRACE("%p, MF_MT_PAN_SCAN_APERTURE, %p *blobsize = %zu\n", This, blobsize, sizeof(MFVideoArea));
-        memset(buf, 0, bufsize);
+        area.OffsetX.fract = 0;
+        area.OffsetX.value = 0;
+        area.OffsetY.fract = 0;
+        area.OffsetY.value = 0;
+        area.Area.cx = (This->frameSize >> 32) & 0xffffffffu;
+        area.Area.cy = (This->frameSize >> 0) & 0xffffffffu;
+        memcpy(buf, &area, sizeof(MFVideoArea));
         if (blobsize)
             *blobsize = sizeof(MFVideoArea);
         return S_OK;
@@ -2281,7 +2297,13 @@ static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 
     if (IsEqualGUID(key, &MF_MT_MINIMUM_DISPLAY_APERTURE))
     {
         TRACE("%p, MF_MT_MINIMUM_DISPLAY_APERTURE, %p *blobsize = %zu\n", This, blobsize, sizeof(MFVideoArea));
-        memset(buf, 0, bufsize);
+        area.OffsetX.fract = 0;
+        area.OffsetX.value = 0;
+        area.OffsetY.fract = 0;
+        area.OffsetY.value = 0;
+        area.Area.cx = (This->frameSize >> 32) & 0xffffffffu;
+        area.Area.cy = (This->frameSize >> 0) & 0xffffffffu;
+        memcpy(buf, &area, sizeof(MFVideoArea));
         if (blobsize)
             *blobsize = sizeof(MFVideoArea);
         return S_OK;
@@ -2324,10 +2346,24 @@ static HRESULT WINAPI mediatype_SetUINT32(IMFMediaType *iface, REFGUID key, UINT
 {
     mfmediatype *This = impl_from_IMFMediaType(iface);
 
+    if (IsEqualGUID(key, &MF_MT_DEFAULT_STRIDE))
+    {
+        FIXME("%p, MF_MT_DEFAULT_STRIDE, This->defaultStride = %d\n", This, value);
+        This->defaultStride = value;
+        return S_OK;
+    }
+
     if (IsEqualGUID(key, &MF_MT_AUDIO_NUM_CHANNELS))
     {
         FIXME("%p, MF_MT_AUDIO_NUM_CHANNELS, This->audioNumChannels = %d\n", This, value);
         This->audioNumChannels = value;
+        return S_OK;
+    }
+
+    if (IsEqualGUID(key, &MF_MT_AUDIO_SAMPLES_PER_SECOND))
+    {
+        FIXME("%p, MF_MT_AUDIO_SAMPLES_PER_SECOND, This->audioSamplesPerSecond = %d\n", This, value);
+        This->audioSamplesPerSecond = value;
         return S_OK;
     }
 

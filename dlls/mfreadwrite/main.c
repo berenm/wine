@@ -277,6 +277,7 @@ static HRESULT WINAPI src_reader_GetNativeMediaType(IMFSourceReader *iface, DWOR
         IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
         IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFAudioFormat_AAC);
         IMFMediaType_SetUINT32(*type, &MF_MT_AUDIO_NUM_CHANNELS, stream->codecpar->channels);
+        IMFMediaType_SetUINT32(*type, &MF_MT_AUDIO_SAMPLES_PER_SECOND, stream->codecpar->sample_rate);
         return S_OK;
     }
 #else
@@ -304,6 +305,24 @@ static HRESULT WINAPI src_reader_GetCurrentMediaType(IMFSourceReader *iface, DWO
         MFCreateMediaType(type);
         IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
         IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFVideoFormat_YV12);
+        IMFMediaType_SetUINT32(*type, &MF_MT_PAN_SCAN_ENABLED, FALSE);
+        IMFMediaType_SetUINT64(*type, &MF_MT_FRAME_SIZE,
+                               (((UINT64)stream->codecpar->width & 0xffffffff) << 32) |
+                               (((UINT64)stream->codecpar->height & 0xffffffff) << 0));
+        IMFMediaType_SetUINT64(*type, &MF_MT_FRAME_RATE,
+                               (((UINT64)stream->avg_frame_rate.num & 0xffffffff) << 32) |
+                               (((UINT64)stream->avg_frame_rate.den & 0xffffffff) << 0));
+        IMFMediaType_SetUINT32(*type, &MF_MT_DEFAULT_STRIDE, stream->codecpar->width);
+        if (stream->codecpar->sample_aspect_ratio.num == 0)
+        {
+            IMFMediaType_SetUINT64(*type, &MF_MT_PIXEL_ASPECT_RATIO, 0x0000000100000001llu);
+        }
+        else
+        {
+            IMFMediaType_SetUINT64(*type, &MF_MT_PIXEL_ASPECT_RATIO,
+                                   (((UINT64)stream->codecpar->sample_aspect_ratio.num & 0xffffffff) << 32) |
+                                   (((UINT64)stream->codecpar->sample_aspect_ratio.den & 0xffffffff) << 0));
+        }
         return S_OK;
     }
 
@@ -313,6 +332,8 @@ static HRESULT WINAPI src_reader_GetCurrentMediaType(IMFSourceReader *iface, DWO
         MFCreateMediaType(type);
         IMFMediaType_SetGUID(*type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
         IMFMediaType_SetGUID(*type, &MF_MT_SUBTYPE, &MFAudioFormat_Float);
+        IMFMediaType_SetUINT32(*type, &MF_MT_AUDIO_NUM_CHANNELS, stream->codecpar->channels);
+        IMFMediaType_SetUINT32(*type, &MF_MT_AUDIO_SAMPLES_PER_SECOND, stream->codecpar->sample_rate);
         return S_OK;
     }
 #else
@@ -564,7 +585,9 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
     {
         TRACE("%p, 0x%08x, MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS %p attr->vt = VT_UI4; attr->ulVal = 0;\n", This, index, attr);
         attr->vt = VT_UI4;
-        attr->ulVal = 0;
+        attr->ulVal = MFMEDIASOURCE_CAN_SEEK |
+                      MFMEDIASOURCE_CAN_PAUSE |
+                      MFMEDIASOURCE_DOES_NOT_USE_NETWORK;
         return S_OK;
     }
 
