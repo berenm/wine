@@ -71,8 +71,7 @@ typedef struct _srcreader
 
 static AVStream *GetStreamFromIndex(srcreader* reader, DWORD index)
 {
-    int stream_index = -1;
-
+    int stream_index = index;
     if (!reader->fmt_ctx)
         return NULL;
 
