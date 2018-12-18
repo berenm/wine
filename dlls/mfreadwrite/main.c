@@ -60,6 +60,7 @@ typedef struct _srcreader
     IMFSourceReader IMFSourceReader_iface;
     LONG ref;
     IMFByteStream *stream;
+    IMFSourceReaderCallback *callback;
 
 #if HAVE_LIBAVFORMAT_AVFORMAT_H
     LPVOID buffer;
@@ -146,6 +147,8 @@ static ULONG WINAPI src_reader_Release(IMFSourceReader *iface)
         if (This->buffer)
             av_freep(This->buffer);
 #endif
+        if (This->callback)
+            IMFSourceReaderCallback_Release(This->callback);
         if (This->stream)
             IMFByteStream_Release(This->stream);
         HeapFree(GetProcessHeap(), 0, This);
@@ -604,6 +607,9 @@ HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttr
     object->IMFSourceReader_iface.lpVtbl = &srcreader_vtbl;
     object->stream = stream;
     IMFByteStream_AddRef(stream);
+
+    object->callback = NULL;
+    IMFAttributes_GetUnknown(attributes, &MF_SOURCE_READER_ASYNC_CALLBACK, &IID_IMFSourceReaderCallback, (LPVOID*)&object->callback);
 
 #if HAVE_LIBAVFORMAT_AVFORMAT_H
     // av_register_all();

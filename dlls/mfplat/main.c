@@ -31,6 +31,7 @@
 #include "mfapi.h"
 #include "mfidl.h"
 #include "mferror.h"
+#include "mfreadwrite.h"
 
 #include "wine/heap.h"
 #include "wine/debug.h"
@@ -453,6 +454,7 @@ typedef struct _mfattributes
 {
     IMFAttributes IMFAttributes_iface;
     LONG ref;
+    IMFSourceReaderCallback* callback;
 } mfattributes;
 
 static inline mfattributes *impl_from_IMFAttributes(IMFAttributes *iface)
@@ -501,6 +503,8 @@ static ULONG WINAPI mfattributes_Release(IMFAttributes *iface)
 
     if (!ref)
     {
+        if (This->callback)
+            IMFSourceReaderCallback_Release(This->callback);
         HeapFree(GetProcessHeap(), 0, This);
     }
 
@@ -643,6 +647,14 @@ static HRESULT WINAPI mfattributes_GetUnknown(IMFAttributes *iface, REFGUID key,
 
     FIXME("%p, %s, %s, %p\n", This, debugstr_guid(key), debugstr_guid(riid), ppv);
 
+    if (IsEqualGUID(key, &MF_SOURCE_READER_ASYNC_CALLBACK) &&
+        IsEqualGUID(riid, &IID_IMFSourceReaderCallback))
+    {
+        *ppv = This->callback;
+        IMFSourceReaderCallback_AddRef(This->callback);
+        return S_OK;
+    }
+
     return E_NOTIMPL;
 }
 
@@ -740,7 +752,11 @@ static HRESULT WINAPI mfattributes_SetUnknown(IMFAttributes *iface, REFGUID key,
     FIXME("%p, %s, %p\n", This, debugstr_guid(key), unknown);
 
     if (IsEqualGUID(key, &MF_SOURCE_READER_ASYNC_CALLBACK))
+    {
+        This->callback = (IMFSourceReaderCallback*) unknown;
+        IMFSourceReaderCallback_AddRef(This->callback);
         return S_OK;
+    }
 
     return E_NOTIMPL;
 }
