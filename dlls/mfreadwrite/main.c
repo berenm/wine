@@ -189,11 +189,18 @@ static HRESULT WINAPI src_reader_GetNativeMediaType(IMFSourceReader *iface, DWOR
                                (((UINT64)stream->codecpar->width & 0xffffffff) << 32) |
                                (((UINT64)stream->codecpar->height & 0xffffffff) << 0));
         IMFMediaType_SetUINT64(*type, &MF_MT_FRAME_RATE,
-                               (((UINT64)stream->time_base.den & 0xffffffff) << 32) |
-                               (((UINT64)stream->time_base.num & 0xffffffff) << 0));
-        IMFMediaType_SetUINT64(*type, &MF_MT_PIXEL_ASPECT_RATIO,
-                               (((UINT64)stream->codecpar->sample_aspect_ratio.num & 0xffffffff) << 32) |
-                               (((UINT64)stream->codecpar->sample_aspect_ratio.den & 0xffffffff) << 0));
+                               (((UINT64)stream->avg_frame_rate.num & 0xffffffff) << 32) |
+                               (((UINT64)stream->avg_frame_rate.den & 0xffffffff) << 0));
+        if (stream->codecpar->sample_aspect_ratio.num == 0)
+        {
+            IMFMediaType_SetUINT64(*type, &MF_MT_PIXEL_ASPECT_RATIO, 0x0000000100000001llu);
+        }
+        else
+        {
+            IMFMediaType_SetUINT64(*type, &MF_MT_PIXEL_ASPECT_RATIO,
+                                   (((UINT64)stream->codecpar->sample_aspect_ratio.num & 0xffffffff) << 32) |
+                                   (((UINT64)stream->codecpar->sample_aspect_ratio.den & 0xffffffff) << 0));
+        }
         return S_OK;
     }
 
