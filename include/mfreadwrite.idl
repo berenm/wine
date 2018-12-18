@@ -145,6 +145,19 @@ interface IMFReadWriteClassFactory : IUnknown
                                      [in] REFIID riid, [out, iid_is(riid)] void **object );
 }
 
+[
+    object,
+    uuid(deec8d99-fa1d-4d82-84c2-2c8969944867),
+    local
+]
+interface IMFSourceReaderCallback : IUnknown
+{
+    HRESULT OnReadSample([in] HRESULT hrStatus, [in] DWORD dwStreamIndex, [in] DWORD dwStreamFlags,
+                         [in] LONGLONG llTimestamp, [in] IMFSample *pSample);
+    HRESULT OnFlush([in] DWORD dwStreamIndex);
+    HRESULT OnEvent([in] DWORD dwStreamIndex, [in] IMFMediaEvent *pEvent);
+}
+
 cpp_quote( "HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttributes *attributes," )
 cpp_quote( "                                                  IMFSourceReader **reader);" )
 cpp_quote( "HRESULT WINAPI MFCreateSourceReaderFromMediaSource(IMFMediaSource *source, IMFAttributes *attributes," )
