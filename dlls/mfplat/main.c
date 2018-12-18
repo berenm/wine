@@ -2127,12 +2127,14 @@ static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT
 
     if (IsEqualGUID(key, &MF_MT_PAN_SCAN_ENABLED))
     {
+        TRACE("%p, MF_MT_PAN_SCAN_ENABLED, %p *value = FALSE\n", This, value);
         *value = FALSE;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_DEFAULT_STRIDE))
     {
+        TRACE("%p, MF_MT_DEFAULT_STRIDE, %p *value = 0\n", This, value);
         *value = 0;
         return S_OK;
     }
@@ -2146,18 +2148,21 @@ static HRESULT WINAPI mediatype_GetUINT64(IMFMediaType *iface, REFGUID key, UINT
 
     if (IsEqualGUID(key, &MF_MT_FRAME_SIZE))
     {
+        TRACE("%p, MF_MT_FRAME_SIZE, %p *value = (%u, %u)\n", This, value, (unsigned)(This->frameSize >> 32), (unsigned)(This->frameSize & 0xffffffffu));
         *value = This->frameSize;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_FRAME_RATE))
     {
+        TRACE("%p, MF_MT_FRAME_RATE, %p *value = (%u, %u)\n", This, value, (unsigned)(This->frameRate >> 32), (unsigned)(This->frameRate & 0xffffffffu));
         *value = This->frameRate;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_PIXEL_ASPECT_RATIO))
     {
+        TRACE("%p, MF_MT_PIXEL_ASPECT_RATIO, %p *value = (%u, %u)\n", This, value, (unsigned)(This->pixelAspectRatio >> 32), (unsigned)(This->pixelAspectRatio & 0xffffffffu));
         *value = This->pixelAspectRatio;
         return S_OK;
     }
@@ -2177,12 +2182,14 @@ static HRESULT WINAPI mediatype_GetGUID(IMFMediaType *iface, REFGUID key, GUID *
 
     if (IsEqualGUID(key, &MF_MT_MAJOR_TYPE))
     {
+        TRACE("%p, MF_MT_MAJOR_TYPE, %p *value = %s\n", This, value, debugstr_guid(&This->typeInfo.guidMajorType));
         *value = This->typeInfo.guidMajorType;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_SUBTYPE))
     {
+        TRACE("%p, MF_MT_SUBTYPE, %p *value = %s\n", This, value, debugstr_guid(&This->typeInfo.guidSubtype));
         *value = This->typeInfo.guidSubtype;
         return S_OK;
     }
@@ -2216,6 +2223,7 @@ static HRESULT WINAPI mediatype_GetBlobSize(IMFMediaType *iface, REFGUID key, UI
 
     if (IsEqualGUID(key, &MF_MT_PAN_SCAN_APERTURE))
     {
+        TRACE("%p, MF_MT_PAN_SCAN_APERTURE, %p *size = %zu\n", This, size, sizeof(MFVideoArea));
         if (size)
             *size = sizeof(MFVideoArea);
         return S_OK;
@@ -2223,6 +2231,7 @@ static HRESULT WINAPI mediatype_GetBlobSize(IMFMediaType *iface, REFGUID key, UI
 
     if (IsEqualGUID(key, &MF_MT_MINIMUM_DISPLAY_APERTURE))
     {
+        TRACE("%p, MF_MT_MINIMUM_DISPLAY_APERTURE, %p *size = %zu\n", This, size, sizeof(MFVideoArea));
         if (size)
             *size = sizeof(MFVideoArea);
         return S_OK;
@@ -2238,6 +2247,7 @@ static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 
 
     if (IsEqualGUID(key, &MF_MT_PAN_SCAN_APERTURE))
     {
+        TRACE("%p, MF_MT_PAN_SCAN_APERTURE, %p *blobsize = %zu\n", This, blobsize, sizeof(MFVideoArea));
         memset(buf, 0, bufsize);
         if (blobsize)
             *blobsize = sizeof(MFVideoArea);
@@ -2246,6 +2256,7 @@ static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 
 
     if (IsEqualGUID(key, &MF_MT_MINIMUM_DISPLAY_APERTURE))
     {
+        TRACE("%p, MF_MT_MINIMUM_DISPLAY_APERTURE, %p *blobsize = %zu\n", This, blobsize, sizeof(MFVideoArea));
         memset(buf, 0, bufsize);
         if (blobsize)
             *blobsize = sizeof(MFVideoArea);
@@ -2297,18 +2308,21 @@ static HRESULT WINAPI mediatype_SetUINT64(IMFMediaType *iface, REFGUID key, UINT
 
     if (IsEqualGUID(key, &MF_MT_FRAME_SIZE))
     {
+        TRACE("%p, MF_MT_FRAME_SIZE, This->frameSize = (%d, %d)\n", This, (unsigned)(value >> 32), (unsigned)(value & 0xffffffffu));
         This->frameSize = value;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_FRAME_RATE))
     {
+        TRACE("%p, MF_MT_FRAME_RATE, This->frameRate = (%d, %d)\n", This, (unsigned)(value >> 32), (unsigned)(value & 0xffffffffu));
         This->frameRate = value;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_PIXEL_ASPECT_RATIO))
     {
+        TRACE("%p, MF_MT_PIXEL_ASPECT_RATIO, This->pixelAspectRatio = (%d, %d)\n", This, (unsigned)(value >> 32), (unsigned)(value & 0xffffffffu));
         This->pixelAspectRatio = value;
         return S_OK;
     }
@@ -2328,12 +2342,14 @@ static HRESULT WINAPI mediatype_SetGUID(IMFMediaType *iface, REFGUID key, REFGUI
 
     if (IsEqualGUID(key, &MF_MT_MAJOR_TYPE))
     {
+        TRACE("%p, MF_MT_MAJOR_TYPE, This->guidMajorType = %s\n", This, debugstr_guid(value));
         This->typeInfo.guidMajorType = *value;
         return S_OK;
     }
 
     if (IsEqualGUID(key, &MF_MT_SUBTYPE))
     {
+        TRACE("%p, MF_MT_SUBTYPE, This->guidSubtype = %s\n", This, debugstr_guid(value));
         This->typeInfo.guidSubtype = *value;
         return S_OK;
     }

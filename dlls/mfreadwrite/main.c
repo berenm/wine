@@ -271,6 +271,7 @@ static HRESULT WINAPI src_reader_SetCurrentMediaType(IMFSourceReader *iface, DWO
         IsEqualGUID(&majorType, &MFMediaType_Video) &&
         IsEqualGUID(&subType, &MFVideoFormat_YV12))
     {
+        TRACE("%p, 0x%08x, %p stream->codecpar->format = AV_PIX_FMT_YUV420P;\n", This, index, type);
         stream->codecpar->format = AV_PIX_FMT_YUV420P;
         return S_OK;
     }
@@ -279,6 +280,7 @@ static HRESULT WINAPI src_reader_SetCurrentMediaType(IMFSourceReader *iface, DWO
         IsEqualGUID(&majorType, &MFMediaType_Audio) &&
         IsEqualGUID(&subType, &MFAudioFormat_Float))
     {
+        TRACE("%p, 0x%08x, %p stream->codecpar->format = AV_SAMPLE_FMT_FLT;\n", This, index, type);
         stream->codecpar->format = AV_SAMPLE_FMT_FLT;
         return S_OK;
     }
@@ -334,6 +336,7 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
         if (!stream)
             return E_INVALIDARG;
 
+        TRACE("%p, 0x%08x, MF_PD_DURATION %p attr->vt = VT_UI8; attr->uhVal.QuadPart = %llu;\n", This, index, attr, 10000000 * stream->duration * stream->time_base.num / stream->time_base.den);
         attr->vt = VT_UI8;
         attr->uhVal.QuadPart = 10000000 * stream->duration * stream->time_base.num / stream->time_base.den;
         return S_OK;
@@ -341,6 +344,7 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
 
     if (IsEqualGUID(guid, &MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS))
     {
+        TRACE("%p, 0x%08x, MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS %p attr->vt = VT_UI4; attr->ulVal = 0;\n", This, index, attr);
         attr->vt = VT_UI4;
         attr->ulVal = 0;
         return S_OK;
