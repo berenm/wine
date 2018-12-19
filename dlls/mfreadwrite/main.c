@@ -35,6 +35,7 @@
 #if HAVE_LIBAVFORMAT_AVFORMAT_H
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/imgutils.h>
 #endif
 
 #include <assert.h>
@@ -67,6 +68,7 @@ typedef struct _srcreader
     SIZE_T buffer_size;
     AVIOContext *avio_ctx;
     AVFormatContext *fmt_ctx;
+    AVPacket *pkt;
 
 #define STREAM_COUNT 32
     BOOL selected[STREAM_COUNT];
@@ -140,6 +142,8 @@ static ULONG WINAPI src_reader_Release(IMFSourceReader *iface)
     if (!ref)
     {
 #if HAVE_LIBAVFORMAT_AVFORMAT_H
+        av_packet_free(&This->pkt);
+
         if (This->fmt_ctx)
             avformat_close_input(&This->fmt_ctx);
         if (This->avio_ctx)
@@ -181,7 +185,7 @@ static HRESULT WINAPI src_reader_SetStreamSelection(IMFSourceReader *iface, DWOR
     AVStream *stream;
     AVCodec *dec;
     AVCodecContext **dec_ctx;
-    AVDictionary *opts;
+    AVDictionary *opts = NULL;
     int ret;
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, %d\n", This, index, selected);
@@ -213,7 +217,6 @@ static HRESULT WINAPI src_reader_SetStreamSelection(IMFSourceReader *iface, DWOR
             return ret;
         }
 
-        av_dict_set(&opts, "refcounted_frames", "1", 0);
         ret = avcodec_open2(*dec_ctx, dec, &opts);
         if (ret < 0) {
             avcodec_free_context(dec_ctx);
@@ -393,87 +396,83 @@ static HRESULT WINAPI src_reader_SetCurrentPosition(IMFSourceReader *iface, REFG
     return E_NOTIMPL;
 }
 
-static int decode_packet(int *got_frame, int cached)
+static int src_reader_outputsample(srcreader *This, AVStream *stream)
 {
+    AVFrame *frame = av_frame_alloc();
     int ret = 0;
-    int decoded = pkt.size;
+    IMFSample *sample;
+    IMFMediaBuffer *buffer;
+    BYTE* membuf;
 
-    *got_frame = 0;
-
-    if (pkt.stream_index == video_stream_idx) {
-        /* decode video frame */
-        ret = avcodec_decode_video2(video_dec_ctx, frame, got_frame, &pkt);
-        if (ret < 0) {
-            fprintf(stderr, "Error decoding video frame (%s)\n", av_err2str(ret));
-            return ret;
-        }
-
-        if (*got_frame) {
-            if (frame->width != width || frame->height != height || frame->format != pix_fmt) {
-                /* To handle this change, one could call av_image_alloc again and
-                 * decode the following frames into another rawvideo file. */
-                fprintf(stderr, "Error: Width, height and pixel format have to be "
-                        "constant in a rawvideo file, but the width, height or "
-                        "pixel format of the input video changed:\n"
-                        "old: width = %d, height = %d, format = %s\n"
-                        "new: width = %d, height = %d, format = %s\n",
-                        width, height, av_get_pix_fmt_name(pix_fmt),
-                        frame->width, frame->height,
-                        av_get_pix_fmt_name(frame->format));
-                return -1;
-            }
-
-            printf("video_frame%s n:%d coded_n:%d\n",
-                   cached ? "(cached)" : "",
-                   video_frame_count++, frame->coded_picture_number);
-
-            /* copy decoded frame to destination buffer:
-             * this is required since rawvideo expects non aligned data */
-            av_image_copy(video_dst_data, video_dst_linesize,
-                          (const uint8_t **)(frame->data), frame->linesize,
-                          pix_fmt, width, height);
-
-            /* write to rawvideo file */
-            fwrite(video_dst_data[0], 1, video_dst_bufsize, video_dst_file);
-        }
-    } else if (pkt.stream_index == audio_stream_idx) {
-        /* decode audio frame */
-        ret = avcodec_decode_audio4(audio_dec_ctx, frame, got_frame, &pkt);
-        if (ret < 0) {
-            fprintf(stderr, "Error decoding audio frame (%s)\n", av_err2str(ret));
-            return ret;
-        }
-        /* Some audio decoders decode only part of the packet, and have to be
-         * called again with the remainder of the packet data.
-         * Sample: fate-suite/lossless-audio/luckynight-partial.shn
-         * Also, some decoders might over-read the packet. */
-        decoded = FFMIN(ret, pkt.size);
-
-        if (*got_frame) {
-            size_t unpadded_linesize = frame->nb_samples * av_get_bytes_per_sample(frame->format);
-            printf("audio_frame%s n:%d nb_samples:%d pts:%s\n",
-                   cached ? "(cached)" : "",
-                   audio_frame_count++, frame->nb_samples,
-                   av_ts2timestr(frame->pts, &audio_dec_ctx->time_base));
-
-            /* Write the raw audio data samples of the first plane. This works
-             * fine for packed formats (e.g. AV_SAMPLE_FMT_S16). However,
-             * most audio decoders output planar audio, which uses a separate
-             * plane of audio samples for each channel (e.g. AV_SAMPLE_FMT_S16P).
-             * In other words, this code will write only the first audio channel
-             * in these cases.
-             * You should use libswresample or libavfilter to convert the frame
-             * to packed data. */
-            fwrite(frame->extended_data[0], 1, unpadded_linesize, audio_dst_file);
-        }
+    ret = avcodec_receive_frame(This->dec_ctx[stream->index], frame);
+    if (ret == AVERROR(EAGAIN))
+    {
+        TRACE("src_reader_outputsample(%d): EAGAIN\n", stream->index);
+        ret = S_OK;
+        goto cleanup;
     }
 
-    /* If we use frame reference counting, we own the data and need
-     * to de-reference it when we don't use it anymore */
-    if (*got_frame && refcount)
-        av_frame_unref(frame);
+    if (ret == AVERROR_EOF)
+    {
+        IMFSourceReaderCallback_OnReadSample(This->callback, S_OK, stream->index, MF_SOURCE_READERF_ENDOFSTREAM,
+            10000000 * stream->duration * stream->time_base.num / stream->time_base.den, NULL);
+        ret = S_OK;
+        goto cleanup;
+    }
 
-    return decoded;
+    if (ret < 0)
+    {
+        ERR("Could not decode frame\n");
+        goto cleanup;
+    }
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+    {
+        MFCreateSample(&sample);
+        IMFSample_SetSampleTime(sample, frame->pts * 10000000 * stream->time_base.num / stream->time_base.den);
+
+        MFCreateMemoryBuffer(frame->width * frame->height * 4, &buffer);
+        IMFMediaBuffer_Lock(buffer, &membuf, NULL, NULL);
+
+        av_image_copy_to_buffer(membuf, frame->width * frame->height * 4,
+                                (const uint8_t* const *)frame->data, (const int*)frame->linesize,
+                                stream->codecpar->format, stream->codecpar->width, stream->codecpar->height, 1);
+
+        IMFMediaBuffer_Unlock(buffer);
+        IMFSample_AddBuffer(sample, buffer);
+        IMFMediaBuffer_Release(buffer);
+
+        FIXME("IMFSourceReaderCallback_OnReadSample(%d, %lu)\n", stream->index, frame->pts * 10000000 * stream->time_base.num / stream->time_base.den);
+        IMFSourceReaderCallback_OnReadSample(This->callback, S_OK, stream->index, 0,
+            frame->pts * 10000000 * stream->time_base.num / stream->time_base.den, sample);
+        IMFSample_Release(sample);
+    }
+
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+    {
+        MFCreateSample(&sample);
+        IMFSample_SetSampleTime(sample, frame->pts * 10000000 * stream->time_base.num / stream->time_base.den);
+
+        MFCreateMemoryBuffer(frame->nb_samples * frame->channels * 4, &buffer);
+        IMFMediaBuffer_Lock(buffer, &membuf, NULL, NULL);
+
+        // av_image_copy_to_buffer(membuf, frame->width * frame->height * 4,
+        //                         (const uint8_t* const *)frame->data, (const int*)frame->linesize,
+        //                         stream->codecpar->format, stream->codecpar->width, stream->codecpar->height, 1);
+
+        IMFMediaBuffer_Unlock(buffer);
+        IMFSample_AddBuffer(sample, buffer);
+        IMFMediaBuffer_Release(buffer);
+
+        FIXME("IMFSourceReaderCallback_OnReadSample(%d, %lu)\n", stream->index, frame->pts * 10000000 * stream->time_base.num / stream->time_base.den);
+        IMFSourceReaderCallback_OnReadSample(This->callback, S_OK, stream->index, 0,
+            frame->pts * 10000000 * stream->time_base.num / stream->time_base.den, sample);
+        IMFSample_Release(sample);
+    }
+
+cleanup:
+    av_frame_free(&frame);
+    return ret;
 }
 
 static HRESULT WINAPI src_reader_ReadSample(IMFSourceReader *iface, DWORD index,
@@ -481,7 +480,7 @@ static HRESULT WINAPI src_reader_ReadSample(IMFSourceReader *iface, DWORD index,
         IMFSample **sample)
 {
     AVStream *stream;
-    AVPacket pkt;
+    int ret = 0;
     srcreader *This = impl_from_IMFSourceReader(iface);
     FIXME("%p, 0x%08x, 0x%08x, %p, %p, %p, %p\n", This, index, flags, actualindex,
           sampleflags, timestamp, sample);
@@ -505,9 +504,25 @@ static HRESULT WINAPI src_reader_ReadSample(IMFSourceReader *iface, DWORD index,
         if (timestamp)
             return E_INVALIDARG;
 
-        IMFSourceReaderCallback_OnReadSample(This->callback, S_OK, stream->index, MF_SOURCE_READERF_ENDOFSTREAM, 0, NULL);
+        do
+        {
+            if (This->pkt->data != NULL)
+            {
+                ret = avcodec_send_packet(This->dec_ctx[This->pkt->stream_index], This->pkt);
+            }
 
-        return S_OK;
+            if (ret == 0)
+            {
+                do
+                {
+                    ret = av_read_frame(This->fmt_ctx, This->pkt);
+                } while (ret == 0 && !This->selected[This->pkt->stream_index]);
+            }
+
+            TRACE("%s:%d %x (%x: AVERROR(EAGAIN))\n", __FILE__, __LINE__, ret, AVERROR(EAGAIN));
+        } while (ret != AVERROR(EAGAIN));
+
+        return src_reader_outputsample(This, stream);
     }
     else
     {
@@ -520,30 +535,6 @@ static HRESULT WINAPI src_reader_ReadSample(IMFSourceReader *iface, DWORD index,
         //     *timestamp = 0;
         // *sampleflags = 0;
     }
-
-    av_init_packet(&pkt);
-    pkt.data = NULL;
-    pkt.size = 0;
-
-    while (av_read_frame(This->fmt_ctx, &pkt) >= 0) {
-        AVPacket orig_pkt = pkt;
-
-        do {
-            ret = decode_packet(&got_frame, 0);
-            if (ret < 0)
-                break;
-            pkt.data += ret;
-            pkt.size -= ret;
-        } while (pkt.size > 0);
-
-        av_packet_unref(&orig_pkt);
-    }
-
-    pkt.data = NULL;
-    pkt.size = 0;
-    do {
-        decode_packet(&got_frame, 1);
-    } while (got_frame);
 
     return E_NOTIMPL;
 }
@@ -585,9 +576,7 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
     {
         TRACE("%p, 0x%08x, MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS %p attr->vt = VT_UI4; attr->ulVal = 0;\n", This, index, attr);
         attr->vt = VT_UI4;
-        attr->ulVal = MFMEDIASOURCE_CAN_SEEK |
-                      MFMEDIASOURCE_CAN_PAUSE |
-                      MFMEDIASOURCE_DOES_NOT_USE_NETWORK;
+        attr->ulVal = 0;
         return S_OK;
     }
 
@@ -617,8 +606,34 @@ static int srcreader_ByteStreamReadPacket(void *opaque, uint8_t *buf, int buf_si
 
     ULONG byte_read;
     IMFByteStream_Read(This->stream, buf, buf_size, &byte_read);
+    // TRACE("IMFByteStream_Read: %p buf: %p size: %d, read: %d\n", opaque, buf, buf_size, byte_read);
 
     return byte_read;
+}
+
+static int64_t srcreader_ByteStreamSeek(void *opaque, int64_t pos, int whence)
+{
+    QWORD offset;
+    srcreader *This = (srcreader *)opaque;
+
+    if (whence == AVSEEK_SIZE)
+    {
+        IMFByteStream_GetLength(This->stream, &offset);
+        // TRACE("IMFByteStream_GetLength: %p pos: %ld whence: %d, out: %lu\n", opaque, pos, whence, offset);
+        return offset;
+    }
+
+    if (whence == SEEK_END)
+    {
+        IMFByteStream_GetLength(This->stream, &offset);
+        pos = offset - pos;
+        whence = SEEK_SET;
+    }
+
+    IMFByteStream_Seek(This->stream, whence == SEEK_SET ? msoBegin : msoCurrent, pos, MFBYTESTREAM_SEEK_FLAG_CANCEL_PENDING_IO, &offset);
+    // TRACE("IMFByteStream_Seek: %p pos: %ld whence: %d, out: %lu\n", opaque, pos, whence, offset);
+
+    return offset;
 }
 
 HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttributes *attributes, IMFSourceReader **reader)
@@ -650,7 +665,7 @@ HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttr
         return E_OUTOFMEMORY;
     }
 
-    object->avio_ctx = avio_alloc_context(object->buffer, object->buffer_size, 0, object, &srcreader_ByteStreamReadPacket, NULL, NULL);
+    object->avio_ctx = avio_alloc_context(object->buffer, object->buffer_size, 0, object, &srcreader_ByteStreamReadPacket, NULL, &srcreader_ByteStreamSeek);
     if (!object->avio_ctx)
     {
         av_freep(object->buffer);
@@ -681,6 +696,10 @@ HRESULT WINAPI MFCreateSourceReaderFromByteStream(IMFByteStream *stream, IMFAttr
     }
 
     av_dump_format(object->fmt_ctx, 0, "stream", 0);
+
+    object->pkt = av_packet_alloc();
+    object->pkt->data = NULL;
+    object->pkt->size = 0;
 #endif
 
     *reader = &object->IMFSourceReader_iface;

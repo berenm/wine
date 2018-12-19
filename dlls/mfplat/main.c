@@ -3607,6 +3607,10 @@ typedef struct _mfsample
 {
     mfattributes attributes;
     IMFSample IMFSample_iface;
+    LONGLONG sampleTime;
+    LONGLONG sampleDuration;
+    DWORD bufferCount;
+    IMFMediaBuffer *buffer;
 } mfsample;
 
 static inline mfsample *impl_from_IMFSample(IMFSample *iface)
@@ -3656,6 +3660,7 @@ static ULONG WINAPI mfsample_Release(IMFSample *iface)
 
     if (!ref)
     {
+        IMFMediaBuffer_Release(This->buffer);
         heap_free(This);
     }
 
@@ -3873,7 +3878,10 @@ static HRESULT WINAPI mfsample_GetSampleTime(IMFSample *iface, LONGLONG *samplet
 
     FIXME("%p, %p\n", This, sampletime);
 
-    return E_NOTIMPL;
+    if (sampletime)
+        *sampletime = This->sampleTime;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_SetSampleTime(IMFSample *iface, LONGLONG sampletime)
@@ -3882,7 +3890,9 @@ static HRESULT WINAPI mfsample_SetSampleTime(IMFSample *iface, LONGLONG sampleti
 
     FIXME("%p, %s\n", This, wine_dbgstr_longlong(sampletime));
 
-    return E_NOTIMPL;
+    This->sampleTime = sampletime;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_GetSampleDuration(IMFSample *iface, LONGLONG *duration)
@@ -3891,7 +3901,10 @@ static HRESULT WINAPI mfsample_GetSampleDuration(IMFSample *iface, LONGLONG *dur
 
     FIXME("%p, %p\n", This, duration);
 
-    return E_NOTIMPL;
+    if (duration)
+        *duration = This->sampleDuration;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_SetSampleDuration(IMFSample *iface, LONGLONG duration)
@@ -3900,7 +3913,9 @@ static HRESULT WINAPI mfsample_SetSampleDuration(IMFSample *iface, LONGLONG dura
 
     FIXME("%p, %s\n", This, wine_dbgstr_longlong(duration));
 
-    return E_NOTIMPL;
+    This->sampleDuration = duration;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_GetBufferCount(IMFSample *iface, DWORD *count)
@@ -3910,7 +3925,7 @@ static HRESULT WINAPI mfsample_GetBufferCount(IMFSample *iface, DWORD *count)
     FIXME("%p, %p\n", This, count);
 
     if(*count)
-        *count = 0;
+        *count = This->bufferCount;
 
     return S_OK;
 }
@@ -3921,7 +3936,15 @@ static HRESULT WINAPI mfsample_GetBufferByIndex(IMFSample *iface, DWORD index, I
 
     FIXME("%p, %u, %p\n", This, index, buffer);
 
-    return E_NOTIMPL;
+    if (index > 0)
+        return E_NOTIMPL;
+
+    if (buffer) {
+        *buffer = This->buffer;
+        IMFMediaBuffer_AddRef(*buffer);
+    }
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_ConvertToContiguousBuffer(IMFSample *iface, IMFMediaBuffer **buffer)
@@ -3930,7 +3953,15 @@ static HRESULT WINAPI mfsample_ConvertToContiguousBuffer(IMFSample *iface, IMFMe
 
     FIXME("%p, %p\n", This, buffer);
 
-    return E_NOTIMPL;
+    if (This->bufferCount > 1)
+        return E_NOTIMPL;
+
+    if (buffer) {
+        *buffer = This->buffer;
+        IMFMediaBuffer_AddRef(*buffer);
+    }
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_AddBuffer(IMFSample *iface, IMFMediaBuffer *buffer)
@@ -3939,7 +3970,14 @@ static HRESULT WINAPI mfsample_AddBuffer(IMFSample *iface, IMFMediaBuffer *buffe
 
     FIXME("%p, %p\n", This, buffer);
 
-    return E_NOTIMPL;
+    if (This->bufferCount > 0)
+        return E_NOTIMPL;
+
+    This->bufferCount = 1;
+    This->buffer = buffer;
+    IMFMediaBuffer_AddRef(buffer);
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfsample_RemoveBufferByIndex(IMFSample *iface, DWORD index)
@@ -4041,6 +4079,10 @@ HRESULT WINAPI MFCreateSample(IMFSample **sample)
 
     init_attribute_object(&object->attributes, 0);
     object->IMFSample_iface.lpVtbl = &mfsample_vtbl;
+    object->sampleTime = 0;
+    object->sampleDuration = 0;
+    object->bufferCount = 0;
+    object->buffer = NULL;
     *sample = &object->IMFSample_iface;
 
     return S_OK;
