@@ -566,9 +566,9 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
         if (!stream)
             return E_INVALIDARG;
 
-        TRACE("%p, 0x%08x, MF_PD_DURATION %p attr->vt = VT_UI8; attr->uhVal.QuadPart = %llu;\n", This, index, attr, 10000000 * stream->duration * stream->time_base.num / stream->time_base.den);
+        TRACE("%p, 0x%08x, MF_PD_DURATION %p attr->vt = VT_UI8; attr->uhVal.QuadPart = %lu;\n", This, index, attr, 10000000 * stream->duration * stream->time_base.num / stream->time_base.den);
         attr->vt = VT_UI8;
-        attr->uhVal.QuadPart = 10000000 * stream->duration * stream->time_base.num / stream->time_base.den;
+        attr->uhVal.QuadPart = 0; // 10000000 * stream->duration * stream->time_base.num / stream->time_base.den;
         return S_OK;
     }
 
